@@ -1,0 +1,92 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Osmia{% endblock %}</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><rect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%232e7d5b%22/><path d=%22M7 8h8v8H7zM17 8h8v8h-8zM7 18h8v8H7zM17 18h8v8h-8z%22 fill=%22white%22 opacity=%22.9%22/></svg>">
+  <link rel="stylesheet" href="{% static 'web/osmia.css' %}">
+  {% block head %}{% endblock %}
+  <meta name="osmia-leave-to" content="{% block leave_to %}{% endblock %}">
+  <script>
+  /* Back and Forward always show the page as it is now, and never land in an editing screen: a screen that names
+     the page it belongs to (its leave_to block) gives way to that page. */
+  (function () {
+    var to = document.querySelector('meta[name="osmia-leave-to"]').content;
+    var nav = window.performance && performance.getEntriesByType ? performance.getEntriesByType('navigation')[0] : null;
+    if (to && nav && nav.type === 'back_forward') location.replace(to);
+    window.addEventListener('pageshow', function (e) { if (e.persisted) { if (to) location.replace(to); else location.reload(); } });
+  })();
+  </script>
+</head>
+<body class="{% block body_class %}{% endblock %}">
+{% if user.is_authenticated %}
+<header class="topbar">
+  <details class="menu left hamburger">
+    <summary title="Menu" aria-label="Menu">☰</summary>
+    <nav class="menu-panel">
+      <a href="{% url 'web:home' %}">🏠 Home</a>
+      <div class="label">Stock</div>
+      <a href="{% url 'inventory:parts' %}">Parts</a>
+      <a href="{% url 'inventory:categories' %}">Categories</a>
+      <a href="{% url 'inventory:locations' %}">Locations</a>
+      <a href="{% url 'orders:list' %}">Orders</a>
+      <a href="{% url 'inventory:vendors' %}">Vendors</a>
+      <a href="{% url 'budgets:list' %}">Budgets</a>
+      <div class="label">Design</div>
+      <a href="{% url 'projects:list' %}">Projects</a>
+      <a href="{% url 'devices:list' %}">Devices</a>
+      <a href="{% url 'harnesses:list' %}">Harnesses</a>
+      <div class="label">Assets</div>
+      <a href="{% url 'assets:list' %}">All assets</a>
+      <a href="{% url 'assets:list' %}?kind=tool">Tools</a>
+      <a href="{% url 'assets:list' %}?kind=lab">Lab equipment</a>
+    </nav>
+  </details>
+  <a class="brand" href="{% url 'web:home' %}">Osmia</a>
+  <form class="topsearch" method="get" action="{% url 'inventory:parts' %}"><input type="search" name="q" placeholder="Find a part…" aria-label="Find a part" value="{{ request.GET.q|default:'' }}"></form>
+  <div class="spacer"></div>
+  <a class="icon-link" href="{% url 'web:notifications' %}" title="Notifications">🔔{% if unread_notifications %}<span class="count">{{ unread_notifications }}</span>{% endif %}</a>
+  <details class="menu">
+    <summary title="{{ user.get_full_name|default:user.username }}">{{ user.get_full_name|default:user.username }} ▾</summary>
+    <div class="menu-panel">
+      <a href="{% url 'accounts:profile' %}">Profile</a>
+      <a href="{% url 'accounts:password_change' %}">Change password</a>
+      <a href="{% url 'accounts:departments' %}">Departments</a>
+      {% if user.is_superuser %}<div class="sep"></div><div class="label">Administrator</div>
+        <a href="{% url 'accounts:users' %}">Users</a>
+        <a href="{% url 'web:demo' %}">Demo data</a>
+        <a href="/admin/">All data (/admin/)</a>{% endif %}
+      <button type="button" onclick="osmiaTheme()">Light / dark</button>
+      <div class="sep"></div>
+      <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button>Log out</button></form>
+    </div>
+  </details>
+</header>
+<div class="shell">
+  <div class="main">
+    {% if messages %}<div class="flashes">{% for message in messages %}<div class="flash {{ message.tags }}">{{ message }}</div>{% endfor %}</div>{% endif %}
+    {% block main %}<div class="content {% block content_class %}{% endblock %}">{% block content %}{% endblock %}</div>{% endblock %}
+  </div>
+</div>
+{% else %}
+  {% block anonymous %}{% endblock %}
+{% endif %}
+<script>
+  window.OSMIA_CSRF = "{{ csrf_token }}";
+  function osmiaTheme() {
+    const root = document.documentElement, dark = matchMedia('(prefers-color-scheme: dark)').matches;
+    const now = root.dataset.theme || (dark ? 'dark' : 'light');
+    root.dataset.theme = now === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem('osmia-theme', root.dataset.theme); } catch (e) {}
+  }
+  try { const t = localStorage.getItem('osmia-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  /* Anything with data-confirm asks first: a form when it is sent, a button when it is pressed. */
+  document.addEventListener('submit', function (e) {
+    var by = e.submitter && e.submitter.dataset.confirm ? e.submitter : e.target;
+    if (by.dataset && by.dataset.confirm && !confirm(by.dataset.confirm)) e.preventDefault();
+  }, true);
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+data/
+*.sqlite3
+.env
+.vscode/
+.idea/
+# The Osmia 2 code this was built from, kept locally for reference
+example software/

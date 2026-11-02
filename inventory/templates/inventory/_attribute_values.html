@@ -1,0 +1,3 @@
+{% for a, value in attributes %}<dt>{{ a.name }}</dt><dd>{% if a.is_link %}{% for x in value %}<a href="{{ x.get_absolute_url }}">{{ x.number }}</a>{% if not forloop.last %}, {% endif %}{% empty %}<span class="muted">—{% if a.required %} (to fill in){% endif %}</span>{% endfor %}
+  {% elif value %}{{ value }}{% else %}<span class="muted">—{% if a.required %} (to fill in){% endif %}</span>{% endif %}</dd>{% endfor %}
+{% for name, things in linked_here %}<dt>{{ name }}</dt><dd>{% for x in things %}<a href="{{ x.get_absolute_url }}">{{ x.number }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</dd>{% endfor %}

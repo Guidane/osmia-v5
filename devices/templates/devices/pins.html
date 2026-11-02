@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Pins of {{ connector }} · Osmia{% endblock %}
+{% block leave_to %}{{ connector.device.get_absolute_url }}{% endblock %}
+{% block content %}
+<p class="small"><a href="{{ connector.device.get_absolute_url }}#c{{ connector.pk }}">← {{ connector.device }}</a></p>
+<h1>Pins of {{ connector.designator }} <span class="muted small">{{ connector.name }}</span></h1>
+<form method="post" class="card flush">{% csrf_token %}
+  <table class="list rows-form">
+    <tr><th>Pin</th><th>Signal</th><th>Description</th><th title="Take it away">✕</th></tr>
+    {% for p in pins %}<tr>
+      <td><input name="number_{{ p.pk }}" value="{{ p.number }}" aria-label="Pin number" class="pin-no" required></td>
+      <td><input name="signal_{{ p.pk }}" value="{{ p.signal }}" aria-label="Signal of pin {{ p.number }}"></td>
+      <td><input name="description_{{ p.pk }}" value="{{ p.description }}" aria-label="Description of pin {{ p.number }}"></td>
+      <td><input type="checkbox" name="gone_{{ p.pk }}" aria-label="Take pin {{ p.number }} away"></td>
+    </tr>{% endfor %}
+    {% for i in new %}<tr class="new">
+      <td><input name="number_new{{ i }}" aria-label="New pin number" class="pin-no" placeholder="New"></td>
+      <td><input name="signal_new{{ i }}" aria-label="Signal"></td><td><input name="description_new{{ i }}" aria-label="Description"></td><td></td>
+    </tr>{% endfor %}
+  </table>
+  <input type="hidden" name="new" value="{{ new|length }}">
+  <div class="actions pad"><button class="btn primary">Save</button><span class="muted small">Fill in the empty rows to add pins (save, and there are more).</span></div>
+</form>
+{% endblock %}

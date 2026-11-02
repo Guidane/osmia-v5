@@ -1,0 +1,20 @@
+{% extends "base.html" %}{% load osmia %}
+{% block title %}{{ location.name }} · Osmia{% endblock %}
+{% block content %}
+<p class="small"><a href="{% url 'inventory:locations' %}">← Locations</a></p>
+<div class="page-head"><h1>{{ location.path }}</h1><span class="muted">{{ location.description }}</span><span class="spacer"></span>
+  <a class="btn" href="?export=1">⬇ Excel</a>
+  <a class="btn" href="{% url 'inventory:location_new' %}?parent={{ location.pk }}">＋ Inside it</a>
+  <a class="btn" href="{% url 'inventory:location_edit' location.pk %}">Change</a></div>
+{% if children %}<p class="small">Inside: {% for c in children %}<a href="{{ c.get_absolute_url }}">{{ c.name }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+<div class="card flush">
+  <table class="list">
+    <tr><th>Part</th><th>Description</th>{% if children %}<th>Where</th>{% endif %}<th class="num">Quantity</th></tr>
+    {% for s in stock %}<tr>
+      <td><a href="{{ s.part.get_absolute_url }}">{{ s.part.number }}</a></td><td>{{ s.part.description }}</td>
+      {% if children %}<td class="small">{% if s.location != location %}<a href="{{ s.location.get_absolute_url }}">{{ s.location.name }}</a>{% endif %}</td>{% endif %}
+      <td class="num">{{ s.quantity|qty }} <span class="muted small">{{ s.part.unit }}</span></td>
+    </tr>{% empty %}<tr><td colspan="4" class="empty small">Nothing here.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

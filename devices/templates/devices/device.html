@@ -1,0 +1,64 @@
+{% extends "base.html" %}{% load osmia %}
+{% block title %}{{ device.number }} · Osmia{% endblock %}
+{% block content %}
+<p class="small"><a href="{% url 'devices:list' %}">← Devices</a></p>
+<div class="page-head">
+  <h1><span class="dot big" style="background:{{ device.colour }}"></span>{{ device.number }}</h1><span class="muted">{{ device.name }}</span>{% if device.origin == 'external' %}<span class="badge">Bought (external)</span>{% endif %}
+  {% if device.version %}<span class="badge{% if not changed %} ok{% endif %}">v{{ device.version }}{% if changed %} + changes{% endif %}</span>{% endif %}
+  <span class="spacer"></span>
+  <a class="btn" href="?export=1">⬇ Excel</a>
+  {% document_button device %}<a class="btn" href="{% url 'devices:edit' device.pk %}">Change</a>
+</div>
+
+<div class="columns">
+  <section class="card">
+    {% document_image device %}
+    <dl class="details">
+      {% if device.description %}<dt>Description</dt><dd>{{ device.description|linebreaksbr }}</dd>{% endif %}
+      <dt>Manufacturer</dt><dd>{{ device.manufacturer|default:"—" }}{% if device.model %} · {{ device.model }}{% endif %}</dd>
+      <dt>As a part</dt><dd>{% if device.part %}<a href="{{ device.part.get_absolute_url }}">{{ device.part }}</a>{% else %}—{% endif %}</dd>
+      {% if device.notes %}<dt>Notes</dt><dd>{{ device.notes|linebreaksbr }}</dd>{% endif %}
+    </dl>
+  </section>
+  <section class="card">
+    <h3>Versions</h3>
+    <p class="small muted">{% if not versions %}Not saved as a version yet.{% elif changed %}Changed since v{{ device.version }}.{% else %}As saved in v{{ device.version }}.{% endif %}</p>
+    {% if changed %}<form method="post" action="{% url 'devices:save_version' device.pk %}" class="inline-form">{% csrf_token %}
+      <input type="text" name="note" placeholder="What changed (optional)" maxlength="300" aria-label="What changed">
+      <button class="btn small primary">Save as v{{ device.version|add:1 }}</button></form>{% endif %}
+    <table class="list compact">{% for v in versions %}<tr><td><a href="{% url 'devices:version' device.pk v.number %}">v{{ v.number }}</a></td>
+      <td class="small">{{ v.note }}</td><td class="small muted nowrap">{{ v.created_by|default:"" }}, {{ v.created_at|date:"j M Y" }}</td></tr>{% endfor %}</table>
+  </section>
+</div>
+
+<div class="page-head"><h2>Connectors</h2><span class="spacer"></span><a class="btn" href="{% url 'devices:connector_new' device.pk %}">＋ Connector</a></div>
+<div class="connectors">
+{% for c, pins, ends in connectors %}
+  <section class="card flush" id="c{{ c.pk }}">
+    <div class="card-head"><h3>{{ c.designator }} <span class="muted small">{{ c.name }}</span></h3>
+      {% if c.part %}<a class="small" href="{{ c.part.get_absolute_url }}">{{ c.part }}</a>{% endif %}
+      <a class="btn small" href="{% url 'devices:pins' device.pk c.pk %}">Pins</a>
+      <a class="btn small ghost" href="{% url 'devices:connector_edit' device.pk c.pk %}">Change</a>
+      <form method="post" action="{% url 'devices:connector_delete' device.pk c.pk %}" data-confirm="Take {{ c.designator }} away, with its pins?">{% csrf_token %}<button class="btn small ghost" title="Take it away">✕</button></form></div>
+    <table class="list compact">
+      <tr><th>Pin</th><th>Signal</th><th>Description</th></tr>
+      {% for p in pins %}<tr><td>{{ p.number }}</td><td>{{ p.signal }}</td><td class="small muted">{{ p.description }}</td></tr>
+      {% empty %}<tr><td colspan="3" class="empty small">No pins yet.</td></tr>{% endfor %}
+    </table>
+    {% if ends %}<p class="small pad">Plugged in: {% for e in ends %}<a href="{{ e.harness.get_absolute_url }}">{{ e.harness.number }} {{ e.designator }}</a> <span class="muted">({{ e.harness.project }})</span>{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+  </section>
+{% empty %}<p class="muted">No connectors yet.</p>{% endfor %}
+</div>
+
+<section class="card flush" id="units">
+  <div class="card-head"><h3>Units</h3><span class="muted small">Each one built or bought is an asset.</span>
+    <a class="btn small" href="{% url 'assets:new' %}?kind={% if device.origin == 'external' %}lab{% else %}device{% endif %}&amp;device={{ device.pk }}&amp;number={{ next_tag }}&amp;name={{ device.name|urlencode }}&amp;version={{ device.version }}">＋ Add one</a></div>
+  <table class="list">
+    <tr><th>Asset tag</th><th>Serial number</th><th>Version</th><th>Status</th><th>Where</th></tr>
+    {% for u in units %}<tr><td><a href="{{ u.get_absolute_url }}">{{ u.number }}</a></td><td class="small">{{ u.serial }}</td><td>{% if u.version %}v{{ u.version }}{% else %}—{% endif %}</td>
+      <td><span class="badge{% if u.status == 'in_use' or u.status == 'available' %} ok{% elif u.status == 'retired' %} failed{% endif %}">{{ u.get_status_display }}</span></td>
+      <td class="small">{{ u.location|default:"" }}</td></tr>
+    {% empty %}<tr><td colspan="5" class="empty small">None yet.</td></tr>{% endfor %}
+  </table>
+</section>
+{% endblock %}

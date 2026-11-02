@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Locations · Osmia{% endblock %}
+{% block content_class %}narrow{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Locations</h1><span class="spacer"></span><a class="btn primary" href="{% url 'inventory:location_new' %}">＋ New location</a></div>
+<div class="card flush">
+  <table class="list">
+    <tr><th>Location</th><th class="num">Parts here</th><th></th></tr>
+    {% for l, depth, kinds in locations %}<tr>
+      <td style="padding-left:{{ depth|add:1 }}em"><a href="{{ l.get_absolute_url }}">{{ l.name }}</a> <span class="muted small">{{ l.description }}</span></td>
+      <td class="num">{{ kinds|default:"" }}</td>
+      <td class="small"><a href="{% url 'inventory:location_new' %}?parent={{ l.pk }}">＋ inside</a></td>
+    </tr>{% empty %}<tr><td colspan="3" class="empty small">No locations yet: e.g. a building, its rooms, their shelves and bins.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

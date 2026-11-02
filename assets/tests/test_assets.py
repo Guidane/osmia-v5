@@ -1,0 +1,137 @@
+"""Assets: checked out and back, calibration (due after its interval, overdue on Home), sent away, in use and retired;
+the list by kind and category; the category's attributes, shared with parts (an auto number counts across both); a
+tool linking to the parts it crimps."""
+from datetime import date, timedelta
+
+from django.core.exceptions import ValidationError
+from django.urls import reverse
+
+from assets import service
+from assets.models import Asset
+from inventory.models import Attribute, Category, Part, PartValue
+from inventory.tests.test_inventory import Base
+
+
+class AssetTests(Base):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.tools = Category.objects.create(name='Crimp tools')
+        cls.tool = Asset.objects.create(number='T-001', name='D-sub crimp tool', kind='tool', category=cls.tools,
+                                        calibration_months=12, calibrated_on=date(2025, 1, 31), keeper=cls.ada)
+
+    def test_checked_out_and_back(self):
+        self.client.post(reverse('assets:act', args=[self.tool.pk]), {'action': 'out', 'to': self.ada.pk, 'note': 'harness H-0001'})
+        tool = Asset.objects.get()
+        self.assertEqual((tool.status, tool.holder), ('out', self.ada))
+        with self.assertRaisesMessage(ValidationError, 'is checked out (Ada)'):
+            service.check_out(tool, self.ada)
+        with self.assertRaisesMessage(ValidationError, 'bring it back first'):
+            service.send_away(tool, self.ada, Asset.Status.REPAIR)
+        self.client.post(reverse('assets:act', args=[self.tool.pk]), {'action': 'back'})
+        tool.refresh_from_db()
+        self.assertEqual((tool.status, tool.holder), ('available', None))
+        self.assertContains(self.client.get(reverse('assets:asset', args=[tool.pk])), 'to Ada: harness H-0001')
+        service.send_away(tool, self.ada, Asset.Status.IN_USE, 'in the burn-in rack')
+        self.assertEqual(Asset.objects.get().status, 'in_use')
+
+    def test_calibration_due_and_overdue(self):
+        self.assertEqual(self.tool.calibration_due, date(2026, 1, 31))
+        Asset.objects.filter(pk=self.tool.pk).update(calibrated_on=date(2024, 3, 31), calibration_months=11)
+        self.assertEqual(Asset.objects.get().calibration_due, date(2025, 2, 28))   # the end of a shorter month
+        self.assertContains(self.client.get('/'), '1</b> asset due for calibration')
+        service.send_away(self.tool, self.ada, Asset.Status.CALIBRATION)
+        self.client.post(reverse('assets:act', args=[self.tool.pk]), {'action': 'calibrated', 'on': str(date.today())})
+        tool = Asset.objects.get()
+        self.assertEqual((tool.status, tool.calibrated_on), ('available', date.today()))
+        with self.assertRaises(ValidationError):
+            service.calibrated(tool, self.ada, date.today() + timedelta(days=1))
+
+    def test_the_list_by_kind_and_category_and_retiring(self):
+        Asset.objects.create(number='PSU-01', name='Lab power supply', kind='lab')
+        page = self.client.get(reverse('assets:list'), {'kind': 'lab'})
+        self.assertContains(page, 'PSU-01')
+        self.assertNotContains(page, 'T-001')
+        self.assertContains(self.client.get(reverse('assets:list'), {'category': self.tools.pk}), 'T-001')
+        service.send_away(self.tool, self.ada, Asset.Status.RETIRED)
+        self.assertNotContains(self.client.get(reverse('assets:list')), 'T-001')
+        self.assertContains(self.client.get(reverse('assets:list'), {'status': 'retired'}), 'T-001')
+        self.assertEqual(service.due(), [])
+
+
+class SharedCategoryTests(Base):
+    """Parts and assets in the same categories fill in the same attributes."""
+    def test_an_asset_fills_in_its_category_s_attributes_and_links_to_parts(self):
+        wire = Attribute.objects.create(category=self.connectors, name='Wire size', kind='decimal', unit='mm²')
+        crimps = Attribute.objects.create(category=self.connectors, name='Crimps', kind='interacts', target=self.dsub,
+                                          reverse_name='Crimped by', position=1)
+        tool = Asset.objects.create(number='T-002', name='Crimp tool', category=self.connectors)
+        response = self.client.post(reverse('assets:edit', args=[tool.pk]), {
+            'number': 'T-002', 'name': 'Crimp tool', 'kind': 'tool', 'category': self.connectors.pk, 'attributes_of': self.connectors.pk,
+            f'attr_{wire.pk}': '0,5', f'attr_{crimps.pk}': [self.plug.pk]})
+        self.assertRedirects(response, reverse('assets:asset', args=[tool.pk]))
+        self.assertContains(self.client.get(reverse('assets:asset', args=[tool.pk])), '0.5 mm²')
+        self.assertContains(self.client.get(reverse('inventory:part', args=[self.plug.pk])), 'Crimped by')
+        page = self.client.get(reverse('inventory:category', args=[self.connectors.pk]))
+        self.assertContains(page, '1 asset')
+        self.assertContains(self.client.get(reverse('assets:list'), {'category': self.connectors.pk, f'a{wire.pk}_min': '0.4'}), 'T-002')
+
+    def test_an_auto_number_counts_across_parts_and_assets(self):
+        tool = Asset.objects.create(number='T-003', name='Stripper', category=self.dsub)
+        self.client.post(reverse('inventory:attribute_new', args=[self.connectors.pk]),
+                         {'name': 'ID', 'kind': 'auto', 'prefix': 'ID-', 'digits': 4})
+        given = {v.part.number: v.value for v in PartValue.objects.select_related('part')}
+        self.assertEqual(given, {'DSUB-9-PLUG': 'ID-0001'})                    # those there already, oldest first
+        self.assertEqual(tool.values.get().value, 'ID-0002')
+        response = self.client.post(reverse('inventory:part_new'), {
+            'number': 'DSUB-25', 'unit': 'pcs', 'category': self.dsub.pk, 'minimum': 0, 'reorder_quantity': 0, 'active': 'on',
+            'attributes_of': self.dsub.pk, f'attr_{Attribute.objects.get(name="ID").pk}': 'ID-9999'})   # can't be typed over
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Part.objects.get(number='DSUB-25').values.get().value, 'ID-0003')
+        page = self.client.post(reverse('inventory:attribute_edit', args=[self.connectors.pk, Attribute.objects.get(name='ID').pk]),
+                                {'name': 'ID', 'kind': 'auto', 'prefix': 'C-', 'digits': 3})
+        self.assertEqual(Part.objects.get(number='DSUB-25').values.get().value, 'C-003')   # shown anew
+        self.assertEqual(page.status_code, 302)
+
+
+class DocumentAndLabelTests(Base):
+    def test_documentation_is_cleaned_and_takes_pictures_and_files(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        url = reverse('web:document', args=['part', self.plug.pk])
+        self.client.post(url, {'body': '<h2>Use</h2><p onclick="x()">Crimp <b>first</b></p><script>alert(1)</script>'
+                                       '<table><tr><td>a</td></tr></table><a href="javascript:x()">bad</a><img src="/docs/files/1/">'})
+        page = self.client.get(url)
+        self.assertContains(page, '<h2>Use</h2><p>Crimp <b>first</b></p>', html=False)
+        self.assertNotContains(page, 'alert(1)')
+        self.assertNotContains(page, 'onclick="x()"')
+        self.assertNotContains(page, 'javascript:')
+        self.assertContains(page, '<table><tr><td>a</td></tr></table>', html=False)
+        png = (b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\r'
+               b'IDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82')
+        self.client.post(reverse('web:document_upload', args=['part', self.plug.pk]), {'image': SimpleUploadedFile('p.png', png, 'image/png')})
+        response = self.client.post(reverse('web:document_upload', args=['part', self.plug.pk]),
+                                    {'file': SimpleUploadedFile('sheet.pdf', b'%PDF', 'application/pdf')}, HTTP_X_REQUESTED_WITH='fetch')
+        self.assertEqual(response.json()['files'][0]['name'], 'sheet.pdf')
+        page = self.client.get(reverse('inventory:part', args=[self.plug.pk]))
+        self.assertContains(page, reverse('web:image', args=['part', self.plug.pk]))   # its picture on its page
+        self.assertContains(page, url)
+
+    def test_labels_of_several_on_a_sheet_and_a_saved_layout(self):
+        tie = Part.objects.create(number='TIE-100', description='Cable tie 100 mm')
+        url = reverse('web:labels', args=['part'])
+        page = self.client.get(url, {'ids': f'{self.plug.pk},{tie.pk}'})
+        self.assertContains(page, 'DSUB-9-PLUG')
+        self.assertContains(page, 'Cable tie 100 mm')
+        self.assertEqual(page.content.decode().count('class="sticker"'), 2)
+        self.assertEqual(page.content.decode().count('class="sheet"'), 1)
+        page = self.client.get(url, {'ids': tie.pk, 'size': '38x21', 'show_number': '1', 'copies': '70'})
+        self.assertNotContains(page, 'Cable tie 100 mm')                      # its description not shown
+        self.assertEqual(page.content.decode().count('class="sheet"'), 2)     # 70 labels: two sheets of 65
+        self.assertEqual(page.content.decode().count('class="sticker"'), 70)
+        self.client.get(url, {'ids': tie.pk, 'size': '99x38', 'show_number': '1', 'save': '1'})
+        page = self.client.get(url, {'ids': tie.pk})
+        self.assertContains(page, '<option value="99x38" selected>', html=False)
+        asset = Asset.objects.create(number='T-010', name='Crimp tool', serial='SN-55')
+        page = self.client.get(reverse('web:labels', args=['asset']), {'ids': asset.pk, 'size': '64x38', 'show_number': '1', 'show_serial': '1'})
+        self.assertContains(page, 'T-010')
+        self.assertContains(page, 'S/N SN-55')

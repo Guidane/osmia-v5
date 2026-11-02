@@ -1,0 +1,30 @@
+{% extends "base.html" %}{% load osmia %}
+{% block title %}What {{ config }} needs · Osmia{% endblock %}
+{% block content %}
+<p class="small"><a href="{{ config.get_absolute_url }}">← {{ project }}: {{ config }}</a></p>
+<div class="page-head"><h1>What {{ config.name }} needs</h1>
+  <form method="get" class="inline-form"><input type="hidden" name="config" value="{{ config.pk }}">
+    <label>to build <input type="number" name="count" value="{{ count }}" min="1" max="10000" class="qty" aria-label="How many to build"></label>
+    <button class="btn small">Work it out</button></form><span class="spacer"></span>
+  <a class="btn" href="?config={{ config.pk }}&amp;count={{ count }}&amp;export=1">⬇ Excel</a></div>
+<div class="columns">
+  <section class="card flush"><div class="card-head"><h3>Devices</h3></div>
+    <table class="list">{% for d, n in devices %}<tr><td><a href="{{ d.get_absolute_url }}">{{ d }}</a></td><td class="num">× {{ n|mul:count }}</td></tr>
+      {% empty %}<tr><td class="empty small">None.</td></tr>{% endfor %}</table></section>
+  <section class="card flush"><div class="card-head"><h3>Harnesses</h3></div>
+    <table class="list">{% for h, n in harnesses %}<tr><td><a href="{{ h.get_absolute_url }}">{{ h }}</a></td><td class="num">× {{ n|mul:count }}</td></tr>
+      {% empty %}<tr><td class="empty small">None.</td></tr>{% endfor %}</table></section>
+</div>
+<form method="post" class="card flush">{% csrf_token %}
+  <div class="card-head"><h3>Parts</h3><span class="muted small">Bought devices, and what its harnesses are made of.</span>
+    <button class="btn small primary">🛒 Order what is missing</button></div>
+  <table class="list">
+    <tr><th>Part</th><th class="num">Needed</th><th class="num">On hand</th><th class="num">On order</th><th class="num">Missing</th></tr>
+    {% for p, q, have, coming, missing in parts %}<tr>
+      <td><a href="{{ p.get_absolute_url }}">{{ p.number }}</a> <span class="muted small">{{ p.description }}</span></td>
+      <td class="num">{{ q|qty }} {{ p.unit }}</td><td class="num">{{ have|qty }}</td><td class="num">{{ coming|qty }}</td>
+      <td class="num{% if missing %} low{% endif %}">{% if missing %}{{ missing|qty }}{% if not p.vendor %} <span class="muted small">(no vendor)</span>{% endif %}{% else %}—{% endif %}</td>
+    </tr>{% empty %}<tr><td colspan="5" class="empty small">No parts: give its harnesses and devices their parts.</td></tr>{% endfor %}
+  </table>
+</form>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% load osmia %}
+{% block title %}{{ harness.number }} v{{ version.number }} · Osmia{% endblock %}
+{% block content %}
+<p class="small"><a href="{{ harness.get_absolute_url }}">← {{ harness }}</a></p>
+<div class="page-head"><h1>{{ harness.number }} v{{ version.number }}</h1><span class="muted">{{ data.name }}</span>
+  <span class="muted small">{{ version.note }} · {{ version.created_by|default:"" }}, {{ version.created_at|date:"j M Y H:i" }}</span><span class="spacer"></span>
+  <form method="post" action="{% url 'harnesses:restore' harness.pk version.number %}" data-confirm="Make {{ harness.number }} as it was in v{{ version.number }}?">{% csrf_token %}
+    <button class="btn">↺ Make it as it was</button></form></div>
+<div class="columns">
+  <section class="card flush"><div class="card-head"><h3>Ends</h3></div>
+    <table class="list">{% for e in data.ends %}<tr><td><b>{{ e.designator }}</b></td><td class="small">{{ e.part }}</td><td class="small">{% if e.connector %}{{ e.connector.0 }} {{ e.connector.1 }}{% endif %}</td></tr>{% endfor %}</table></section>
+  <section class="card flush"><div class="card-head"><h3>Parts list</h3></div>
+    <table class="list">{% for p, q in parts %}<tr><td>{{ p.number }}</td><td class="num">{{ q|qty }} {{ p.unit }}</td></tr>{% endfor %}</table></section>
+</div>
+<section class="card flush"><div class="card-head"><h3>Pinout</h3></div>
+  <table class="list"><tr><th>From</th><th>Pin</th><th>To</th><th>Pin</th><th>Signal</th><th>Set</th><th>Set type</th><th>Colour</th><th>Gauge</th><th>Length</th><th>Wire</th></tr>
+    {% for w in data.wires %}<tr><td>{{ w.from }}</td><td>{{ w.from_pin }}</td><td>{{ w.to }}</td><td>{{ w.to_pin }}</td><td>{{ w.signal }}</td><td>{{ w.set }}</td>
+      <td class="small">{{ w.set_type }}</td><td>{{ w.colour }}</td><td class="small">{{ w.gauge }}</td><td>{{ w.length|qty }}</td><td class="small">{{ w.part }}</td></tr>{% endfor %}</table></section>
+{% endblock %}

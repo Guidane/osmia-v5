@@ -1,0 +1,83 @@
+{% extends "base.html" %}{% load osmia %}
+{% block title %}{{ part.number }} · Osmia{% endblock %}
+{% block content %}
+<p class="small"><a href="{% url 'inventory:parts' %}">← Parts</a></p>
+<div class="page-head">
+  <h1>{{ part.number }}</h1>{% if not part.active %}<span class="badge">Inactive</span>{% endif %}
+  <span class="muted">{{ part.description }}</span><span class="spacer"></span>
+  {% if part.vendor %}<form method="post" action="{% url 'inventory:part_reorder' part.pk %}">{% csrf_token %}<button class="btn primary" title="Add it to the draft order for {{ part.vendor }}">🛒 Reorder</button></form>{% endif %}
+  <a class="btn" href="{% url 'web:labels' 'part' %}?ids={{ part.pk }}">🏷 Label</a>{% document_button part %}<a class="btn" href="{% url 'inventory:part_edit' part.pk %}">Change</a>
+</div>
+
+<div class="tiles">
+  <div class="tile{% if part.minimum and on_hand < part.minimum %} warn{% endif %}"><b>{{ on_hand|qty }}</b> {{ part.get_unit_display }} on hand</div>
+  <div class="tile"><b>{{ on_order|qty }}</b> on order</div>
+  <div class="tile"><b>{{ part.minimum|qty }}</b> minimum</div>
+</div>
+
+<div class="columns">
+  <section class="card">
+    {% document_image part %}
+    <h3>Details</h3>
+    <dl class="details">
+      <dt>Category</dt><dd>{% if part.category %}<a href="{{ part.category.get_absolute_url }}">{{ part.category }}</a>{% else %}—{% endif %}</dd>
+      {% include "inventory/_attribute_values.html" %}
+      <dt>Manufacturer</dt><dd>{{ part.manufacturer|default:"—" }}{% if part.mpn %} · {{ part.mpn }}{% endif %}</dd>
+      <dt>Vendor</dt><dd>{% if part.vendor %}<a href="{{ part.vendor.get_absolute_url }}">{{ part.vendor }}</a>{% if part.vendor_number %} · {{ part.vendor_number }}{% endif %}{% else %}—{% endif %}</dd>
+      <dt>Last price</dt><dd>{{ part.price|qty|default:"—" }}</dd>
+      <dt>Reorders</dt><dd>{% if part.reorder_quantity %}{{ part.reorder_quantity|qty }} {{ part.unit }}{% else %}enough to get above the minimum{% endif %}</dd>
+      <dt>Datasheet</dt><dd>{% if part.datasheet %}<a href="{{ part.datasheet }}" target="_blank" rel="noopener noreferrer">Open ↗</a>{% else %}—{% endif %}</dd>
+      {% if part.notes %}<dt>Notes</dt><dd>{{ part.notes|linebreaksbr }}</dd>{% endif %}
+    </dl>
+  </section>
+
+  <section class="card">
+    <h3>Where it is</h3>
+    <table class="list">
+      {% for s in stock %}<tr><td><a href="{{ s.location.get_absolute_url }}">{{ s.location }}</a></td><td class="num">{{ s.quantity|qty }} {{ part.unit }}</td></tr>
+      {% empty %}<tr><td class="empty small">None in stock.</td></tr>{% endfor %}
+    </table>
+    <form method="post" action="{% url 'inventory:part_stock' part.pk %}" class="stock-form">{% csrf_token %}
+      <select name="action" aria-label="What happens" data-stock-action>
+        <option value="add">Add</option><option value="use">Use / take out</option><option value="move">Move</option><option value="count">Count (set to)</option></select>
+      <input type="text" name="quantity" inputmode="decimal" placeholder="How many" aria-label="How many" required>
+      <select name="location" aria-label="Location" required><option value="">Location…</option>
+        {% for l, depth in locations %}<option value="{{ l.pk }}">{% for _ in ""|ljust:depth %}&nbsp;&nbsp;&nbsp;{% endfor %}{{ l.name }}</option>{% endfor %}</select>
+      <select name="to" aria-label="Move to" data-stock-to hidden><option value="">To…</option>
+        {% for l, depth in locations %}<option value="{{ l.pk }}">{% for _ in ""|ljust:depth %}&nbsp;&nbsp;&nbsp;{% endfor %}{{ l.name }}</option>{% endfor %}</select>
+      <input type="text" name="note" placeholder="Note (optional)" aria-label="Note" maxlength="300">
+      <button class="btn">Save</button>
+    </form>
+    {% if not locations %}<p class="small muted">Make a <a href="{% url 'inventory:location_new' %}">location</a> first.</p>{% endif %}
+  </section>
+</div>
+
+<div class="columns">
+  <section class="card flush">
+    <div class="card-head"><h3>Orders</h3></div>
+    <table class="list">
+      {% for l in lines %}<tr><td><a href="{{ l.order.get_absolute_url }}">{{ l.order.number }}</a></td><td class="small">{{ l.order.vendor }}</td>
+        <td class="num">{{ l.quantity|qty }}</td><td><span class="badge{% if l.order.status == 'received' %} ok{% elif l.order.overdue %} failed{% endif %}">{% if l.order.overdue %}Late{% else %}{{ l.order.get_status_display }}{% endif %}</span></td></tr>
+      {% empty %}<tr><td class="empty small">Never ordered.</td></tr>{% endfor %}
+    </table>
+  </section>
+  <section class="card flush">
+    <div class="card-head"><h3>History</h3></div>
+    <table class="list">
+      {% for m in movements %}<tr><td class="small nowrap">{{ m.at|date:"j M Y H:i" }}</td>
+        <td>{{ m.get_kind_display }} <b>{{ m.quantity|qty }}</b>
+          {% if m.source and m.target %}{{ m.source.name }} → {{ m.target.name }}{% elif m.source %}from {{ m.source.name }}{% elif m.target %}{% if m.kind == 'counted' %}at{% else %}into{% endif %} {{ m.target.name }}{% endif %}
+          {% if m.reference %}· {% if m.url %}<a href="{{ m.url }}">{{ m.reference }}</a>{% else %}{{ m.reference }}{% endif %}{% endif %}
+          {% if m.note %}<span class="muted small">· {{ m.note }}</span>{% endif %}</td>
+        <td class="small muted">{{ m.user|default:"" }}</td></tr>
+      {% empty %}<tr><td class="empty small">Nothing yet.</td></tr>{% endfor %}
+    </table>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}<script>
+  document.querySelectorAll('[data-stock-action]').forEach(function (s) {
+    var to = s.form.querySelector('[data-stock-to]');
+    s.addEventListener('change', function () { to.hidden = s.value !== 'move'; to.required = s.value === 'move'; });
+  });
+</script>{% endblock %}

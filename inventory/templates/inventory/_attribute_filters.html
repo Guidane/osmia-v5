@@ -1,0 +1,7 @@
+{% if filters %}<div class="attribute-filters">{% for a, value, low, high in filters %}<label class="small">{{ a.name }}
+    {% if a.kind == 'integer' or a.kind == 'decimal' %}<input type="text" name="a{{ a.pk }}_min" value="{{ low }}" placeholder="from" inputmode="decimal" class="qty">
+      <input type="text" name="a{{ a.pk }}_max" value="{{ high }}" placeholder="to" inputmode="decimal" class="qty"> {{ a.unit }}
+    {% elif a.kind == 'choice' or a.kind == 'yesno' %}<select name="a{{ a.pk }}"><option value="">any</option>
+      {% if a.kind == 'yesno' %}<option{% if value == 'Yes' %} selected{% endif %}>Yes</option><option{% if value == 'No' %} selected{% endif %}>No</option>
+      {% else %}{% for c in a.choice_list %}<option{% if value == c %} selected{% endif %}>{{ c }}</option>{% endfor %}{% endif %}</select>
+    {% else %}<input type="text" name="a{{ a.pk }}" value="{{ value }}" placeholder="contains">{% endif %}</label>{% endfor %}</div>{% endif %}

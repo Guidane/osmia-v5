@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Devices · Osmia{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Devices</h1><span class="spacer"></span>
+  <a class="btn" href="?export=1{% if q %}&amp;q={{ q|urlencode }}{% endif %}">⬇ Excel</a>
+  <a class="btn primary" href="{% url 'devices:new' %}">＋ New device</a></div>
+<form method="get" class="filters"><input type="search" name="q" value="{{ q }}" placeholder="Number, name, manufacturer…" aria-label="Search devices">
+  <nav class="tabs"><a href="?"{% if not origin %} class="on"{% endif %}>All</a>{% for value, label in origins %}<a href="?origin={{ value }}"{% if origin == value %} class="on"{% endif %}>{{ label }}</a>{% endfor %}</nav></form>
+<div class="card flush">
+  <table class="list">
+    <tr><th>Device</th><th>Name</th><th>Manufacturer</th><th class="num">Connectors</th><th class="num">Units</th><th>Version</th></tr>
+    {% for d in devices %}<tr>
+      <td><span class="dot" style="background:{{ d.colour }}"></span><a href="{{ d.get_absolute_url }}">{{ d.number }}</a></td><td>{{ d.name }}{% if d.origin == 'external' %} <span class="badge">Bought</span>{% endif %}</td>
+      <td class="small">{{ d.manufacturer }}{% if d.model %} · {{ d.model }}{% endif %}</td>
+      <td class="num">{{ d.n_connectors }}</td><td class="num">{{ d.n_units }}</td>
+      <td class="small">{% if d.version %}v{{ d.version }}{% else %}<span class="badge">Not saved</span>{% endif %}</td>
+    </tr>{% empty %}<tr><td colspan="6" class="empty small">No devices yet.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

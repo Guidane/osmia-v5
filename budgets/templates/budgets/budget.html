@@ -1,0 +1,53 @@
+{% extends "base.html" %}{% load osmia %}
+{% block title %}{{ budget }} · Osmia{% endblock %}
+{% block content %}
+<p class="small"><a href="{% if budget.parent %}{{ budget.parent.get_absolute_url }}{% else %}{% url 'budgets:list' %}{% endif %}">← {{ budget.parent|default:"Budgets" }}</a></p>
+<div class="page-head"><h1>{{ budget }}</h1>{% if not budget.active %}<span class="badge">Closed</span>{% endif %}
+  <span class="muted">{% if budget.project %}<a href="{{ budget.project.get_absolute_url }}">{{ budget.project }}</a> · {% endif %}{% if budget.owner %}{{ budget.owner }}{% endif %}{% if budget.starts_on or budget.ends_on %} · {{ budget.starts_on|default:"…" }} to {{ budget.ends_on|default:"…" }}{% endif %}</span>
+  <span class="spacer"></span>
+  <a class="btn" href="?export=1">⬇ Excel</a>
+  <a class="btn" href="{% url 'budgets:new' %}?parent={{ budget.pk }}">＋ Under it</a>
+  <a class="btn" href="{% url 'budgets:edit' budget.pk %}">Change</a></div>
+
+<div class="tiles">
+  <div class="tile"><b>{{ budget.amount|money }}</b> budget</div>
+  <div class="tile"><b>{{ totals.spent|money }}</b> spent ({{ totals.used }}%)</div>
+  <div class="tile{% if totals.over %} bad{% elif totals.used >= 90 %} warn{% else %} ok{% endif %}"><b>{{ totals.remaining|money }}</b> {% if totals.over %}over{% else %}left{% endif %}</div>
+  <div class="tile"><b>{{ totals.planned|money }}</b> in draft orders</div>
+</div>
+<div class="card">
+  <span class="meter wide{% if totals.over %} over{% elif totals.used >= 90 %} near{% endif %}"><span style="width:{% if totals.used > 100 %}100{% else %}{{ totals.used }}{% endif %}%"></span></span>
+  <p class="small muted">Arrived {{ totals.received|money }} · still to come {{ totals.coming|money }} · other costs {{ totals.costs|money }}{% if children %} · of which under it {{ totals.spent|sub:own.spent|money }}{% endif %}</p>
+  {% if split > budget.amount %}<p class="small error">The budgets under it add up to {{ split|money }}: more than this one.</p>{% endif %}
+  {% if budget.notes %}<p>{{ budget.notes|linebreaksbr }}</p>{% endif %}
+</div>
+
+{% if children %}<section class="card flush">
+  <div class="card-head"><h3>Under it</h3></div>
+  <table class="list"><tr><th>Budget</th><th class="num">Amount</th><th class="num">Spent</th><th class="num">Left</th></tr>
+    {% for c, t in children %}<tr><td><a href="{{ c.get_absolute_url }}">{{ c }}</a></td><td class="num">{{ c.amount|money }}</td>
+      <td class="num">{{ t.spent|money }}</td><td class="num{% if t.over %} low{% endif %}">{{ t.remaining|money }}</td></tr>{% endfor %}</table>
+</section>{% endif %}
+
+<div class="columns">
+  <section class="card flush">
+    <div class="card-head"><h3>Orders</h3><a class="btn small" href="{% url 'orders:new' %}?budget={{ budget.pk }}">＋ New order</a></div>
+    <table class="list">{% for o in orders %}<tr><td><a href="{{ o.get_absolute_url }}">{{ o.number }}</a> <span class="muted small">{{ o.vendor }}</span></td>
+      <td><span class="badge{% if o.status == 'received' %} ok{% elif o.overdue or o.status == 'cancelled' %} failed{% endif %}">{% if o.overdue %}Late{% else %}{{ o.get_status_display }}{% endif %}</span></td>
+      <td class="num">{{ o.total|money }}</td></tr>
+      {% empty %}<tr><td class="empty small">No orders charged to it.</td></tr>{% endfor %}</table>
+  </section>
+  <section class="card flush" id="costs">
+    <div class="card-head"><h3>Other costs</h3></div>
+    <table class="list">{% for c in costs %}<tr><td class="small nowrap">{{ c.spent_on }}</td><td>{{ c.description }} <span class="muted small">{{ c.created_by|default:"" }}</span></td>
+      <td class="num">{{ c.amount|money }}</td>
+      <td><form method="post" action="{% url 'budgets:cost_delete' budget.pk c.pk %}" data-confirm="Take {{ c.description }} away?">{% csrf_token %}<button class="btn small ghost" title="Take it away">✕</button></form></td></tr>
+      {% empty %}<tr><td class="empty small">None.</td></tr>{% endfor %}</table>
+    <form method="post" action="{% url 'budgets:cost_add' budget.pk %}" class="inline-form pad">{% csrf_token %}
+      <input type="date" name="spent_on" value="{{ today|date:'Y-m-d' }}" aria-label="Date">
+      <input type="text" name="description" placeholder="What for" aria-label="What for" required maxlength="300">
+      <input type="text" name="amount" inputmode="decimal" placeholder="Amount" aria-label="Amount" required class="qty">
+      <button class="btn">＋ Add</button></form>
+  </section>
+</div>
+{% endblock %}

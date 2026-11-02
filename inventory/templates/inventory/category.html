@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{ category.name }} · Osmia{% endblock %}
+{% block content %}
+<p class="small"><a href="{% url 'inventory:categories' %}">← Categories</a></p>
+<div class="page-head"><h1>{{ category.path }}</h1><span class="spacer"></span>
+  <a class="btn" href="{% url 'inventory:parts' %}?category={{ category.pk }}">{{ parts }} part{{ parts|pluralize }}</a>
+  <a class="btn" href="{% url 'assets:list' %}?category={{ category.pk }}">{{ assets }} asset{{ assets|pluralize }}</a>
+  <a class="btn" href="{% url 'inventory:part_new' %}?category={{ category.pk }}">＋ Part</a>
+  <a class="btn" href="{% url 'assets:new' %}?category={{ category.pk }}">＋ Asset</a>
+  <a class="btn" href="{% url 'inventory:categories' %}?edit={{ category.pk }}">Change</a></div>
+{% if children %}<p class="small">Under it: {% for c in children %}<a href="{{ c.get_absolute_url }}">{{ c.name }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+
+<section class="card flush" id="attributes">
+  <div class="card-head"><h3>Attributes</h3><span class="muted small">What its parts and assets fill in. Its own attributes go to every category under it too.</span></div>
+  <table class="list">
+    <tr><th>Attribute</th><th>Type</th><th>Unit, choices, what it links to</th><th>Required</th><th></th></tr>
+    {% for a in inherited %}<tr class="inherited">
+      <td>{{ a.name }}</td><td class="small">{{ a.get_kind_display }}</td>
+      <td class="small">{% include "inventory/_attribute_detail.html" %}</td>
+      <td>{% if a.required %}✓{% endif %}</td>
+      <td class="small muted">from <a href="{{ a.category.get_absolute_url }}#attributes">{{ a.category.name }}</a></td></tr>{% endfor %}
+    {% for a in own %}<tr>
+      <td><b>{{ a.name }}</b>{% if a.help %} <span class="muted small">{{ a.help }}</span>{% endif %}</td><td class="small">{{ a.get_kind_display }}</td>
+      <td class="small">{% include "inventory/_attribute_detail.html" %}</td>
+      <td>{% if a.required %}✓{% endif %}</td>
+      <td class="nowrap">
+        <form method="post" action="{% url 'inventory:attribute_move' category.pk a.pk %}" class="inline">{% csrf_token %}
+          <button class="btn small ghost" name="to" value="up" title="Up"{% if forloop.first %} disabled{% endif %}>↑</button><button class="btn small ghost" name="to" value="down" title="Down"{% if forloop.last %} disabled{% endif %}>↓</button></form>
+        <a class="btn small ghost" href="{% url 'inventory:attribute_edit' category.pk a.pk %}">Change</a>
+        <form method="post" action="{% url 'inventory:attribute_delete' category.pk a.pk %}" class="inline" data-confirm="Take {{ a.name }} away? What was filled in for it goes too.">{% csrf_token %}<button class="btn small ghost" title="Take it away">✕</button></form></td></tr>
+    {% endfor %}
+    {% if not inherited and not own %}<tr><td colspan="5" class="empty small">No attributes yet.</td></tr>{% endif %}
+  </table>
+</section>
+
+<form method="post" action="{% url 'inventory:attribute_new' category.pk %}" class="form card">{% csrf_token %}
+  <h3>New attribute</h3>
+  <div class="fields">{% include "web/_form_fields.html" %}</div>
+  <div class="actions"><button class="btn primary">＋ Add it</button></div>
+</form>
+{% endblock %}

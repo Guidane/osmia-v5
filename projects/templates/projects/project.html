@@ -1,0 +1,109 @@
+{% extends "base.html" %}{% load static osmia %}
+{% block title %}{{ project }} · Osmia{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'projects/diagram.css' %}">{% endblock %}
+{% block content_class %}wide{% endblock %}
+{% block content %}
+<p class="small"><a href="{% url 'projects:list' %}">← Projects</a></p>
+<div class="page-head"><h1>{{ project }}</h1><span class="muted">{{ project.description|truncatechars:120 }}</span><span class="spacer"></span>
+  <a class="btn" href="{% url 'harnesses:list' %}?project={{ project.pk }}">Harnesses ({{ project.harnesses.count }})</a>
+  {% for b in project.budgets.all %}<a class="btn" href="{{ b.get_absolute_url }}">💰 {{ b }}</a>{% empty %}<a class="btn" href="{% url 'budgets:new' %}?project={{ project.pk }}">＋ Budget</a>{% endfor %}
+  <a class="btn" href="{% url 'projects:needs' project.pk %}?config={{ config.pk }}">What it needs</a>
+  {% document_button project %}<a class="btn" href="{% url 'projects:edit' project.pk %}">Change</a></div>
+
+<div class="project">
+  <aside class="card config-tree">
+    <h3>Configurations</h3>
+    <nav>{% for c, depth in tree %}<a href="{{ c.get_absolute_url }}" style="padding-left:{{ depth|add:1 }}em"{% if c == config %} class="on"{% endif %}>{% if depth %}└ {% endif %}{{ c.name }}</a>{% endfor %}</nav>
+    <details><summary class="small">＋ New configuration</summary>
+      <form method="post" action="{% url 'projects:configuration' project.pk %}" class="form">{% csrf_token %}<input type="hidden" name="action" value="new">
+        <div class="field"><label for="cfg-name">Name</label><input id="cfg-name" name="name" required maxlength="200" placeholder="e.g. With load board"></div>
+        <div class="field"><label for="cfg-parent">Based on</label><select id="cfg-parent" name="parent"><option value="">Nothing: a setup of its own</option>
+          {% for c, depth in tree %}<option value="{{ c.pk }}"{% if c == config %} selected{% endif %}>{% for _ in ""|ljust:depth %}&nbsp;&nbsp;{% endfor %}{{ c.name }}</option>{% endfor %}</select></div>
+        <label class="small"><input type="checkbox" name="copy" value="1"> a copy, not linked (changes to it don't flow down)</label>
+        <div class="actions"><button class="btn small primary">Make it</button></div></form></details>
+    {% if config %}<details><summary class="small">⚙ This configuration</summary>
+      <form method="post" action="{% url 'projects:configuration' project.pk %}" class="form">{% csrf_token %}<input type="hidden" name="config" value="{{ config.pk }}">
+        <div class="field"><label for="cfg-rename">Name</label><input id="cfg-rename" name="name" value="{{ config.name }}" maxlength="200"></div>
+        <div class="field"><label for="cfg-desc">Description</label><textarea id="cfg-desc" name="description" rows="2">{{ config.description }}</textarea></div>
+        <div class="actions"><button class="btn small" name="action" value="rename">Save</button>
+          {% if config.parent %}<button class="btn small" name="action" value="detach" data-confirm="Make {{ config }} a setup of its own? Changes to {{ config.parent }} won't flow into it any more.">Detach</button>{% endif %}
+          <button class="btn small ghost" name="action" value="delete" data-confirm="Delete {{ config }}?">Delete</button></div></form></details>{% endif %}
+  </aside>
+
+  <div class="project-main">
+    {% if config %}
+    <div class="card flush diagram-card">
+      <div class="card-head"><h3>{{ config.name }}{% if config.parent %} <span class="muted small">based on {{ config.parent.name }}</span>{% endif %}</h3>
+        <span class="legend small"><i class="lg added"></i> added <i class="lg changed"></i> changed <i class="lg gone"></i> taken away</span></div>
+      <svg id="diagram" class="diagram" role="img" aria-label="Devices and the harnesses between them"></svg>
+      {% if not diagram.devices %}<p class="empty small">No devices yet: add one below.</p>{% endif %}
+    </div>
+    {{ diagram|json_script:"diagram-data" }}
+
+    {% if problems %}<div class="flash warning"><b>To look at:</b><ul class="tight">{% for p in problems %}<li>{{ p }}</li>{% endfor %}</ul></div>{% endif %}
+
+    <div class="columns">
+      <section class="card flush">
+        <div class="card-head"><h3>Devices</h3></div>
+        <table class="list">
+          {% for key, row, device in placed_devices %}<tr id="dev-{{ key }}" class="placed">
+            <td><b>{{ row.label|default:device.number }}</b> <span class="muted small"><a href="{{ device.get_absolute_url }}">{{ device }}</a></span>
+              <details class="inline-edit"><summary class="small">Change</summary>
+                <form method="post" action="{% url 'projects:change' project.pk %}" class="inline-form">{% csrf_token %}
+                  <input type="hidden" name="config" value="{{ config.pk }}"><input type="hidden" name="key" value="{{ key }}">
+                  <input name="label" value="{{ row.label }}" aria-label="Name in the project" maxlength="100"><button class="btn small" name="action" value="rename">Rename</button></form>
+                <form method="post" action="{% url 'projects:change' project.pk %}" class="inline-form">{% csrf_token %}
+                  <input type="hidden" name="config" value="{{ config.pk }}"><input type="hidden" name="key" value="{{ key }}">
+                  <select name="device" aria-label="Swap for">{% for d in devices %}<option value="{{ d.pk }}"{% if d.pk == row.device_id %} selected{% endif %}>{{ d }}</option>{% endfor %}</select>
+                  <button class="btn small" name="action" value="swap">Swap</button></form></details></td>
+            <td><form method="post" action="{% url 'projects:change' project.pk %}">{% csrf_token %}<input type="hidden" name="config" value="{{ config.pk }}">
+              <input type="hidden" name="key" value="{{ key }}"><button class="btn small ghost" name="action" value="remove" title="Take it away from {{ config }}">✕</button></form></td>
+          </tr>{% empty %}<tr><td class="empty small">None.</td></tr>{% endfor %}
+        </table>
+        <form method="post" action="{% url 'projects:change' project.pk %}" class="inline-form pad">{% csrf_token %}<input type="hidden" name="config" value="{{ config.pk }}">
+          <select name="device" aria-label="Device" required><option value="">Device…</option>{% for d in devices %}<option value="{{ d.pk }}">{{ d }}</option>{% endfor %}</select>
+          <input name="label" placeholder="Name (optional)" aria-label="Name in the project" maxlength="100">
+          <button class="btn" name="action" value="add_device">＋ Add</button></form>
+      </section>
+
+      <section class="card flush">
+        <div class="card-head"><h3>Harnesses</h3><a class="btn small" href="{% url 'harnesses:new' %}?project={{ project.pk }}">＋ New harness</a></div>
+        <table class="list">
+          {% for key, harness, ends in harness_rows %}<tr id="har-{{ key }}" class="placed">
+            <td><a href="{{ harness.get_absolute_url }}"><b>{{ harness.number }}</b></a> <span class="muted small">{{ harness.name }}</span>
+              <form method="post" action="{% url 'projects:change' project.pk %}" class="plug-form">{% csrf_token %}
+                <input type="hidden" name="config" value="{{ config.pk }}"><input type="hidden" name="key" value="{{ key }}">
+                {% for end, plugged in ends %}<label class="small">{{ end.designator }}{% if end.connector %} <span class="muted">({{ end.connector.designator }})</span>{% endif %} →
+                  <select name="end_{{ end.pk }}" aria-label="{{ end.designator }} plugs into"><option value="">not plugged in</option>
+                    {% for dkey, drow, device in placed_devices %}<option value="{{ dkey }}"{% if dkey == plugged %} selected{% endif %}>{{ drow.label|default:device.number }}</option>{% endfor %}</select></label>{% endfor %}
+                <button class="btn small" name="action" value="plug">Plug in</button></form></td>
+            <td><form method="post" action="{% url 'projects:change' project.pk %}">{% csrf_token %}<input type="hidden" name="config" value="{{ config.pk }}">
+              <input type="hidden" name="key" value="{{ key }}"><button class="btn small ghost" name="action" value="remove" title="Take it away from {{ config }}">✕</button></form></td>
+          </tr>{% empty %}<tr><td class="empty small">None.</td></tr>{% endfor %}
+        </table>
+        {% if harnesses %}<form method="post" action="{% url 'projects:change' project.pk %}" class="inline-form pad">{% csrf_token %}<input type="hidden" name="config" value="{{ config.pk }}">
+          <select name="harness" aria-label="Harness" required><option value="">Harness…</option>{% for h in harnesses %}<option value="{{ h.pk }}">{{ h }}</option>{% endfor %}</select>
+          <button class="btn" name="action" value="add_harness">＋ Add</button><span class="muted small">Its ends plug in by themselves where there is one device that fits.</span></form>{% endif %}
+      </section>
+    </div>
+
+    <section class="card flush">
+      <div class="card-head"><h3>Changes here</h3><span class="muted small">{% if config.parent %}What {{ config.name }} changes of {{ config.parent.name }}; the rest comes from it.{% else %}A setup of its own: everything it has.{% endif %}</span></div>
+      <table class="list">
+        {% for p, what, text in changes %}<tr class="change-{{ what }}"><td><span class="badge {{ what }}">{{ what }}</span> {{ text }}</td>
+          <td>{% if config.parent %}<form method="post" action="{% url 'projects:change' project.pk %}">{% csrf_token %}<input type="hidden" name="config" value="{{ config.pk }}">
+            <input type="hidden" name="placement" value="{{ p.pk }}"><button class="btn small ghost" name="action" value="undo" title="Take this change back">↺ Undo</button></form>{% endif %}</td></tr>
+        {% empty %}<tr><td class="empty small">{% if config.parent %}No changes: the same as {{ config.parent.name }}.{% else %}Nothing yet.{% endif %}</td></tr>{% endfor %}
+      </table>
+    </section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{% static 'projects/diagram.js' %}"></script>
+<script>
+  Diagram.draw(document.getElementById('diagram'), JSON.parse(document.getElementById('diagram-data').textContent), {
+    url: "{% url 'projects:change' project.pk %}", config: "{{ config.pk }}", csrf: window.OSMIA_CSRF });
+</script>
+{% endblock %}

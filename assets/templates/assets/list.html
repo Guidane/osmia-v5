@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Assets · Osmia{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Assets</h1><span class="spacer"></span>
+  <a class="btn" href="?{{ request.GET.urlencode }}{% if request.GET %}&amp;{% endif %}export=1">⬇ Excel</a>
+  <button type="button" class="btn" data-labels="{% url 'web:labels' 'asset' %}" title="Labels of the ticked assets (none ticked: of all listed)">🏷 Labels</button>
+  <a class="btn" href="{% url 'inventory:categories' %}">Categories</a>
+  <a class="btn primary" href="{% url 'assets:new' %}{% if kind %}?kind={{ kind }}{% endif %}">＋ New asset</a></div>
+<form method="get" class="filters">
+  <nav class="tabs"><a href="?"{% if not kind %} class="on"{% endif %}>All</a>{% for value, label in kinds %}<a href="?kind={{ value }}"{% if kind == value %} class="on"{% endif %}>{{ label }}</a>{% endfor %}</nav>
+  {% if kind %}<input type="hidden" name="kind" value="{{ kind }}">{% endif %}
+  <input type="search" name="q" value="{{ q }}" placeholder="Asset tag, name, model, serial…" aria-label="Search assets">
+  <select name="category" aria-label="Category" onchange="this.form.submit()"><option value="">Every category</option>
+    {% for c, depth in categories %}<option value="{{ c.pk }}"{% if category.pk == c.pk %} selected{% endif %}>{% for _ in ""|ljust:depth %}&nbsp;&nbsp;&nbsp;{% endfor %}{{ c.name }}</option>{% endfor %}</select>
+  <select name="status" aria-label="Status" onchange="this.form.submit()"><option value="">Not retired</option>
+    {% for value, label in statuses %}<option value="{{ value }}"{% if status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+  <label class="small"><input type="checkbox" name="due" value="1"{% if request.GET.due %} checked{% endif %} onchange="this.form.submit()"> due for calibration</label>
+  {% include "inventory/_attribute_filters.html" %}
+</form>
+<div class="card flush">
+  <table class="list">
+    <tr><th><input type="checkbox" data-pick-all aria-label="Tick them all"></th><th>Asset tag</th><th>Name</th><th>Kind</th><th>Category</th>{% for a in attributes %}<th>{{ a.name }}</th>{% endfor %}<th>Kept at</th><th>Status</th><th>Calibration due</th></tr>
+    {% for a, values in rows %}<tr>
+      <td><input type="checkbox" name="pick" value="{{ a.pk }}" aria-label="{{ a.number }}"></td>
+      <td><a href="{{ a.get_absolute_url }}">{{ a.number }}</a></td><td>{{ a.name }} <span class="muted small">{{ a.manufacturer }} {{ a.model }}</span></td>
+      <td class="small">{{ a.get_kind_display }}</td><td class="small">{{ a.category.name|default:"" }}</td>
+      {% for v in values %}<td class="small">{{ v }}</td>{% endfor %}<td class="small">{{ a.location.name|default:"" }}</td>
+      <td><span class="badge{% if a.status == 'available' or a.status == 'in_use' %} ok{% elif a.status == 'retired' or a.status == 'repair' %} failed{% endif %}">{{ a.get_status_display }}</span>{% if a.holder %} <span class="small">{{ a.holder }}</span>{% endif %}</td>
+      <td class="small{% if a.calibration_overdue %} error{% endif %}">{{ a.calibration_due|default:"" }}</td>
+    </tr>{% empty %}<tr><td colspan="{{ attributes|length|add:8 }}" class="empty small">No assets here.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}
+{% block scripts %}<script>
+  /* Labels of the ticked ones (none ticked: of all those listed). */
+  document.querySelectorAll('[data-labels]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var boxes = document.querySelectorAll('input[name=pick]'), ticked = Array.prototype.filter.call(boxes, function (x) { return x.checked; });
+      var ids = (ticked.length ? ticked : Array.prototype.slice.call(boxes)).map(function (x) { return x.value; });
+      if (ids.length) location.href = b.dataset.labels + '?ids=' + ids.join(',');
+    });
+  });
+  var all = document.querySelector('input[data-pick-all]');
+  if (all) all.addEventListener('change', function () { document.querySelectorAll('input[name=pick]').forEach(function (x) { x.checked = all.checked; }); });
+</script>{% endblock %}

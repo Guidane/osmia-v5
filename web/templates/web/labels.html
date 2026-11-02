@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Labels · Osmia{% endblock %}
+{% block head %}<style>
+  @page { size: A4; margin: 0; }
+  .sheet { width: 210mm; height: 297mm; background: #fff; color: #000; box-shadow: var(--shadow); margin: 0 auto 10px; position: relative; overflow: hidden;
+           padding: {{ sheet.top }}mm 0 0 {{ sheet.left }}mm; display: grid; align-content: start;
+           grid-template-columns: repeat({{ sheet.cols }}, {{ sheet.width }}mm); grid-auto-rows: {{ sheet.height }}mm;
+           column-gap: {{ sheet.gap_x }}mm; row-gap: {{ sheet.gap_y }}mm; }
+  .sticker { box-sizing: border-box; padding: 1.5mm 2mm; overflow: hidden; display: flex; gap: 2mm; align-items: center; outline: 1px dashed #ccc; }
+  .sticker img { max-height: calc({{ sheet.height }}mm - 3mm); max-width: 35%; object-fit: contain; }
+  .sticker .lines { min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
+  .sticker .number { font-weight: 700; font-size: {% if sheet.height < 30 %}9pt{% else %}12pt{% endif %}; }
+  .sticker .text { font-size: {% if sheet.height < 30 %}7pt{% else %}9pt{% endif %}; }
+  .sticker .small { font-size: {% if sheet.height < 30 %}6pt{% else %}7.5pt{% endif %}; color: #333; }
+  .sticker .lines > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sticker .text { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  @media print {
+    .topbar, .flashes, .label-settings, p.back { display: none !important; }
+    body, .content { background: #fff; padding: 0 !important; margin: 0; max-width: none; }
+    .sheet { box-shadow: none; margin: 0; page-break-after: always; }
+    .sticker { outline: none; }
+  }
+</style>{% endblock %}
+{% block content_class %}wide{% endblock %}
+{% block content %}
+<p class="small back"><a href="{% if kind == 'part' %}{% url 'inventory:parts' %}{% else %}{% url 'assets:list' %}{% endif %}">← {% if kind == 'part' %}Parts{% else %}Assets{% endif %}</a></p>
+<form method="get" class="card label-settings">
+  <input type="hidden" name="ids" value="{{ ids }}">
+  <div class="page-head"><h1>🏷 Labels of {{ things|length }} {{ kind }}{{ things|length|pluralize }}</h1><span class="spacer"></span>
+    <button class="btn" name="save" value="1" title="Labels of {{ kind }}s look like this from now on">Save as default</button>
+    <button type="button" class="btn primary" onclick="window.print()">🖨 Print</button></div>
+  <div class="label-options">
+    <label>Sheet <select name="size" onchange="this.form.submit()">{% for key, name in sizes %}<option value="{{ key }}"{% if layout.size == key %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+    <span class="label-shows">Show: {% for key, name, on in shown %}<label><input type="checkbox" name="show_{{ key }}" value="1"{% if key in layout.show %} checked{% endif %} onchange="this.form.submit()"> {{ name }}</label>{% endfor %}</span>
+    {% if attributes %}<span class="label-shows">Attributes: {% for name in attributes %}<label><input type="checkbox" name="attribute" value="{{ name }}"{% if name in layout.attributes %} checked{% endif %} onchange="this.form.submit()"> {{ name }}</label>{% endfor %}</span>{% endif %}
+    <label>Copies of each <input type="number" name="copies" value="{{ copies }}" min="1" max="100" class="qty" onchange="this.form.submit()"></label>
+    <label>Skip the first <input type="number" name="skip" value="{{ skip }}" min="0" max="200" class="qty" onchange="this.form.submit()"> labels (a sheet used before)</label>
+  </div>
+</form>
+{% for page in pages %}<div class="sheet">
+  {% for label in page %}<div class="sticker">{% if label %}{% with lines=label.0 picture=label.1 %}
+    {% if picture %}<img src="{{ picture }}" alt="">{% endif %}
+    <div class="lines">{% for cls, text in lines %}<span class="{{ cls }}">{{ text }}</span>{% endfor %}</div>{% endwith %}{% endif %}</div>{% endfor %}
+</div>{% endfor %}
+{% endblock %}

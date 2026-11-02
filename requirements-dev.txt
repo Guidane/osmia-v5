@@ -1,0 +1,4 @@
+-r requirements.txt
+# The browser tests: Edge or Chrome if installed, else run "playwright install chromium".
+playwright>=1.40
+tblib>=3.0          # tracebacks of failing tests in parallel runs

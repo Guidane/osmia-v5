@@ -1,0 +1,34 @@
+{% extends "base.html" %}{% load osmia %}
+{% block title %}{{ department.name }} · Osmia{% endblock %}
+{% block content %}
+<p class="small"><a href="{% if department.parent %}{{ department.parent.get_absolute_url }}{% else %}{% url 'accounts:departments' %}{% endif %}">← {{ department.parent.name|default:"Departments" }}</a></p>
+<div class="page-head"><h1>{{ department.path }}</h1>{% if department.manager %}<span class="muted">managed by {{ department.manager }}</span>{% endif %}<span class="spacer"></span>
+  {% if user.is_superuser %}<a class="btn" href="{% url 'accounts:department_new' %}?parent={{ department.pk }}">＋ Under it</a>
+  <a class="btn" href="{% url 'accounts:department_edit' department.pk %}">Change</a>
+  <form method="post" action="{% url 'accounts:department_delete' department.pk %}" class="inline" data-confirm="Delete {{ department.name }}? Its people will be in no department.">{% csrf_token %}<button class="btn ghost">Delete</button></form>{% endif %}</div>
+{% if department.description %}<p>{{ department.description|linebreaksbr }}</p>{% endif %}
+{% if children %}<p class="small">Under it: {% for c in children %}<a href="{{ c.get_absolute_url }}">{{ c.name }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+
+<section class="card flush">
+  <div class="card-head"><h3>People <span class="muted small">{{ people|length }}</span></h3></div>
+  <table class="list">
+    {% for p in people %}<tr><td>{% if user.is_superuser %}<a href="{% url 'accounts:user_edit' p.pk %}">{{ p }}</a>{% else %}{{ p }}{% endif %}{% if p == department.manager %} <span class="badge ok">Manager</span>{% endif %}</td>
+      <td class="small">{{ p.job_title }}</td><td class="small">{% if p.email %}<a href="mailto:{{ p.email }}">{{ p.email }}</a>{% endif %}</td><td class="small">{{ p.phone }}</td>
+      {% if user.is_superuser %}<td><form method="post" action="{% url 'accounts:assign' department.pk %}">{% csrf_token %}<button class="btn small ghost" name="remove" value="{{ p.pk }}" title="Take {{ p }} out of {{ department.name }}">✕</button></form></td>{% endif %}</tr>
+    {% empty %}<tr><td class="empty small">Nobody yet.</td></tr>{% endfor %}
+  </table>
+  {% if user.is_superuser and others %}<form method="post" action="{% url 'accounts:assign' department.pk %}" class="pad assign-form">{% csrf_token %}
+    <label for="assign-users" class="small">Put in {{ department.name }} (out of where they are now):</label>
+    <select id="assign-users" name="users" multiple size="6">{% for o in others %}<option value="{{ o.pk }}">{{ o }}{% if o.department %} — now in {{ o.department.name }}{% endif %}</option>{% endfor %}</select>
+    <div class="actions"><button class="btn">＋ Put them in</button><span class="muted small">Ctrl+click picks several.</span></div></form>{% endif %}
+</section>
+
+<div class="columns">
+  <section class="card flush"><div class="card-head"><h3>Budgets</h3></div>
+    <table class="list">{% for b in budgets %}<tr><td><a href="{{ b.get_absolute_url }}">{{ b }}</a></td><td class="num">{{ b.amount|money }}</td></tr>
+      {% empty %}<tr><td class="empty small">None.</td></tr>{% endfor %}</table></section>
+  <section class="card flush"><div class="card-head"><h3>Projects</h3></div>
+    <table class="list">{% for p in projects %}<tr><td><a href="{{ p.get_absolute_url }}">{{ p }}</a></td></tr>
+      {% empty %}<tr><td class="empty small">None.</td></tr>{% endfor %}</table></section>
+</div>
+{% endblock %}

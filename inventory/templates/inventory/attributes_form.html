@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · Osmia{% endblock %}
+{% block content_class %}narrow{% endblock %}
+{% block leave_to %}{{ back|default:"" }}{% endblock %}
+{% block content %}
+<form method="post" class="form card" id="part-form">{% csrf_token %}
+  <h1>{{ title }}</h1>
+  <input type="hidden" name="attributes_of" value="{{ form.shown_category }}">
+  {% if form.non_field_errors %}<div class="flash error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+  <div class="fields">
+  {% for f in form %}{% if not f.name|slice:":5" == "attr_" %}
+    <div class="field{% if f.errors %} has-error{% endif %}">
+      {% if f.widget_type == 'checkbox' %}<label class="inline">{{ f }} {{ f.label }}</label>{% else %}<label for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{% endif %}
+      {% if f.help_text %}<div class="help">{{ f.help_text|safe }}</div>{% endif %}
+      {{ f.errors }}
+    </div>
+    {% if f.name == 'category' %}<fieldset class="attributes">
+      <legend>Attributes</legend>
+      {% for a in form.attribute_fields %}
+        <div class="field{% if a.errors %} has-error{% endif %}"><label for="{{ a.id_for_label }}"{% if a.field.required %} class="required"{% endif %}>{{ a.label }}</label>{{ a }}
+          {% if a.help_text %}<div class="help">{{ a.help_text }}</div>{% endif %}{{ a.errors }}</div>
+      {% empty %}<p class="muted small">{% if form.shown_category %}Its category has no attributes yet.{% else %}Pick a category: its attributes are filled in here.{% endif %}</p>{% endfor %}
+    </fieldset>{% endif %}
+  {% endif %}{% endfor %}
+  </div>
+  {% if part_numbers %}<datalist id="part-numbers">{% for number, description in part_numbers %}<option value="{{ number }}">{{ description }}</option>{% endfor %}</datalist>{% endif %}
+  <div class="actions"><button class="btn primary">Save</button>{% if back %} <a href="{{ back }}">Cancel</a>{% endif %}</div>
+</form>
+{% endblock %}
+{% block scripts %}<script>
+  /* Another category has other attributes: show them (what is filled in stays). */
+  var form = document.getElementById('part-form');
+  form.querySelector('[name=category]').addEventListener('change', function () {
+    var flag = document.createElement('input');
+    flag.type = 'hidden'; flag.name = 'refresh'; flag.value = '1';
+    form.appendChild(flag);
+    form.noValidate = true;
+    form.submit();
+  });
+</script>{% endblock %}

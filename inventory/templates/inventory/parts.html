@@ -1,0 +1,43 @@
+{% extends "base.html" %}{% load osmia %}
+{% block title %}Parts · Osmia{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Parts</h1><span class="spacer"></span>
+  <a class="btn" href="?{{ request.GET.urlencode }}{% if request.GET %}&amp;{% endif %}export=1">⬇ Excel</a>
+  <button type="button" class="btn" data-labels="{% url 'web:labels' 'part' %}" title="Labels of the ticked parts (none ticked: of all listed)">🏷 Labels</button>
+  <a class="btn" href="{% url 'inventory:categories' %}">Categories</a>
+  <a class="btn primary" href="{% url 'inventory:part_new' %}">＋ New part</a></div>
+<form method="get" class="filters">
+  <input type="search" name="q" value="{{ q }}" placeholder="Part number, description, manufacturer…" aria-label="Search parts">
+  <select name="category" aria-label="Category"><option value="">Every category</option>
+    {% for c, depth in categories %}<option value="{{ c.pk }}"{% if category.pk == c.pk %} selected{% endif %}>{% for _ in ""|ljust:depth %}&nbsp;&nbsp;&nbsp;{% endfor %}{{ c.name }}</option>{% endfor %}</select>
+  <label class="small"><input type="checkbox" name="all" value="1"{% if request.GET.all %} checked{% endif %}> also inactive</label>
+  <button class="btn">Find</button>
+  {% include "inventory/_attribute_filters.html" %}
+</form>
+<div class="card flush">
+  <table class="list">
+    <tr><th><input type="checkbox" data-pick-all aria-label="Tick them all"></th><th>Part number</th><th>Description</th><th>Category</th>{% for a in attributes %}<th>{{ a.name }}</th>{% empty %}<th>Manufacturer</th>{% endfor %}<th class="num">On hand</th><th></th></tr>
+    {% for p, values in rows %}<tr>
+      <td><input type="checkbox" name="pick" value="{{ p.pk }}" aria-label="{{ p.number }}"></td>
+      <td><a href="{{ p.get_absolute_url }}">{{ p.number }}</a></td><td>{{ p.description }}</td>
+      <td class="small">{{ p.category.name|default:"" }}</td>
+      {% for v in values %}<td class="small">{{ v }}</td>{% empty %}<td class="small">{{ p.manufacturer }}</td>{% endfor %}
+      <td class="num{% if p.minimum and p.have|default:0 < p.minimum %} low{% endif %}">{{ p.have|qty|default:"0" }} <span class="muted small">{{ p.unit }}</span></td>
+      <td>{% if not p.active %}<span class="badge">Inactive</span>{% endif %}</td>
+    </tr>{% empty %}<tr><td colspan="{{ attributes|length|add:7 }}" class="empty small">{% if q or category %}No parts match.{% else %}No parts yet.{% endif %}</td></tr>{% endfor %}
+  </table>
+</div>
+{% if count > page %}<p class="muted small">The first {{ page }} of {{ count }}: search to narrow it down.</p>{% endif %}
+{% endblock %}
+{% block scripts %}<script>
+  /* Labels of the ticked ones (none ticked: of all those listed). */
+  document.querySelectorAll('[data-labels]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var boxes = document.querySelectorAll('input[name=pick]'), ticked = Array.prototype.filter.call(boxes, function (x) { return x.checked; });
+      var ids = (ticked.length ? ticked : Array.prototype.slice.call(boxes)).map(function (x) { return x.value; });
+      if (ids.length) location.href = b.dataset.labels + '?ids=' + ids.join(',');
+    });
+  });
+  var all = document.querySelector('input[data-pick-all]');
+  if (all) all.addEventListener('change', function () { document.querySelectorAll('input[name=pick]').forEach(function (x) { x.checked = all.checked; }); });
+</script>{% endblock %}

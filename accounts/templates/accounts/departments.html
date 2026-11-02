@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Departments · Osmia{% endblock %}
+{% block content_class %}narrow{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Departments</h1><span class="spacer"></span>
+  {% if user.is_superuser %}<a class="btn" href="{% url 'accounts:users' %}">Users</a>
+  <a class="btn primary" href="{% url 'accounts:department_new' %}">＋ New department</a>{% endif %}</div>
+<div class="card flush">
+  <table class="list">
+    <tr><th>Department</th><th>Manager</th><th class="num">People</th>{% if user.is_superuser %}<th></th>{% endif %}</tr>
+    {% for d, depth, n in departments %}<tr>
+      <td style="padding-left:{{ depth|add:1 }}em"><a href="{{ d.get_absolute_url }}">{{ d.name }}</a></td>
+      <td class="small">{{ d.manager|default:"" }}</td><td class="num">{{ n|default:"" }}</td>
+      {% if user.is_superuser %}<td class="small"><a href="{% url 'accounts:department_new' %}?parent={{ d.pk }}">＋ under it</a></td>{% endif %}
+    </tr>{% empty %}<tr><td colspan="4" class="empty small">No departments yet.</td></tr>{% endfor %}
+  </table>
+</div>
+{% if without and user.is_superuser %}<p class="small"><a href="{% url 'accounts:users' %}?none=1">{{ without }} {{ without|pluralize:"person is,people are" }} in no department.</a></p>{% endif %}
+{% endblock %}

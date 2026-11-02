@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Demo data · Osmia{% endblock %}
+{% block content_class %}narrow{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Demo data {% if on %}<span class="badge ok">On</span>{% else %}<span class="badge">Off</span>{% endif %}</h1>
+  <p>Example data to try Osmia with, alongside your own: departments, parts and assets with attributes, stock in locations,
+    orders (one of them late), budgets, devices with their pins, a bought power supply, and the Burn-in rack project with its
+    harnesses and configurations.</p>
+  {% if on %}
+    <p class="small muted">{{ rows }} rows were made by it. Switching it off takes those away and nothing else; anything real
+      that uses one of them by then (a real order of a demo part, say) keeps that one.</p>
+    <form method="post" data-confirm="Take all the demo data away?">{% csrf_token %}<button class="btn primary" name="action" value="off">Switch it off</button></form>
+  {% else %}
+    <p class="small muted">It is made next to what is there, so it can be taken away again later without touching your own data.</p>
+    <form method="post">{% csrf_token %}<button class="btn primary" name="action" value="on">Switch it on</button></form>
+  {% endif %}
+</div>
+{% endblock %}

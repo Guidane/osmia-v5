@@ -1,0 +1,60 @@
+{% extends "base.html" %}{% load osmia %}
+{% block title %}{{ thing }} · Documentation · Osmia{% endblock %}
+{% block content %}
+<p class="small"><a href="{{ thing.get_absolute_url }}">← {{ thing }}</a></p>
+<div class="page-head"><h1>📄 {{ thing }}</h1><span class="spacer"></span>
+  {% if doc %}<span class="muted small">{% if doc.updated_by %}{{ doc.updated_by }}, {% endif %}{{ doc.updated_at|date:"j M Y H:i" }}</span>{% endif %}
+  {% if not editing %}<a class="btn primary" href="?edit=1">✎ Write</a>{% endif %}</div>
+
+<div class="doc-layout">
+  <div>
+    {% if editing %}
+    <form method="post" class="card flush">{% csrf_token %}
+      <div class="doc-edit" data-upload="{% url 'web:document_upload' kind thing.pk %}">
+        <div class="doc-toolbar" role="toolbar" aria-label="Formatting">
+          <select data-block aria-label="Paragraph style"><option value="">Style…</option><option value="p">Normal text</option><option value="h2">Heading 1</option><option value="h3">Heading 2</option><option value="h4">Heading 3</option><option value="quote">Quote</option><option value="code">Code block</option></select>
+          <span class="sep"></span>
+          <button type="button" data-do="bold" title="Bold (Ctrl+B)"><b>B</b></button><button type="button" data-do="italic" title="Italic (Ctrl+I)"><i>I</i></button><button type="button" data-do="underline" title="Underline (Ctrl+U)"><u>U</u></button><button type="button" data-do="strike" title="Strike through"><s>S</s></button><button type="button" data-do="clear" title="Clear formatting">⌫</button>
+          <span class="sep"></span>
+          <button type="button" data-do="ul" title="Bullet list">• List</button><button type="button" data-do="ol" title="Numbered list">1. List</button>
+          <span class="sep"></span>
+          <button type="button" data-do="link" title="Link">🔗 Link</button><button type="button" data-do="unlink" title="Take the link away">⛓</button>
+          <button type="button" data-do="table" title="Insert a table">▦ Table</button>
+          <button type="button" data-table="row" title="Add a row under this one">+ Row</button><button type="button" data-table="col" title="Add a column after this one">+ Col</button><button type="button" data-table="delrow" title="Take this row away">− Row</button><button type="button" data-table="delcol" title="Take this column away">− Col</button>
+          <button type="button" data-do="picture" title="Insert a picture or a file">🖼 Image</button>
+          <button type="button" data-do="hr" title="A line across">― Line</button>
+          <span class="sep"></span>
+          <button type="button" data-do="undo" title="Undo (Ctrl+Z)">↶</button><button type="button" data-do="redo" title="Redo (Ctrl+Y)">↷</button>
+          <input type="file" multiple hidden aria-label="Picture or file to insert">
+        </div>
+        <div class="doc doc-area" contenteditable="true" aria-label="Documentation">{% if doc.body %}{{ doc.body|markup }}{% else %}<p><br></p>{% endif %}</div>
+        <textarea name="body" hidden></textarea>
+      </div>
+      <div class="actions pad"><button class="btn primary">Save</button><a href="{{ request.path }}">Cancel</a></div>
+    </form>
+    {% else %}
+    <article class="card doc">{% if doc.body %}{{ doc.body|markup }}{% else %}<p class="muted">Nothing written yet. <a href="?edit=1">Write it</a>: how it is used, set up, maintained…</p>{% endif %}</article>
+    {% endif %}
+  </div>
+
+  <aside>
+    <section class="card">
+      <h3>Picture</h3>
+      {% if doc.image %}<a href="{% url 'web:image' kind thing.pk %}"><img class="doc-image" src="{% url 'web:image' kind thing.pk %}" alt="{{ thing }}"></a>
+        <form method="post" action="{% url 'web:document_remove' kind thing.pk %}" class="inline" data-confirm="Take the picture away?">{% csrf_token %}<button class="btn small ghost" name="what" value="image">✕ Take it away</button></form>{% endif %}
+      <form method="post" action="{% url 'web:document_upload' kind thing.pk %}" enctype="multipart/form-data" class="inline-form">{% csrf_token %}
+        <input type="file" name="image" accept="image/*" aria-label="Picture" required><button class="btn small">{% if doc.image %}Replace{% else %}Add{% endif %}</button></form>
+    </section>
+    <section class="card">
+      <h3>Files</h3>
+      <div class="files">{% for f in files %}
+        <div class="file">{% if f.is_image %}<a href="{% url 'web:document_file' f.pk %}"><img src="{% url 'web:document_file' f.pk %}" alt="{{ f.name }}"></a>{% else %}<a href="{% url 'web:document_file' f.pk %}">📎 {{ f.name }}</a>{% endif %}
+          <form method="post" action="{% url 'web:document_remove' kind thing.pk %}" class="inline" data-confirm="Delete {{ f.name }}?">{% csrf_token %}<button class="btn small ghost" name="what" value="{{ f.pk }}" title="Delete it">✕</button></form></div>
+      {% empty %}<p class="muted small">No files yet: datasheets, drawings, manuals, photos.</p>{% endfor %}</div>
+      <form method="post" action="{% url 'web:document_upload' kind thing.pk %}" enctype="multipart/form-data" class="inline-form">{% csrf_token %}
+        <input type="file" name="file" multiple aria-label="Files to add" required><button class="btn small">Add</button></form>
+    </section>
+  </aside>
+</div>
+{% endblock %}
+{% block scripts %}{% load static %}{% if editing %}<script src="{% static 'web/editor.js' %}"></script>{% endif %}{% endblock %}

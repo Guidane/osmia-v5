@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Notifications · Osmia{% endblock %}
+{% block content_class %}narrow{% endblock %}
+{% block content %}
+<div class="card flush">
+  <div class="card-head"><h3>Notifications</h3>
+    <form method="post">{% csrf_token %}<button class="btn small">Mark all read</button></form></div>
+  {% for n in items %}
+    <a class="work-row" href="{% url 'web:notification_open' n.pk %}">
+      <span class="w-main"><span class="w-title"{% if n.read %} style="font-weight:normal"{% endif %}>{{ n.message }}</span>
+        <span class="w-sub">{{ n.created_at|timesince }} ago</span></span></a>
+  {% empty %}<p class="empty small">Nothing yet.</p>{% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,89 @@
+{% extends "base.html" %}{% load osmia %}
+{% block title %}{{ asset.number }} · Osmia{% endblock %}
+{% block content %}
+<p class="small"><a href="{% url 'assets:list' %}?kind={{ asset.kind }}">← Assets</a></p>
+<div class="page-head"><h1>{{ asset.number }}</h1><span class="muted">{{ asset.name }}</span><span class="badge">{{ asset.get_kind_display }}</span>
+  <span class="badge{% if asset.status == 'available' or asset.status == 'in_use' %} ok{% elif asset.status == 'retired' or asset.status == 'repair' %} failed{% endif %}">{{ asset.get_status_display }}{% if asset.holder %}: {{ asset.holder }}{% endif %}</span>
+  <span class="spacer"></span><a class="btn" href="{% url 'web:labels' 'asset' %}?ids={{ asset.pk }}">🏷 Label</a>{% document_button asset %}<a class="btn" href="{% url 'assets:edit' asset.pk %}">Change</a></div>
+{% if asset.calibration_overdue %}<div class="flash error">Calibration was due on {{ asset.calibration_due }}.</div>{% endif %}
+
+<div class="columns">
+  <section class="card">
+    {% document_image asset %}
+    <dl class="details">
+      <dt>Category</dt><dd>{% if asset.category %}<a href="{{ asset.category.get_absolute_url }}">{{ asset.category }}</a>{% else %}—{% endif %}</dd>
+      {% include "inventory/_attribute_values.html" %}
+      <dt>Make</dt><dd>{{ asset.manufacturer|default:"—" }}{% if asset.model %} · {{ asset.model }}{% endif %}</dd>
+      <dt>Serial number</dt><dd>{{ asset.serial|default:"—" }}</dd>
+      {% if asset.device %}<dt>Device</dt><dd><a href="{{ asset.device.get_absolute_url }}">{{ asset.device }}</a>{% if asset.version %} v{{ asset.version }}{% endif %}</dd>{% endif %}
+      {% if asset.harness %}<dt>Harness</dt><dd><a href="{{ asset.harness.get_absolute_url }}">{{ asset.harness }}</a>{% if asset.version %} v{{ asset.version }}{% endif %}</dd>{% endif %}
+      {% if asset.built_on %}<dt>Built</dt><dd>{{ asset.built_on }}{% if asset.built_by %} by {{ asset.built_by }}{% endif %}</dd>{% endif %}
+      <dt>Kept at</dt><dd>{% if asset.location %}<a href="{{ asset.location.get_absolute_url }}">{{ asset.location }}</a>{% else %}—{% endif %}</dd>
+      <dt>Looked after by</dt><dd>{{ asset.keeper|default:"—" }}</dd>
+      <dt>Bought from</dt><dd>{% if asset.vendor %}<a href="{{ asset.vendor.get_absolute_url }}">{{ asset.vendor }}</a>{% if asset.vendor_number %} · {{ asset.vendor_number }}{% endif %}{% if asset.price %} · {{ asset.price|money }}{% endif %}{% else %}—{% endif %}{% for l in order_lines %} · <a href="{{ l.order.get_absolute_url }}">{{ l.order.number }}</a>{% endfor %}</dd>
+      <dt>Calibration</dt><dd>{% if asset.calibration_months %}every {{ asset.calibration_months }} month{{ asset.calibration_months|pluralize }}; last {{ asset.calibrated_on|default:"never" }}; due <b{% if asset.calibration_overdue %} class="error"{% endif %}>{{ asset.calibration_due }}</b>{% else %}not needed{% endif %}</dd>
+      {% if asset.notes %}<dt>Notes</dt><dd>{{ asset.notes|linebreaksbr }}</dd>{% endif %}
+    </dl>
+  </section>
+  <section class="card">
+    <h3>What happened</h3>
+    {% if asset.status == 'ordered' %}
+      <p class="small">On order.{% for l in order_lines %} <a href="{{ l.order.get_absolute_url }}">{{ l.order.number }}</a> ({{ l.order.get_status_display|lower }}){% empty %}
+        <form method="post" action="{% url 'assets:act' asset.pk %}" class="inline">{% csrf_token %}<button class="btn small primary" name="action" value="order"{% if not asset.vendor %} disabled title="Give it a vendor first"{% endif %}>🛒 Put it on an order</button></form>{% endfor %}</p>
+    {% elif asset.status == 'building' %}
+      <p class="small">Being built: tick its wires below.</p>
+    {% elif asset.status == 'available' %}
+      <form method="post" action="{% url 'assets:act' asset.pk %}" class="inline-form">{% csrf_token %}
+        <select name="to" aria-label="Who takes it">{% for p in people %}<option value="{{ p.pk }}"{% if p == user %} selected{% endif %}>{{ p }}</option>{% endfor %}</select>
+        <input type="text" name="note" placeholder="What for (optional)" aria-label="What for" maxlength="300">
+        <button class="btn primary" name="action" value="out">Check it out</button></form>
+    {% elif asset.status != 'retired' %}
+      <form method="post" action="{% url 'assets:act' asset.pk %}" class="inline-form">{% csrf_token %}
+        <input type="text" name="note" placeholder="Note (optional)" aria-label="Note" maxlength="300">
+        <button class="btn primary" name="action" value="back">It is back</button></form>
+    {% endif %}
+    {% if asset.calibration_months and asset.status != 'retired' %}
+      <form method="post" action="{% url 'assets:act' asset.pk %}" class="inline-form">{% csrf_token %}
+        <input type="date" name="on" value="{{ today|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}" aria-label="Calibrated on">
+        <input type="text" name="note" placeholder="Certificate, by whom (optional)" aria-label="Note" maxlength="300">
+        <button class="btn" name="action" value="calibrated">Calibrated</button></form>{% endif %}
+    {% if asset.status == 'available' %}
+      <form method="post" action="{% url 'assets:act' asset.pk %}" class="inline-form">{% csrf_token %}
+        <input type="text" name="note" placeholder="Where, why (optional)" aria-label="Where or why" maxlength="300">
+        <button class="btn small" name="action" value="in_use">In use</button>
+        <button class="btn small" name="action" value="calibration">Away for calibration</button>
+        <button class="btn small" name="action" value="repair">In repair</button>
+        <button class="btn small ghost" name="action" value="retired" data-confirm="Retire {{ asset.number }}? It stays, with its history.">Retire</button></form>{% endif %}
+  </section>
+</div>
+
+{% if checks %}
+<form method="post" action="{% url 'assets:checklist' asset.pk %}" class="card flush">{% csrf_token %}
+  <div class="card-head"><h3>Checklist <span class="muted small">{{ placed }} / {{ checks|length }} placed · {{ verified }} / {{ checks|length }} verified</span></h3>
+    <span class="muted small">Tick each wire as it is placed, then again when it is checked against the pinout.</span></div>
+  <table class="list">
+    <tr><th>Wire</th><th>Signal</th><th>Set</th><th>Colour</th><th>Placed</th><th>Verified</th></tr>
+    {% for c in checks %}{% ifchanged c.between %}<tr class="group-row"><th colspan="6">{{ c.between }}</th></tr>{% endifchanged %}
+      <tr><td>{{ c.wire }}</td><td>{{ c.signal }}</td><td>{{ c.wire_set }}</td><td>{{ c.colour }}</td>
+        <td><input type="checkbox" name="placed_{{ c.pk }}" aria-label="{{ c.wire }} placed"{% if c.placed %} checked{% endif %}></td>
+        <td><input type="checkbox" name="verified_{{ c.pk }}" aria-label="{{ c.wire }} verified"{% if c.verified %} checked{% endif %}></td></tr>
+    {% endfor %}
+  </table>
+  <div class="actions pad"><button class="btn primary">Save</button></div>
+</form>
+{% endif %}
+
+<div class="columns">
+  <section class="card flush">
+    <div class="card-head"><h3>What links to it</h3></div>
+    <table class="list">{% for name, things in linked_here %}<tr class="group-row"><th>{{ name }}</th></tr>
+      {% for p in things %}<tr><td><a href="{{ p.get_absolute_url }}">{{ p.number }}</a> <span class="muted small">{{ p.description }}</span></td></tr>{% endfor %}
+      {% empty %}<tr><td class="empty small">Nothing links to it yet: give a category a "link to an asset" attribute (e.g. Crimped with).</td></tr>{% endfor %}</table>
+  </section>
+  <section class="card flush">
+    <div class="card-head"><h3>History</h3></div>
+    <table class="list">{% for e in events %}<tr><td class="small nowrap">{{ e.at|date:"j M Y H:i" }}</td><td>{{ e.get_kind_display }} <span class="muted small">{{ e.note }}</span></td><td class="small muted">{{ e.user|default:"" }}</td></tr>
+      {% empty %}<tr><td class="empty small">Nothing yet.</td></tr>{% endfor %}</table>
+  </section>
+</div>
+{% endblock %}

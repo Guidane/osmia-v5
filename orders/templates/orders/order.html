@@ -1,0 +1,74 @@
+{% extends "base.html" %}{% load osmia %}
+{% block title %}{{ order.number }} · Osmia{% endblock %}
+{% block content %}
+<p class="small"><a href="{% url 'orders:list' %}">← Orders</a></p>
+<div class="page-head">
+  <h1>{{ order.number }}</h1>
+  <span class="badge{% if order.status == 'received' %} ok{% elif order.overdue or order.status == 'cancelled' %} failed{% endif %}">{% if order.overdue %}Late{% else %}{{ order.get_status_display }}{% endif %}</span>
+  <span class="muted"><a href="{{ order.vendor.get_absolute_url }}">{{ order.vendor }}</a>{% if order.budget %} · <a href="{{ order.budget.get_absolute_url }}">{{ order.budget }}</a>{% endif %}{% if order.ordered_on %} · ordered {{ order.ordered_on }}{% endif %}{% if order.expected_on and order.status != 'received' %} · expected {{ order.expected_on }}{% endif %}{% if order.received_on %} · received {{ order.received_on }}{% endif %}</span>
+  <span class="spacer"></span>
+  {% if order.status == 'draft' or order.status == 'ordered' %}<form method="post" action="{% url 'orders:cancel' order.pk %}" data-confirm="Cancel {{ order.number }}?">{% csrf_token %}<button class="btn ghost">Cancel order</button></form>{% endif %}
+</div>
+
+{% if order.status == 'draft' %}
+<section class="card flush">
+  <div class="card-head"><h3>What to order</h3><span class="muted small">A draft: change it, then place it.</span></div>
+  <table class="list">
+    <tr><th>Part</th><th colspan="3">Quantity · price each</th></tr>
+    {% for line, where in lines %}<tr>
+      <td>{% if line.asset %}🔧 {% endif %}<a href="{{ line.item.get_absolute_url }}">{{ line.item.number }}</a> <span class="muted small">{{ line.text }}{% if line.vendor_number %} · {{ line.vendor_number }}{% endif %}</span></td>
+      <td colspan="3"><form method="post" action="{% url 'orders:line_change' order.pk line.pk %}" class="line-form">{% csrf_token %}
+        <input type="text" name="quantity" value="{{ line.quantity|qty }}" inputmode="decimal" aria-label="Quantity of {{ line.item.number }}"{% if line.asset %} readonly{% endif %}>
+        <input type="text" name="price" value="{{ line.price|qty }}" inputmode="decimal" placeholder="—" aria-label="Price of {{ line.item.number }}">
+        <button class="btn small">Save</button> <button class="btn small ghost" name="remove" value="1" title="Take it off">✕</button></form></td>
+    </tr>{% empty %}<tr><td colspan="4" class="empty small">Nothing on it yet.</td></tr>{% endfor %}
+  </table>
+  <form method="post" action="{% url 'orders:line_add' order.pk %}" class="line-form add">{% csrf_token %}
+    <input type="text" name="part" list="parts" placeholder="Part number or asset tag" aria-label="Part number or asset tag on order" required autocomplete="off">
+    <datalist id="parts">{% for p in parts %}<option value="{{ p.number }}">{{ p.description }}</option>{% endfor %}{% for a in assets %}<option value="{{ a.number }}">🔧 {{ a.name }} (asset on order)</option>{% endfor %}</datalist>
+    <input type="text" name="quantity" inputmode="decimal" placeholder="How many" aria-label="How many">
+    <input type="text" name="price" inputmode="decimal" placeholder="Price (optional)" aria-label="Price each">
+    <button class="btn">＋ Add</button>
+  </form>
+</section>
+{% if budget_left is not None and budget_left < 0 %}<div class="flash warning">Placing it takes {{ order.budget }} over its budget by {{ budget_left|money_abs }}.</div>{% endif %}
+{% if lines %}<form method="post" action="{% url 'orders:place' order.pk %}" class="card place-form">{% csrf_token %}
+  <label>Expected <input type="date" name="expected_on" value="{{ order.expected_on|date:'Y-m-d' }}" min="{{ today|date:'Y-m-d' }}"></label>
+  <button class="btn primary">✓ Placed with {{ order.vendor }}</button>
+  <span class="muted small">Press once it is sent to the vendor: from then on it shows as still to come.</span>
+</form>{% endif %}
+
+{% else %}
+<section class="card flush">
+  <div class="card-head"><h3>Lines</h3>{% if order.status == 'ordered' or order.status == 'partly' %}<span class="muted small">Fill in what arrived, and where it goes.</span>{% endif %}</div>
+  <form method="post" action="{% url 'orders:receive' order.pk %}">{% csrf_token %}
+  <table class="list">
+    <tr><th>Part</th><th class="num">Ordered</th><th class="num">Received</th>{% if order.status == 'ordered' or order.status == 'partly' %}<th>Arrived now</th><th>Into</th>{% endif %}</tr>
+    {% for line, where in lines %}<tr>
+      <td>{% if line.asset %}🔧 {% endif %}<a href="{{ line.item.get_absolute_url }}">{{ line.item.number }}</a> <span class="muted small">{{ line.text }}</span></td>
+      <td class="num">{{ line.quantity|qty }}</td>
+      <td class="num">{{ line.received|qty }}{% if line.outstanding == 0 %} ✓{% endif %}</td>
+      {% if order.status == 'ordered' or order.status == 'partly' %}
+        <td>{% if line.outstanding %}<input type="text" name="q_{{ line.pk }}" inputmode="decimal" placeholder="{{ line.outstanding|qty }}" aria-label="How many {{ line.item.number }} arrived" class="qty">
+          <button type="button" class="btn small ghost" data-all="q_{{ line.pk }}" data-value="{{ line.outstanding|qty }}" title="All of it">All</button>{% endif %}</td>
+        <td>{% if line.outstanding %}<select name="l_{{ line.pk }}" aria-label="Where {{ line.item.number }} goes"><option value="">Location…</option>
+          {% for l, depth in locations %}<option value="{{ l.pk }}"{% if l.pk == where %} selected{% endif %}>{% for _ in ""|ljust:depth %}&nbsp;&nbsp;&nbsp;{% endfor %}{{ l.name }}</option>{% endfor %}</select>{% endif %}</td>
+      {% endif %}
+    </tr>{% endfor %}
+  </table>
+  {% if order.status == 'ordered' or order.status == 'partly' %}<div class="actions pad"><button class="btn primary">📦 Receive</button></div>{% endif %}
+  </form>
+</section>
+{% endif %}
+
+<form method="post" class="form card">{% csrf_token %}
+  <h3>Order details</h3>
+  <div class="fields">{% include "web/_form_fields.html" %}</div>
+  <div class="actions"><button class="btn">Save</button></div>
+</form>
+{% endblock %}
+{% block scripts %}<script>
+  document.querySelectorAll('[data-all]').forEach(function (b) {
+    b.addEventListener('click', function () { b.form.querySelector('[name="' + b.dataset.all + '"]').value = b.dataset.value; });
+  });
+</script>{% endblock %}

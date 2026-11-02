@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% load osmia %}
+{% block title %}Budgets · Osmia{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Budgets</h1><span class="spacer"></span>
+  <a class="btn" href="?export=1{% if request.GET.all %}&amp;all=1{% endif %}">⬇ Excel</a>
+  <a class="btn primary" href="{% url 'budgets:new' %}">＋ New budget</a></div>
+<div class="filters"><a class="small" href="?{% if not request.GET.all %}all=1{% endif %}">{% if request.GET.all %}Only the open ones{% else %}Also closed ones{% endif %}</a></div>
+<div class="card flush">
+  <table class="list">
+    <tr><th>Budget</th><th>Owner</th><th class="num">Amount</th><th class="num">Spent</th><th class="num">Left</th><th>Used</th></tr>
+    {% for b, depth, t in rows %}<tr>
+      <td style="padding-left:{{ depth|add:1 }}em"><a href="{{ b.get_absolute_url }}">{{ b }}</a>{% if b.project %} <span class="muted small">{{ b.project }}</span>{% endif %}{% if not b.active %} <span class="badge">Closed</span>{% endif %}</td>
+      <td class="small">{{ b.owner|default:"" }}</td>
+      <td class="num">{{ b.amount|money }}</td><td class="num">{{ t.spent|money }}</td>
+      <td class="num{% if t.over %} low{% endif %}">{{ t.remaining|money }}</td>
+      <td><span class="meter{% if t.over %} over{% elif t.used >= 90 %} near{% endif %}"><span style="width:{% if t.used > 100 %}100{% else %}{{ t.used }}{% endif %}%"></span></span> <span class="small">{{ t.used }}%</span></td>
+    </tr>{% empty %}<tr><td colspan="6" class="empty small">No budgets yet.</td></tr>{% endfor %}
+  </table>
+</div>
+<p class="muted small">Spent: the orders charged to a budget once placed (what arrived and what is still to come), its other costs, and all of that of the budgets under it.</p>
+{% endblock %}

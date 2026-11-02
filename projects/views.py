@@ -1,0 +1,233 @@
+"""Projects: the list, a project's page (its configurations as a tree, the selected one drawn as devices and the
+harnesses between them, its changes and what is wrong), changing a configuration, and what building one needs."""
+from django import forms
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
+
+from accounts.models import Department
+from devices.models import Device
+from harnesses.models import Harness
+from orders import service as orders
+from web import excel
+from web.shortcuts import edit_page, errors
+from web.forms import TreeForm, initial_for
+
+from . import configs
+from .models import Configuration, Project
+
+GRID_X, GRID_Y = 300, 240   # where new devices go on the diagram: a grid of four across
+
+
+class ProjectForm(TreeForm):
+    tree_fields = {'department': Department}
+
+    class Meta:
+        model = Project
+        fields = ['code', 'name', 'description', 'department', 'owner']
+        widgets = {'description': forms.Textarea(attrs={'rows': 3})}
+
+
+
+def _tree(project):
+    """The project's configurations, depth first: [(configuration, depth)]."""
+    children = {}
+    for c in project.configurations.all():
+        children.setdefault(c.parent_id, []).append(c)
+    out = []
+
+    def walk(parent, depth):
+        for c in children.get(parent, []):
+            out.append((c, depth))
+            walk(c.pk, depth + 1)
+    walk(None, 0)
+    return out
+
+
+@login_required
+def project_list(request):
+    return render(request, 'projects/list.html', {'projects': Project.objects.prefetch_related('configurations', 'harnesses')})
+
+
+@login_required
+def project_form(request, pk=None):
+    item = get_object_or_404(Project, pk=pk) if pk else None
+    def first_configuration(project, new):
+        if new:
+            Configuration.objects.create(project=project, name='Base')
+    return edit_page(request, ProjectForm(request.POST or None, instance=item, initial=initial_for(item, owner=request.user.pk)),
+                     'project', saved=first_configuration)
+
+
+def _selected(request, project):
+    config = project.configurations.filter(pk=request.GET.get('config') or request.POST.get('config') or 0).first()
+    return config or project.configurations.filter(parent=None).first() or project.configurations.first()
+
+
+def _diagram(config, rows, found):
+    """What the diagram draws: the devices (with their connectors), the harnesses between them, and (faded) what
+    the parent has that this configuration took away."""
+    base = configs.resolve(config.parent)
+    device_ids = {r['device_id'] for r in list(rows.values()) + list(base.values()) if r['kind'] == 'device'}
+    devices = {d.pk: d for d in Device.objects.filter(pk__in=device_ids).prefetch_related('connectors')}
+    harnesses = {h.pk: h for h in Harness.objects.filter(pk__in={r['harness_id'] for r in rows.values() if r['harness_id']})
+                 .prefetch_related('ends')}
+    bad = {key for key, _ in found}
+
+    def state(key, row):
+        before = base.get(key)
+        if config.parent_id is None:
+            return 'same'
+        if before is None:
+            return 'added'
+        return 'same' if all(before[f] == row[f] for f in ('device_id', 'harness_id', 'label', 'ends')) else 'changed'
+
+    out = {'devices': [], 'harnesses': [], 'ghosts': []}
+    for key, row in rows.items():
+        if row['kind'] == 'device' and row['device_id'] in devices:
+            d = devices[row['device_id']]
+            out['devices'].append({'key': key, 'label': row['label'] or d.number, 'number': d.number, 'name': d.name, 'colour': d.colour,
+                                   'url': d.get_absolute_url(), 'x': row['x'], 'y': row['y'], 'state': state(key, row),
+                                   'connectors': [{'id': c.pk, 'designator': c.designator, 'name': c.name} for c in d.connectors.all()]})
+        elif row['kind'] == 'harness' and row['harness_id'] in harnesses:
+            h = harnesses[row['harness_id']]
+            out['harnesses'].append({'key': key, 'number': h.number, 'name': h.name, 'url': h.get_absolute_url(), 'state': state(key, row),
+                                     'bad': key in bad, 'ends': [{'designator': e.designator, 'device': row['ends'].get(str(e.pk)),
+                                                                  'connector': e.connector_id} for e in h.ends.all()]})
+    for key, row in base.items():
+        if key not in rows and row['kind'] == 'device' and row['device_id'] in devices:
+            out['ghosts'].append({'label': row['label'] or devices[row['device_id']].number, 'x': row['x'], 'y': row['y']})
+    return out
+
+
+@login_required
+def project(request, pk):
+    item = get_object_or_404(Project, pk=pk)
+    config = _selected(request, item)
+    rows = configs.resolve(config) if config else {}
+    found = configs.problems(config, rows) if config else []
+    placed_devices = [(key, r) for key, r in rows.items() if r['kind'] == 'device']
+    device_names = {d.pk: d for d in Device.objects.filter(pk__in=[r['device_id'] for _, r in placed_devices])}
+    harness_rows = []
+    for key, r in rows.items():
+        if r['kind'] == 'harness':
+            h = Harness.objects.filter(pk=r['harness_id']).prefetch_related('ends__connector__device').first()
+            if h:
+                harness_rows.append((key, h, [(e, r['ends'].get(str(e.pk))) for e in h.ends.all()]))
+    return render(request, 'projects/project.html', {
+        'project': item, 'config': config, 'tree': _tree(item), 'changes': configs.changes(config) if config else [],
+        'problems': [text for _, text in found],
+        'diagram': _diagram(config, rows, found) if config else {'devices': [], 'harnesses': [], 'ghosts': []},
+        'placed_devices': [(key, r, device_names.get(r['device_id'])) for key, r in placed_devices],
+        'harness_rows': harness_rows, 'devices': Device.objects.all(), 'harnesses': item.harnesses.exclude(status=Harness.Status.OBSOLETE)})
+
+
+@login_required
+@require_POST
+def configuration(request, pk):
+    """Make, rename, detach or delete a configuration."""
+    item = get_object_or_404(Project, pk=pk)
+    post = request.POST
+    config = item.configurations.filter(pk=post.get('config') or 0).first()
+    action = post.get('action')
+    try:
+        if action == 'new':
+            parent = item.configurations.filter(pk=post.get('parent') or 0).first()
+            name = post.get('name', '').strip()
+            if not name:
+                raise ValidationError('Give the configuration a name.')
+            if post.get('copy') and parent:
+                config = configs.copy(parent, name[:200])
+            else:
+                config = Configuration.objects.create(project=item, parent=parent, name=name[:200])
+        elif config is None:
+            raise ValidationError('Pick the configuration.')
+        elif action == 'rename':
+            config.name = post.get('name', '').strip()[:200] or config.name
+            config.description = post.get('description', '').strip()
+            config.save()
+        elif action == 'detach':
+            configs.detach(config)
+            messages.success(request, f'{config} is a setup of its own now.')
+        elif action == 'delete':
+            if config.children.exists():
+                raise ValidationError(f'{config} has configurations under it: delete or detach those first.')
+            if item.configurations.count() == 1:
+                raise ValidationError('A project keeps at least one configuration.')
+            config.delete()
+            return redirect(item)
+    except ValidationError as exc:
+        errors(request, exc)
+    return redirect(config.get_absolute_url() if config and config.pk else item.get_absolute_url())
+
+
+@login_required
+@require_POST
+def change(request, pk):
+    """A change to the selected configuration: add, move, rename, swap or take away a device; add, plug in or take
+    away a harness; take a change back. Moves come from the diagram (JSON back)."""
+    item = get_object_or_404(Project, pk=pk)
+    config = _selected(request, item)
+    post, action, key = request.POST, request.POST.get('action'), request.POST.get('key') or None
+    try:
+        if action == 'move':
+            configs.place(config, key, x=int(float(post.get('x', 0))), y=int(float(post.get('y', 0))))
+            return JsonResponse({'ok': True})
+        if action == 'add_device':
+            device = get_object_or_404(Device, pk=post.get('device'))
+            n = sum(1 for r in configs.resolve(config).values() if r['kind'] == 'device')
+            same = sum(1 for r in configs.resolve(config).values() if r['device_id'] == device.pk)
+            configs.place(config, kind='device', device_id=device.pk, label=post.get('label', '').strip()[:100]
+                          or (f'{device.number} {same + 1}' if same else device.number),
+                          x=40 + (n % 4) * GRID_X, y=40 + (n // 4) * GRID_Y)
+        elif action == 'rename':
+            configs.place(config, key, label=post.get('label', '').strip()[:100])
+        elif action == 'swap':
+            configs.place(config, key, device_id=get_object_or_404(Device, pk=post.get('device')).pk)
+        elif action == 'add_harness':
+            harness = get_object_or_404(Harness, pk=post.get('harness'), project=item)
+            configs.place(config, kind='harness', harness_id=harness.pk, ends=configs.plug(config, harness))
+        elif action == 'plug':
+            harness = get_object_or_404(Harness, pk=configs.resolve(config)[key]['harness_id'])
+            wanted = {k[4:]: v for k, v in post.items() if k.startswith('end_') and v}
+            configs.place(config, key, ends=configs.plug(config, harness, wanted) if wanted else {})
+        elif action == 'remove':
+            configs.take_away(config, key)
+        elif action == 'undo':
+            configs.undo(config, post.get('placement'))
+        else:
+            raise ValidationError('What should change?')
+    except (ValidationError, KeyError, ValueError) as exc:
+        if action == 'move':
+            return JsonResponse({'ok': False}, status=400)
+        errors(request, exc if isinstance(exc, ValidationError) else ValidationError('That is not in this configuration.'))
+    return redirect(config.get_absolute_url())
+
+
+@login_required
+def needs(request, pk):
+    item = get_object_or_404(Project, pk=pk)
+    config = _selected(request, item)
+    devices, harnesses, parts = configs.needs(config)
+    count = request.GET.get('count', '')
+    count = int(count) if count.isdigit() and 0 < int(count) <= 10000 else 1   # how many of it to build
+    parts = [(p, q * count, have, coming, max(q * count - have - coming, 0)) for p, q, have, coming in parts]
+    if request.method == 'POST':   # order what is missing
+        ordered = []
+        for part, _, _, _, missing in parts:
+            if missing and part.vendor_id:
+                orders.reorder(part, request.user, missing)
+                ordered.append(part.number)
+        messages.success(request, f'On the draft orders: {", ".join(ordered)}.' if ordered else 'Nothing missing could be ordered.')
+        return redirect(f'{request.path}?config={config.pk}&count={count}')
+    if request.GET.get('export'):
+        return excel.download(f'{item.name} {config.name}', [
+            ('Parts', ['Part', 'Description', 'Needed', 'Unit', 'On hand', 'On order', 'Missing'],
+             [(p.number, p.description, q, p.unit, have, coming, missing) for p, q, have, coming, missing in parts]),
+            ('Devices', ['Device', 'Name', 'How many'], [(d.number, d.name, n * count) for d, n in devices]),
+            ('Harnesses', ['Harness', 'Name', 'How many'], [(h.number, h.name, n * count) for h, n in harnesses])])
+    return render(request, 'projects/needs.html', {'project': item, 'config': config, 'devices': devices, 'harnesses': harnesses,
+                                                   'parts': parts, 'count': count})

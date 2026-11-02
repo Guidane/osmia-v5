@@ -1,0 +1,40 @@
+/* A project's page: the configurations on the left, the diagram and its lists on the right. */
+.project { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .project { grid-template-columns: 1fr; } }
+.config-tree nav a { display: block; padding: 5px 8px; border-radius: 6px; color: var(--text); }
+.config-tree nav a:hover { background: var(--hover); text-decoration: none; }
+.config-tree nav a.on { background: var(--brand-soft); color: var(--brand-dark); font-weight: 600; }
+.config-tree details { margin-top: 12px; }
+.config-tree summary { cursor: pointer; color: var(--brand); }
+.legend { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.legend .lg { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 2px solid; }
+.legend .lg.added { border-color: #16a34a; } .legend .lg.changed { border-color: #d97706; } .legend .lg.gone { border-color: var(--border-strong); border-style: dashed; }
+
+.diagram { display: block; width: 100%; background: var(--panel-2); touch-action: none; user-select: none; }
+.diagram .box { fill: var(--panel); stroke: var(--border-strong); stroke-width: 1.5; }
+.diagram .device { cursor: grab; }
+.diagram .device.added .box { stroke: #16a34a; stroke-width: 2.5; }
+.diagram .device.changed .box { stroke: #d97706; stroke-width: 2.5; }
+.diagram .label { font: 600 13px system-ui, sans-serif; fill: var(--text); }
+.diagram .sub, .diagram .conn-name { font: 11px system-ui, sans-serif; fill: var(--muted); }
+.diagram .conn { font: 600 12px system-ui, sans-serif; fill: var(--text); }
+.diagram .row-line { stroke: var(--border); }
+.diagram .ghost { fill: none; stroke: var(--border-strong); stroke-dasharray: 5 4; }
+.diagram .ghost-label { font: 12px system-ui, sans-serif; fill: var(--faint); }
+.diagram .wire { fill: none; stroke: var(--brand); stroke-width: 2.5; }
+.diagram .port { fill: var(--brand); }
+.diagram .wire.added { stroke: #16a34a; } .diagram .port.added { fill: #16a34a; }
+.diagram .wire.changed { stroke: #d97706; } .diagram .port.changed { fill: #d97706; }
+.diagram .wire.bad { stroke: var(--danger); stroke-dasharray: 6 4; } .diagram .port.bad { fill: var(--danger); }
+.diagram .pill { cursor: pointer; }
+.diagram .pill rect { fill: var(--brand); }
+.diagram .pill.added rect { fill: #16a34a; } .diagram .pill.changed rect { fill: #d97706; } .diagram .pill.bad rect { fill: var(--danger); }
+.diagram .pill-label { font: 600 12px system-ui, sans-serif; fill: #fff; text-anchor: middle; }
+
+tr.placed.picked td { background: var(--select); }
+.inline-edit summary { cursor: pointer; color: var(--brand); display: inline; margin-left: 6px; }
+.inline-edit form { margin-top: 6px; }
+.plug-form { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin-top: 6px; }
+.badge.added { background: var(--ok-soft); color: var(--ok); }
+.badge.changed { background: var(--warn-soft); color: var(--warn); }
+.badge.removed, .badge.stale { background: var(--danger-soft); color: var(--danger); }

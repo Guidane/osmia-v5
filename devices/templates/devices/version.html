@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}{{ device.number }} v{{ version.number }} · Osmia{% endblock %}
+{% block content %}
+<p class="small"><a href="{{ device.get_absolute_url }}">← {{ device }}</a></p>
+<div class="page-head"><h1>{{ data.number }} v{{ version.number }}</h1><span class="muted">{{ data.name }}</span>
+  <span class="muted small">{{ version.note }} · {{ version.created_by|default:"" }}, {{ version.created_at|date:"j M Y H:i" }}</span><span class="spacer"></span>
+  <form method="post" action="{% url 'devices:restore' device.pk version.number %}" data-confirm="Make {{ device.number }} as it was in v{{ version.number }}? What it is now stays in its saved versions only.">{% csrf_token %}
+    <button class="btn">↺ Make it as it was</button></form></div>
+<div class="connectors">{% for c in data.connectors %}
+  <section class="card flush"><div class="card-head"><h3>{{ c.designator }} <span class="muted small">{{ c.name }}</span></h3><span class="small">{{ c.part }}</span></div>
+    <table class="list compact"><tr><th>Pin</th><th>Signal</th><th>Description</th></tr>
+      {% for p in c.pins %}<tr><td>{{ p.number }}</td><td>{{ p.signal }}</td><td class="small muted">{{ p.description }}</td></tr>{% endfor %}</table></section>
+{% empty %}<p class="muted">No connectors.</p>{% endfor %}</div>
+{% endblock %}
