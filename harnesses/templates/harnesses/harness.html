@@ -13,6 +13,7 @@
 
 {% if problems %}<div class="flash warning"><b>To look at:</b><ul class="tight">{% for p in problems %}<li>{{ p }}</li>{% endfor %}</ul></div>{% endif %}
 
+<div class="with-notes">
 <div class="columns">
   <section class="card flush">
     <div class="card-head"><h3>Ends</h3><a class="btn small" href="{% url 'harnesses:ends' harness.pk %}">Change</a></div>
@@ -32,6 +33,8 @@
     <table class="list compact">{% for v in versions %}<tr><td><a href="{% url 'harnesses:version' harness.pk v.number %}">v{{ v.number }}</a></td>
       <td class="small">{{ v.note }}</td><td class="small muted nowrap">{{ v.created_by|default:"" }}, {{ v.created_at|date:"j M Y" }}</td></tr>{% endfor %}</table>
   </section>
+</div>
+{% include "web/_notes.html" with notes=harness.notes %}
 </div>
 
 <section class="card flush">
@@ -63,7 +66,7 @@
 </div>
 
 <section class="card flush" id="built">
-  <div class="card-head"><h3>Built</h3><span class="muted small">Each harness built is an asset, with a checklist of its wires.</span></div>
+  <div class="card-head"><h3>Built</h3></div>
   <table class="list">
     <tr><th>Asset tag</th><th>Version</th><th>Status</th><th>Built</th></tr>
     {% for u in units %}<tr><td><a href="{{ u.get_absolute_url }}">{{ u.number }}</a></td><td>{% if u.version %}v{{ u.version }}{% else %}as it was{% endif %}</td>

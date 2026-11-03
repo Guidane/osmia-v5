@@ -16,7 +16,7 @@
       {% empty %}<tr><td class="empty small">None.</td></tr>{% endfor %}</table></section>
 </div>
 <form method="post" class="card flush">{% csrf_token %}
-  <div class="card-head"><h3>Parts</h3><span class="muted small">Bought devices, and what its harnesses are made of.</span>
+  <div class="card-head"><h3>Parts</h3>
     <button class="btn small primary">🛒 Order what is missing</button></div>
   <table class="list">
     <tr><th>Part</th><th class="num">Needed</th><th class="num">On hand</th><th class="num">On order</th><th class="num">Missing</th></tr>

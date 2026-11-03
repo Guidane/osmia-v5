@@ -1,46 +1,69 @@
-"""Orders: the list (what is still to come, what is late), an order's page (its lines while it is a draft; placing,
-receiving into stock, cancelling) and making one."""
+"""Orders: the list (what is still to come, what is late, requests to order), an order's page (its details, then its
+lines while it is a draft; placing, receiving, cancelling) and making one: an order of one's own, or a request asking
+someone else to order what is described."""
 from datetime import date
 from decimal import Decimal
 
 from django import forms
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from inventory import stock
-from budgets.models import Budget
-from inventory.models import Location, Part, Vendor
 from assets.models import Asset
-
+from budgets.models import Budget
+from inventory import stock
+from inventory.models import Category, Location, Part, Vendor
 from web import excel
-from web.shortcuts import errors
 from web.forms import initial_for
+from web.templatetags.osmia import qty
+from web.shortcuts import errors
 
 from . import service
 from .models import Order, OrderLine
 
-SHOWN = {'open': ('Still to come', Q(status__in=Order.OPEN)), 'draft': ('Drafts', Q(status=Order.Status.DRAFT)),
+REQUESTS = Q(kind=Order.Kind.REQUEST, status=Order.Status.DRAFT)
+SHOWN = {'open': ('Still to come', Q(status__in=Order.OPEN)), 'requests': ('Requests', REQUESTS),
+         'draft': ('Drafts', Q(status=Order.Status.DRAFT, kind=Order.Kind.ORDER)),
          'received': ('Received', Q(status=Order.Status.RECEIVED)), 'all': ('All', Q())}
 
 
 class OrderForm(forms.ModelForm):
+    """An order's details (a request's: who should order it too, while it is a draft). What a request asked for stays as
+    it was sent."""
     class Meta:
         model = Order
-        fields = ['vendor', 'budget', 'vendor_reference', 'expected_on', 'notes']
-        widgets = {'expected_on': forms.DateInput(attrs={'type': 'date'}), 'notes': forms.Textarea(attrs={'rows': 2})}
+        fields = ['request', 'ask', 'vendor', 'budget', 'vendor_reference', 'expected_on', 'notes']
+        widgets = {'expected_on': forms.DateInput(attrs={'type': 'date'}), 'notes': forms.Textarea(attrs={'rows': 6}),
+                   'request': forms.Textarea(attrs={'rows': 4, 'placeholder': 'e.g. 20 M3x8 screws, stainless, for the rack by Friday'})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['vendor'].queryset = Vendor.objects.filter(active=True) | Vendor.objects.filter(pk=self.instance.vendor_id)
         self.fields['budget'].choices = [('', '—')] + [(b.pk, '   ' * depth + str(b)) for b, depth in Budget.ordered()
                                                        if b.active or b.pk == self.instance.budget_id]
+        self.fields['ask'].queryset = get_user_model().objects.filter(is_active=True)
+        if self.instance.kind != Order.Kind.REQUEST or self.instance.pk:
+            del self.fields['request']
+        if self.instance.kind != Order.Kind.REQUEST or self.instance.status != Order.Status.DRAFT:
+            del self.fields['ask']
         if self.instance.pk and self.instance.status != Order.Status.DRAFT:
             self.fields['vendor'].disabled = True
 
+
+class RequestForm(OrderForm):
+    """Asking someone else to order: what is needed, and maybe the budget, the vendor, who should order it."""
+    class Meta(OrderForm.Meta):
+        fields = ['request', 'budget', 'vendor', 'ask']
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('instance', Order(kind=Order.Kind.REQUEST))
+        super().__init__(*args, **kwargs)
+        self.fields['request'].required = True
 
 
 @login_required
@@ -49,12 +72,12 @@ def order_list(request):
     found = Order.objects.filter(SHOWN[shown][1]).select_related('vendor').prefetch_related('lines__part', 'lines__asset')
     q = request.GET.get('q', '').strip()
     if q:
-        found = found.filter(Q(number__icontains=q) | Q(vendor__name__icontains=q) | Q(vendor_reference__icontains=q)
+        found = found.filter(Q(number__icontains=q) | Q(vendor__name__icontains=q) | Q(vendor_reference__icontains=q) | Q(request__icontains=q)
                              | Q(lines__part__number__icontains=q) | Q(lines__asset__number__icontains=q)).distinct()
     if request.GET.get('export'):
         return excel.download('orders', [
-            ('Orders', ['Order', 'Vendor', 'Status', "Vendor's number", 'Ordered', 'Expected', 'Received', 'Late'],
-             [(o.number, o.vendor.name, o.get_status_display(), o.vendor_reference, o.ordered_on, o.expected_on, o.received_on,
+            ('Orders', ['Order', 'Asked for', 'Vendor', 'Status', "Vendor's number", 'Ordered', 'Expected', 'Received', 'Late'],
+             [(o.number, o.request, o.vendor.name if o.vendor else '', o.get_status_display(), o.vendor_reference, o.ordered_on, o.expected_on, o.received_on,
                'yes' if o.overdue else '') for o in found]),
             ('Lines', ['Order', 'Part number or asset', 'Description', 'Ordered', 'Received', 'Price each'],
              [(o.number, line.item.number, line.text, line.quantity, line.received, line.price)
@@ -62,18 +85,29 @@ def order_list(request):
     found = list(found[:300])
     if shown == 'open':   # late ones first, then by when they are expected
         found.sort(key=lambda o: (not o.overdue, o.expected_on or date.max, o.pk))
-    return render(request, 'orders/list.html', {'orders': found, 'shown': shown, 'tabs': [(k, v[0]) for k, v in SHOWN.items()], 'q': q})
+    return render(request, 'orders/list.html', {'orders': found, 'shown': shown, 'tabs': [(k, v[0]) for k, v in SHOWN.items()], 'q': q,
+                                                'requests': Order.objects.filter(REQUESTS).count()})
 
 
 @login_required
 def order_new(request):
-    form = OrderForm(request.POST or None, initial=initial_for(None, vendor=request.GET.get('vendor'), budget=request.GET.get('budget')))
+    """Two ways: an order of one's own (its vendor, then its lines), or a request asking someone else to order."""
+    start = initial_for(None, vendor=request.GET.get('vendor'), budget=request.GET.get('budget'))
+    asking = request.POST.get('kind') == Order.Kind.REQUEST
+    own = OrderForm(request.POST if request.method == 'POST' and not asking else None, initial=start, prefix='own')
+    wish = RequestForm(request.POST if asking else None, initial=start, prefix='ask')
+    del own.fields['vendor_reference'], own.fields['expected_on'], own.fields['notes']
+    own.fields['vendor'].required = True
+    form = wish if asking else own
     if request.method == 'POST' and form.is_valid():
         order = form.save(commit=False)
         order.created_by = request.user
         order.save()
+        if asking:
+            service.ask(order)
+            messages.success(request, f'{order} is asked for: {order.ask or "the administrators"} will order it.')
         return redirect(order)
-    return render(request, 'web/form.html', {'form': form, 'title': 'New order', 'back': None})
+    return render(request, 'orders/new.html', {'own': own, 'wish': wish, 'asking': asking})
 
 
 def _where(line):
@@ -86,7 +120,7 @@ def _where(line):
 
 @login_required
 def order(request, pk):
-    item = get_object_or_404(Order.objects.select_related('vendor', 'created_by'), pk=pk)
+    item = get_object_or_404(Order.objects.select_related('vendor', 'created_by', 'ask'), pk=pk)
     form = OrderForm(request.POST or None, instance=item)
     if request.method == 'POST' and form.is_valid():
         form.save()
@@ -100,8 +134,9 @@ def order(request, pk):
     return render(request, 'orders/order.html', {
         'budget_left': left,
         'order': item, 'form': form, 'lines': [(line, _where(line)) for line in lines], 'locations': Location.ordered(),
-        'parts': Part.objects.filter(active=True).only('number', 'description')[:5000], 'today': date.today(),
-        'assets': Asset.objects.filter(status=Asset.Status.ORDERED, order_lines=None)})
+        'today': date.today(), 'categories': Category.ordered(),
+        'assets_json': [{'number': a.number, 'description': a.name, 'category': a.get_kind_display(), 'have': '', 'asset': True,
+                         'price': qty(a.price)} for a in Asset.objects.filter(status=Asset.Status.ORDERED, order_lines=None)]})
 
 
 def _draft(request, pk):
@@ -123,7 +158,7 @@ def line_add(request, pk):
             if asset.status != Asset.Status.ORDERED or asset.order_lines.exclude(order__status=Order.Status.CANCELLED).exists():
                 raise ValidationError(f'{asset} is not an asset waiting to be ordered.')
             OrderLine.objects.create(order=item, asset=asset, quantity=1, price=asset.price)
-            return redirect('orders:order', pk)
+            return redirect(reverse('orders:order', args=[pk]) + '#add')
         if part is None:
             raise ValidationError(f'There is no part or asset "{number}".')
         quantity = stock.amount(request.POST.get('quantity'))
@@ -137,7 +172,7 @@ def line_add(request, pk):
                                      price=stock.amount(price, allow_zero=True) if price else part.price)
     except ValidationError as exc:
         errors(request, exc)
-    return redirect('orders:order', pk)
+    return redirect(reverse('orders:order', args=[pk]) + '#add')   # the popup opens again, for the next one
 
 
 @login_required

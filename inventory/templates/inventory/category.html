@@ -11,7 +11,7 @@
 {% if children %}<p class="small">Under it: {% for c in children %}<a href="{{ c.get_absolute_url }}">{{ c.name }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
 
 <section class="card flush" id="attributes">
-  <div class="card-head"><h3>Attributes</h3><span class="muted small">What its parts and assets fill in. Its own attributes go to every category under it too.</span></div>
+  <div class="card-head"><h3>Attributes</h3></div>
   <table class="list">
     <tr><th>Attribute</th><th>Type</th><th>Unit, choices, what it links to</th><th>Required</th><th></th></tr>
     {% for a in inherited %}<tr class="inherited">

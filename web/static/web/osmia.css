@@ -164,6 +164,14 @@ kbd { font: 11px ui-monospace, Consolas, monospace; padding: 1px 5px; border: 1p
 .page-head { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .page-head h1 { margin: 0; }
 .page-head .spacer { flex: 1; }
+.with-notes { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 0 10px; align-items: start; }
+.with-notes:not(:has(> .notes-card, > .side)) { display: block; }
+.with-notes > .side { display: flex; flex-direction: column; gap: 10px; }
+.with-notes > .side > .card { margin-bottom: 0; }
+.notes-card h3 { margin: 0 0 6px; }
+.notes-card textarea { width: 100%; min-height: 180px; resize: vertical; }
+.notes-text { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 800px) { .with-notes { grid-template-columns: minmax(0, 1fr); } }
 .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 0 10px; align-items: start; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 10px; }
 .tile { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; color: var(--muted); }
@@ -186,8 +194,36 @@ dl.details dd { margin: 0; }
 .inline-form, .stock-form, .line-form, .place-form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .stock-form { margin-top: 8px; }
 .stock-form input[name=quantity], .line-form input[name=quantity], .line-form input[name=price], input.qty { width: 90px; }
-.line-form.add { padding: 6px 10px; border-top: 1px solid var(--border); }
-.line-form.add input[name=part] { width: 220px; }
+.request { border-left: 3px solid var(--brand); }
+.request h3 { margin: 0 0 4px; }
+.request-text { margin: 0 0 6px; font-size: 14px; }
+.ways { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+.ways > .card { flex: 1 1 320px; }
+dialog.finder { width: min(960px, calc(100vw - 32px)); height: min(640px, calc(100vh - 32px)); padding: 0; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
+dialog.finder[open] { display: flex; flex-direction: column; }
+dialog.finder::backdrop { background: rgba(0, 0, 0, .35); }
+.finder-head { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.finder-head h3 { margin: 0; }
+.finder-head input { width: 280px; }
+.finder-body { display: flex; flex: 1; min-height: 0; }
+.finder-tree { width: 220px; overflow: auto; border-right: 1px solid var(--border); padding: 4px; display: flex; flex-direction: column; }
+.finder-tree button { text-align: left; background: none; border: 0; color: var(--text); font: inherit; padding: 3px 6px; border-radius: var(--radius); cursor: pointer; }
+.finder-tree button:hover { background: var(--hover); }
+.finder-tree button.on { background: var(--select); font-weight: 600; }
+.finder-results { flex: 1; overflow: auto; }
+tr.pick { cursor: pointer; }
+tr.pick:hover, tr.pick:focus { background: var(--hover); outline: none; }
+tr.pick.on { background: var(--select); }
+.finder-foot { padding: 8px 12px; border-top: 1px solid var(--border); }
+.finder-foot #picked { font-weight: 600; }
+.finder-foot #picked.muted { font-weight: normal; }
+.finder-foot input[name=price] { width: 170px; }
+@media (max-width: 640px) {
+  .finder-body { flex-direction: column; }
+  .finder-tree { width: auto; max-height: 30%; border-right: 0; border-bottom: 1px solid var(--border); }
+  .finder-head { flex-wrap: wrap; } .finder-head input { width: 100%; }
+}
 .actions.pad { padding: 0 10px 8px; }
 .tile.ok { border-color: var(--ok); } .tile.ok b { color: var(--ok); }
 p.pad, .pad { padding-left: 10px; padding-right: 10px; }

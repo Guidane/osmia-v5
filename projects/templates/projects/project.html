@@ -83,7 +83,7 @@
         </table>
         {% if harnesses %}<form method="post" action="{% url 'projects:change' project.pk %}" class="inline-form pad">{% csrf_token %}<input type="hidden" name="config" value="{{ config.pk }}">
           <select name="harness" aria-label="Harness" required><option value="">Harness…</option>{% for h in harnesses %}<option value="{{ h.pk }}">{{ h }}</option>{% endfor %}</select>
-          <button class="btn" name="action" value="add_harness">＋ Add</button><span class="muted small">Its ends plug in by themselves where there is one device that fits.</span></form>{% endif %}
+          <button class="btn" name="action" value="add_harness">＋ Add</button></form>{% endif %}
       </section>
     </div>
 

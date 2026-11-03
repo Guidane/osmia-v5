@@ -14,7 +14,7 @@ from .models import Order, OrderLine
 
 
 def _draft_for(vendor, user):
-    order = Order.objects.filter(vendor=vendor, status=Order.Status.DRAFT).order_by('-pk').first()
+    order = Order.objects.filter(vendor=vendor, kind=Order.Kind.ORDER, status=Order.Status.DRAFT).order_by('-pk').first()
     return order or Order.objects.create(vendor=vendor, created_by=user)
 
 
@@ -64,13 +64,23 @@ def reorder(part, user, quantity=None):
     return line
 
 
+def ask(order):
+    """A request is made: who should order it (else the administrators) hears of it."""
+    from django.contrib.auth import get_user_model
+    people = [order.ask] if order.ask else list(get_user_model().objects.filter(is_superuser=True, is_active=True))
+    people = [p for p in people if p != order.created_by] or people
+    notify(people, f'{order.created_by or "Someone"} asks to order: {order.request[:200]}', order.get_absolute_url())
+
+
 @transaction.atomic
 def place(order, user, expected_on=None):
-    """The order went to the vendor: from now on it is waiting for its parts."""
+    """The order went to the vendor: from now on it is waiting for its parts. Who asked for it hears."""
     if order.status != Order.Status.DRAFT:
         raise ValidationError(f'{order} is {order.get_status_display().lower()} already.')
     if not order.lines.exists():
         raise ValidationError(f'{order} has nothing on it yet.')
+    if order.vendor_id is None:
+        raise ValidationError(f'Say who {order} is ordered from first.')
     order.status, order.ordered_on = Order.Status.ORDERED, date.today()
     order.expected_on = expected_on or order.expected_on
     order.save()
@@ -80,6 +90,8 @@ def place(order, user, expected_on=None):
     if order.budget_id:
         from budgets.money import warn_if_over
         warn_if_over(order.budget)
+    if order.kind == Order.Kind.REQUEST and order.created_by and order.created_by != user:
+        notify([order.created_by], f'What you asked for is ordered from {order.vendor}: {order}.', order.get_absolute_url())
 
 
 @transaction.atomic
@@ -130,3 +142,5 @@ def cancel(order, user):
         raise ValidationError(f'Part of {order} has arrived: it can\'t be cancelled any more.')
     order.status = Order.Status.CANCELLED
     order.save(update_fields=['status'])
+    if order.kind == Order.Kind.REQUEST and order.created_by and order.created_by != user:
+        notify([order.created_by], f'{user} won\'t order what you asked for ({order}).', order.get_absolute_url())

@@ -20,7 +20,7 @@
   {% if user.is_superuser and others %}<form method="post" action="{% url 'accounts:assign' department.pk %}" class="pad assign-form">{% csrf_token %}
     <label for="assign-users" class="small">Put in {{ department.name }} (out of where they are now):</label>
     <select id="assign-users" name="users" multiple size="6">{% for o in others %}<option value="{{ o.pk }}">{{ o }}{% if o.department %} — now in {{ o.department.name }}{% endif %}</option>{% endfor %}</select>
-    <div class="actions"><button class="btn">＋ Put them in</button><span class="muted small">Ctrl+click picks several.</span></div></form>{% endif %}
+    <div class="actions"><button class="btn">＋ Put them in</button></div></form>{% endif %}
 </section>
 
 <div class="columns">

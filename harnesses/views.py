@@ -103,7 +103,7 @@ def _number(text, row, what):
     return value
 
 
-def _edit(request, harness, title, columns, records, values, apply, help_text=''):
+def _edit(request, harness, title, columns, records, values, apply):
     """A page editing ``records`` of ``harness`` as a table: ``apply(row, record or None, values)`` saves one row."""
     if request.method == 'POST':
         try:
@@ -122,7 +122,7 @@ def _edit(request, harness, title, columns, records, values, apply, help_text=''
         messages.success(request, f'{title} of {harness.number} is saved.')
         return redirect(harness)
     return render(request, 'harnesses/edit.html', {
-        'harness': harness, 'title': title, 'columns': columns, 'rows': rows.rows(records, values, blank=5), 'help': help_text,
+        'harness': harness, 'title': title, 'columns': columns, 'rows': rows.rows(records, values, blank=5),
         'part_numbers': Part.objects.filter(active=True).values_list('number', 'description')[:5000]})
 
 
@@ -146,8 +146,7 @@ def ends(request, pk):
         end.connector = Connector.objects.filter(pk=cells['connector']).first() if cells['connector'].isdigit() else None
         end.save()
     return _edit(request, item, 'The ends', columns, records,
-                 lambda e: {'designator': e.designator, 'part': e.part.number if e.part else '', 'connector': e.connector_id}, apply,
-                 'Each end of the harness: its connector, and the device connector it plugs into.')
+                 lambda e: {'designator': e.designator, 'part': e.part.number if e.part else '', 'connector': e.connector_id}, apply)
 
 
 @login_required
@@ -185,8 +184,7 @@ def pinout(request, pk):
     return _edit(request, item, 'The pinout', columns, records, lambda w: {
         'from_end': w.from_end_id, 'from_pin': w.from_pin, 'to_end': w.to_end_id, 'to_pin': w.to_pin, 'signal': w.signal,
         'wire_set': w.wire_set, 'set_type': w.set_type, 'colour': w.colour, 'gauge': w.gauge,
-        'length': f'{w.length.normalize():f}' if w.length is not None else '', 'part': w.part.number if w.part else ''}, apply,
-        'Each wire, from a pin of one end to a pin of another. A signal left empty is taken from the device\'s pin.')
+        'length': f'{w.length.normalize():f}' if w.length is not None else '', 'part': w.part.number if w.part else ''}, apply)
 
 
 @login_required
@@ -204,8 +202,7 @@ def items(request, pk):
         line.part, line.quantity, line.note = part, quantity, cells['note'][:200]
         line.save()
     return _edit(request, item, 'The other items', columns, list(item.items.select_related('part')),
-                 lambda i: {'part': i.part.number, 'quantity': f'{i.quantity.normalize():f}', 'note': i.note}, apply,
-                 'What else it is made of: contacts, ties, sleeving, labels.')
+                 lambda i: {'part': i.part.number, 'quantity': f'{i.quantity.normalize():f}', 'note': i.note}, apply)
 
 
 # -- Versions ------------------------------------------------------------------------------------------

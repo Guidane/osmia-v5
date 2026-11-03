@@ -15,6 +15,7 @@
   <div class="tile"><b>{{ part.minimum|qty }}</b> minimum</div>
 </div>
 
+<div class="with-notes">
 <div class="columns">
   <section class="card">
     {% document_image part %}
@@ -27,7 +28,6 @@
       <dt>Last price</dt><dd>{{ part.price|qty|default:"—" }}</dd>
       <dt>Reorders</dt><dd>{% if part.reorder_quantity %}{{ part.reorder_quantity|qty }} {{ part.unit }}{% else %}enough to get above the minimum{% endif %}</dd>
       <dt>Datasheet</dt><dd>{% if part.datasheet %}<a href="{{ part.datasheet }}" target="_blank" rel="noopener noreferrer">Open ↗</a>{% else %}—{% endif %}</dd>
-      {% if part.notes %}<dt>Notes</dt><dd>{{ part.notes|linebreaksbr }}</dd>{% endif %}
     </dl>
   </section>
 
@@ -51,12 +51,14 @@
     {% if not locations %}<p class="small muted">Make a <a href="{% url 'inventory:location_new' %}">location</a> first.</p>{% endif %}
   </section>
 </div>
+{% include "web/_notes.html" with notes=part.notes %}
+</div>
 
 <div class="columns">
   <section class="card flush">
     <div class="card-head"><h3>Orders</h3></div>
     <table class="list">
-      {% for l in lines %}<tr><td><a href="{{ l.order.get_absolute_url }}">{{ l.order.number }}</a></td><td class="small">{{ l.order.vendor }}</td>
+      {% for l in lines %}<tr><td><a href="{{ l.order.get_absolute_url }}">{{ l.order.number }}</a></td><td class="small">{{ l.order.vendor|default:"—" }}</td>
         <td class="num">{{ l.quantity|qty }}</td><td><span class="badge{% if l.order.status == 'received' %} ok{% elif l.order.overdue %} failed{% endif %}">{% if l.order.overdue %}Late{% else %}{{ l.order.get_status_display }}{% endif %}</span></td></tr>
       {% empty %}<tr><td class="empty small">Never ordered.</td></tr>{% endfor %}
     </table>

@@ -1,0 +1,3 @@
+{% with f=form.notes %}{% if f %}<aside class="card notes-card">
+  <h3><label for="{{ f.id_for_label }}">Notes</label></h3>{{ f }}{{ f.errors }}
+</aside>{% endif %}{% endwith %}

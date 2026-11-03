@@ -75,19 +75,16 @@ class Attribute(models.Model):
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='attributes')
     name = models.CharField(max_length=100)
     kind = models.CharField('type', max_length=10, choices=Kind, default=Kind.TEXT)
-    unit = models.CharField(max_length=20, blank=True, help_text='For a number, e.g. Ω, mm, V.')
-    choices = models.TextField(blank=True, help_text='For a choice from a list: one choice per line.')
-    prefix = models.CharField(max_length=20, blank=True, help_text='For an auto number: what goes before it, e.g. ID-.')
-    digits = models.PositiveSmallIntegerField(default=5, help_text='For an auto number: how many digits, e.g. 5 for ID-00001.')
-    required = models.BooleanField(default=False, help_text="Parts can't be saved without it.")
-    help = models.CharField(max_length=200, blank=True, help_text='A hint shown with the input, e.g. "as on the datasheet".')
+    unit = models.CharField(max_length=20, blank=True)
+    choices = models.TextField(blank=True)
+    prefix = models.CharField(max_length=20, blank=True)
+    digits = models.PositiveSmallIntegerField(default=5)
+    required = models.BooleanField(default=False)
+    help = models.CharField(max_length=200, blank=True)
     target = models.ForeignKey(Category, null=True, blank=True, on_delete=models.CASCADE, related_name='interactions',
-                               verbose_name='interacts with',
-                               help_text='For "interacts with": the category whose parts (and those of the categories under it) it names.')
-    links_to = models.CharField(max_length=10, choices=LinksTo, blank=True, help_text='For a link: what it links to.')
-    reverse_name = models.CharField('name on the other side', max_length=100, blank=True,
-                                    help_text='For "interacts with" and links: what the other side calls it, e.g. "Mates with pins" '
-                                              'for "Mates with sockets", or "Crimps" for "Crimped with".')
+                               verbose_name='interacts with')
+    links_to = models.CharField(max_length=10, choices=LinksTo, blank=True)
+    reverse_name = models.CharField('name on the other side', max_length=100, blank=True)
     position = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -192,16 +189,13 @@ class Part(models.Model):
     mpn = models.CharField('manufacturer part number', max_length=200, blank=True)
     unit = models.CharField(max_length=10, choices=Unit, default=Unit.PCS)
     datasheet = models.URLField(blank=True)
-    vendor = models.ForeignKey(Vendor, null=True, blank=True, on_delete=models.SET_NULL, related_name='parts',
-                               help_text='Where it is usually ordered: Reorder adds it to an order for this vendor.')
+    vendor = models.ForeignKey(Vendor, null=True, blank=True, on_delete=models.SET_NULL, related_name='parts')
     vendor_number = models.CharField("vendor's part number", max_length=200, blank=True)
     price = models.DecimalField('last price', max_digits=12, decimal_places=4, null=True, blank=True)
-    minimum = models.DecimalField('minimum stock', max_digits=12, decimal_places=3, default=0,
-                                  help_text='Below this (counting what is on order), it is listed as needing ordering.')
-    reorder_quantity = models.DecimalField(max_digits=12, decimal_places=3, default=0,
-                                           help_text='How many Reorder orders; empty: enough to get back above the minimum.')
+    minimum = models.DecimalField('minimum stock', max_digits=12, decimal_places=3, default=0)
+    reorder_quantity = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     notes = models.TextField(blank=True)
-    active = models.BooleanField(default=True, help_text='Untick for a part no longer used: it stays, with its history.')
+    active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -23,17 +23,13 @@ class UserForm(forms.ModelForm):
         model = User
         fields = ['username', 'first_name', 'last_name', 'email', 'job_title', 'phone', 'department', 'is_superuser', 'is_active']
         labels = {'is_superuser': 'Administrator', 'is_active': 'Can log in'}
-        help_texts = {'is_superuser': 'Manages the users and departments, and can change anything at /admin/.',
-                      'is_active': 'Untick for someone who left: what they did stays, with their name.'}
 
     def __init__(self, *args, by=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.by = by
         self.fields['department'].choices = tree_choices(Department)
-        if not self.instance.pk:
-            self.fields['password1'].help_text = 'They can change it once they are logged in.'
-        else:
-            self.fields['password1'].help_text = 'Leave empty to keep their password.'
+        if self.instance.pk:
+            self.fields['password1'].widget.attrs['placeholder'] = 'Empty: it stays as it is'
 
     def clean(self):
         data = super().clean()

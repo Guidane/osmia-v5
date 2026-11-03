@@ -3,11 +3,13 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db.models import Count, Q, Sum
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from orders import service as orders
 from web import excel
+from web.templatetags.osmia import qty
 from web.shortcuts import edit_page, errors
 from web.forms import initial_for
 
@@ -21,14 +23,31 @@ PAGE = 200   # parts listed at most
 
 
 
+def search(found, q):
+    """Parts with every word of ``q`` in their number, description, manufacturer or numbers."""
+    for word in q.split():
+        found = found.filter(Q(number__icontains=word) | Q(description__icontains=word) | Q(manufacturer__icontains=word)
+                             | Q(mpn__icontains=word) | Q(vendor_number__icontains=word))
+    return found
+
+
+@login_required
+def find(request):
+    """Parts matching ?q= (words) and ?category= (with those under it), for finding one to pick: JSON."""
+    found = search(Part.objects.filter(active=True).select_related('category').annotate(have=Sum('stock__quantity')),
+                   request.GET.get('q', '').strip())
+    category = Category.objects.filter(pk=request.GET.get('category') or 0).first()
+    if category is not None:
+        found = found.filter(category_id__in=category.below())
+    return JsonResponse({'parts': [{'number': p.number, 'description': p.description, 'category': p.category.name if p.category else '',
+                                    'have': qty(p.have or 0), 'unit': p.get_unit_display(), 'price': qty(p.price)}
+                                   for p in found[:60]], 'more': found.count() > 60})
+
+
 @login_required
 def parts(request):
     q = request.GET.get('q', '').strip()
-    found = Part.objects.select_related('category', 'vendor').annotate(have=Sum('stock__quantity'))
-    if q:
-        for word in q.split():
-            found = found.filter(Q(number__icontains=word) | Q(description__icontains=word) | Q(manufacturer__icontains=word)
-                                 | Q(mpn__icontains=word) | Q(vendor_number__icontains=word))
+    found = search(Part.objects.select_related('category', 'vendor').annotate(have=Sum('stock__quantity')), q)
     category = Category.objects.filter(pk=request.GET.get('category') or 0).first()
     attributes = category.all_attributes() if category else []
     if category is not None:

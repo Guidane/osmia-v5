@@ -5,6 +5,7 @@
 <div class="page-head"><h1>{{ vendor.name }}</h1>{% if not vendor.active %}<span class="badge">Inactive</span>{% endif %}<span class="spacer"></span>
   <a class="btn" href="{% url 'orders:new' %}?vendor={{ vendor.pk }}">＋ New order</a>
   <a class="btn" href="{% url 'inventory:vendor_edit' vendor.pk %}">Change</a></div>
+<div class="with-notes">
 <div class="columns">
   <section class="card">
     <dl class="details">
@@ -14,7 +15,6 @@
       <dt>Phone</dt><dd>{{ vendor.phone|default:"—" }}</dd>
       <dt>Address</dt><dd>{{ vendor.address|linebreaksbr|default:"—" }}</dd>
       <dt>Our account</dt><dd>{{ vendor.account_number|default:"—" }}</dd>
-      {% if vendor.notes %}<dt>Notes</dt><dd>{{ vendor.notes|linebreaksbr }}</dd>{% endif %}
     </dl>
   </section>
   <section class="card flush">
@@ -23,6 +23,8 @@
       <td><span class="badge{% if o.status == 'received' %} ok{% elif o.overdue %} failed{% endif %}">{% if o.overdue %}Late{% else %}{{ o.get_status_display }}{% endif %}</span></td></tr>
       {% empty %}<tr><td class="empty small">No orders yet.</td></tr>{% endfor %}</table>
   </section>
+</div>
+{% include "web/_notes.html" with notes=vendor.notes %}
 </div>
 <section class="card flush">
   <div class="card-head"><h3>Parts ordered from it</h3></div>

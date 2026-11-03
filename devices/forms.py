@@ -12,8 +12,8 @@ class DeviceForm(forms.ModelForm):
 
 
 class ConnectorForm(forms.ModelForm):
-    pins = forms.CharField(required=False, label='Pins', help_text='For a new connector: how many (e.g. 9, numbered 1 to 9), '
-                           'or their numbers separated by commas (A1, A2, B1). Pins can be added later too.')
+    pins = forms.CharField(required=False, label='Pins',
+                           widget=forms.TextInput(attrs={'placeholder': 'How many (e.g. 9), or their numbers: A1, A2, B1'}))
 
     class Meta:
         model = Connector

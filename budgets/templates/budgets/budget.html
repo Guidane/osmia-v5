@@ -15,11 +15,13 @@
   <div class="tile{% if totals.over %} bad{% elif totals.used >= 90 %} warn{% else %} ok{% endif %}"><b>{{ totals.remaining|money }}</b> {% if totals.over %}over{% else %}left{% endif %}</div>
   <div class="tile"><b>{{ totals.planned|money }}</b> in draft orders</div>
 </div>
+<div class="with-notes">
 <div class="card">
   <span class="meter wide{% if totals.over %} over{% elif totals.used >= 90 %} near{% endif %}"><span style="width:{% if totals.used > 100 %}100{% else %}{{ totals.used }}{% endif %}%"></span></span>
   <p class="small muted">Arrived {{ totals.received|money }} · still to come {{ totals.coming|money }} · other costs {{ totals.costs|money }}{% if children %} · of which under it {{ totals.spent|sub:own.spent|money }}{% endif %}</p>
   {% if split > budget.amount %}<p class="small error">The budgets under it add up to {{ split|money }}: more than this one.</p>{% endif %}
-  {% if budget.notes %}<p>{{ budget.notes|linebreaksbr }}</p>{% endif %}
+</div>
+{% include "web/_notes.html" with notes=budget.notes %}
 </div>
 
 {% if children %}<section class="card flush">
@@ -32,7 +34,7 @@
 <div class="columns">
   <section class="card flush">
     <div class="card-head"><h3>Orders</h3><a class="btn small" href="{% url 'orders:new' %}?budget={{ budget.pk }}">＋ New order</a></div>
-    <table class="list">{% for o in orders %}<tr><td><a href="{{ o.get_absolute_url }}">{{ o.number }}</a> <span class="muted small">{{ o.vendor }}</span></td>
+    <table class="list">{% for o in orders %}<tr><td><a href="{{ o.get_absolute_url }}">{{ o.number }}</a> <span class="muted small">{{ o.vendor|default:"" }}</span></td>
       <td><span class="badge{% if o.status == 'received' %} ok{% elif o.overdue or o.status == 'cancelled' %} failed{% endif %}">{% if o.overdue %}Late{% else %}{{ o.get_status_display }}{% endif %}</span></td>
       <td class="num">{{ o.total|money }}</td></tr>
       {% empty %}<tr><td class="empty small">No orders charged to it.</td></tr>{% endfor %}</table>

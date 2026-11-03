@@ -10,6 +10,7 @@
   {% document_button device %}<a class="btn" href="{% url 'devices:edit' device.pk %}">Change</a>
 </div>
 
+<div class="with-notes">
 <div class="columns">
   <section class="card">
     {% document_image device %}
@@ -17,7 +18,6 @@
       {% if device.description %}<dt>Description</dt><dd>{{ device.description|linebreaksbr }}</dd>{% endif %}
       <dt>Manufacturer</dt><dd>{{ device.manufacturer|default:"—" }}{% if device.model %} · {{ device.model }}{% endif %}</dd>
       <dt>As a part</dt><dd>{% if device.part %}<a href="{{ device.part.get_absolute_url }}">{{ device.part }}</a>{% else %}—{% endif %}</dd>
-      {% if device.notes %}<dt>Notes</dt><dd>{{ device.notes|linebreaksbr }}</dd>{% endif %}
     </dl>
   </section>
   <section class="card">
@@ -29,6 +29,8 @@
     <table class="list compact">{% for v in versions %}<tr><td><a href="{% url 'devices:version' device.pk v.number %}">v{{ v.number }}</a></td>
       <td class="small">{{ v.note }}</td><td class="small muted nowrap">{{ v.created_by|default:"" }}, {{ v.created_at|date:"j M Y" }}</td></tr>{% endfor %}</table>
   </section>
+</div>
+{% include "web/_notes.html" with notes=device.notes %}
 </div>
 
 <div class="page-head"><h2>Connectors</h2><span class="spacer"></span><a class="btn" href="{% url 'devices:connector_new' device.pk %}">＋ Connector</a></div>
@@ -51,7 +53,7 @@
 </div>
 
 <section class="card flush" id="units">
-  <div class="card-head"><h3>Units</h3><span class="muted small">Each one built or bought is an asset.</span>
+  <div class="card-head"><h3>Units</h3>
     <a class="btn small" href="{% url 'assets:new' %}?kind={% if device.origin == 'external' %}lab{% else %}device{% endif %}&amp;device={{ device.pk }}&amp;number={{ next_tag }}&amp;name={{ device.name|urlencode }}&amp;version={{ device.version }}">＋ Add one</a></div>
   <table class="list">
     <tr><th>Asset tag</th><th>Serial number</th><th>Version</th><th>Status</th><th>Where</th></tr>

@@ -58,7 +58,8 @@ def home(request):
         'assets_due': due(),
         'over_budget': over,
         'to_order': needs_ordering(), 'waiting': waiting, 'late': sum(1 for o in waiting if o.overdue),
-        'drafts': Order.objects.filter(status=Order.Status.DRAFT).select_related('vendor'),
+        'drafts': Order.objects.filter(status=Order.Status.DRAFT, kind=Order.Kind.ORDER).count(),
+        'requests': Order.objects.filter(status=Order.Status.DRAFT, kind=Order.Kind.REQUEST).count(),
         'received': Order.objects.filter(status=Order.Status.RECEIVED).select_related('vendor').order_by('-received_on', '-pk')[:8]})
 
 

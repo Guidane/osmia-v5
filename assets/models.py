@@ -38,29 +38,23 @@ class Asset(models.Model):
     number = models.CharField('asset tag', max_length=100, unique=True)
     name = models.CharField(max_length=200)
     kind = models.CharField(max_length=12, choices=Kind, default=Kind.TOOL)
-    category = models.ForeignKey(Category, null=True, blank=True, on_delete=models.SET_NULL, related_name='assets',
-                                 help_text='Its attributes are its category\'s (and those above it), as for parts.')
+    category = models.ForeignKey(Category, null=True, blank=True, on_delete=models.SET_NULL, related_name='assets')
     manufacturer = models.CharField(max_length=200, blank=True)
     model = models.CharField(max_length=200, blank=True)
     serial = models.CharField('serial number', max_length=100, blank=True)
-    device = models.ForeignKey('devices.Device', null=True, blank=True, on_delete=models.PROTECT, related_name='assets',
-                               help_text='The device design it is (its connectors and pins), e.g. for a power supply.')
-    harness = models.ForeignKey('harnesses.Harness', null=True, blank=True, on_delete=models.PROTECT, related_name='assets',
-                                help_text='The harness design it was built to.')
-    version = models.PositiveIntegerField(null=True, blank=True, help_text='The version of its design it was built to.')
-    location = models.ForeignKey(Location, null=True, blank=True, on_delete=models.SET_NULL, related_name='assets',
-                                 help_text='Where it is kept.')
-    keeper = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='kept_assets',
-                               help_text='Who looks after it.')
+    device = models.ForeignKey('devices.Device', null=True, blank=True, on_delete=models.PROTECT, related_name='assets')
+    harness = models.ForeignKey('harnesses.Harness', null=True, blank=True, on_delete=models.PROTECT, related_name='assets')
+    version = models.PositiveIntegerField(null=True, blank=True)
+    location = models.ForeignKey(Location, null=True, blank=True, on_delete=models.SET_NULL, related_name='assets')
+    keeper = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='kept_assets')
     status = models.CharField(max_length=12, choices=Status, default=Status.AVAILABLE)
     holder = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='held_assets',
                                editable=False)   # who has it out
-    vendor = models.ForeignKey(Vendor, null=True, blank=True, on_delete=models.SET_NULL, related_name='assets', help_text='Where it is bought.')
+    vendor = models.ForeignKey(Vendor, null=True, blank=True, on_delete=models.SET_NULL, related_name='assets')
     vendor_number = models.CharField("vendor's number", max_length=200, blank=True)
     price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     calibrated_on = models.DateField(null=True, blank=True)
-    calibration_months = models.PositiveIntegerField('calibration every (months)', null=True, blank=True,
-                                                     help_text='Empty: it needs no calibration.')
+    calibration_months = models.PositiveIntegerField('calibration every (months)', null=True, blank=True)
     built_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+',
                                  editable=False)
     built_on = models.DateField(null=True, blank=True)

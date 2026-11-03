@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}New order · Osmia{% endblock %}
+{% block content %}
+<p class="small"><a href="{% url 'orders:list' %}">← Orders</a></p>
+<div class="page-head"><h1>New order</h1></div>
+<div class="ways">
+  <form method="post" class="form card">{% csrf_token %}<input type="hidden" name="kind" value="order">
+    <h3>Order it yourself</h3>
+    {% with form=own %}<div class="fields">{% include "web/_form_fields.html" %}</div>{% endwith %}
+    <div class="actions"><button class="btn primary">Make the order</button></div>
+  </form>
+  <form method="post" class="form card">{% csrf_token %}<input type="hidden" name="kind" value="request">
+    <h3>Ask someone to order</h3>
+    {% with form=wish %}<div class="fields">{% include "web/_form_fields.html" %}</div>{% endwith %}
+    <div class="actions"><button class="btn primary">Ask for it</button></div>
+  </form>
+</div>
+{% endblock %}

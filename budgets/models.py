@@ -12,13 +12,12 @@ class Budget(Tree):
     number = models.CharField(max_length=50, blank=True)
     project = models.ForeignKey('projects.Project', null=True, blank=True, on_delete=models.SET_NULL, related_name='budgets')
     department = models.ForeignKey('accounts.Department', null=True, blank=True, on_delete=models.SET_NULL, related_name='budgets')
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='budgets',
-                              help_text='Hears when it is overspent.')
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='budgets')
     amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     starts_on = models.DateField(null=True, blank=True)
     ends_on = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
-    active = models.BooleanField(default=True, help_text='Untick when it is closed: orders can no longer be charged to it.')
+    active = models.BooleanField(default=True)
 
     class Meta(Tree.Meta):
         ordering = ['number', 'name']

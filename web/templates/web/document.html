@@ -50,7 +50,7 @@
       <div class="files">{% for f in files %}
         <div class="file">{% if f.is_image %}<a href="{% url 'web:document_file' f.pk %}"><img src="{% url 'web:document_file' f.pk %}" alt="{{ f.name }}"></a>{% else %}<a href="{% url 'web:document_file' f.pk %}">📎 {{ f.name }}</a>{% endif %}
           <form method="post" action="{% url 'web:document_remove' kind thing.pk %}" class="inline" data-confirm="Delete {{ f.name }}?">{% csrf_token %}<button class="btn small ghost" name="what" value="{{ f.pk }}" title="Delete it">✕</button></form></div>
-      {% empty %}<p class="muted small">No files yet: datasheets, drawings, manuals, photos.</p>{% endfor %}</div>
+      {% empty %}<p class="muted small">No files yet.</p>{% endfor %}</div>
       <form method="post" action="{% url 'web:document_upload' kind thing.pk %}" enctype="multipart/form-data" class="inline-form">{% csrf_token %}
         <input type="file" name="file" multiple aria-label="Files to add" required><button class="btn small">Add</button></form>
     </section>

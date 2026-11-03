@@ -25,13 +25,11 @@ class Device(models.Model):
     number = models.CharField('device number', max_length=100)
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
-    origin = models.CharField(max_length=10, choices=Origin, default=Origin.IN_HOUSE,
-                              help_text='Bought: a power supply, a meter, a PLC… from a manufacturer.')
+    origin = models.CharField(max_length=10, choices=Origin, default=Origin.IN_HOUSE)
     manufacturer = models.CharField(max_length=200, blank=True)
     model = models.CharField(max_length=200, blank=True)
-    part = models.ForeignKey(Part, null=True, blank=True, on_delete=models.SET_NULL, related_name='devices',
-                             help_text='When it is bought as a part: what a project needs of it shows in its parts list.')
-    colour = models.CharField(max_length=7, default=COLOURS[0], help_text='Its colour in project diagrams.')
+    part = models.ForeignKey(Part, null=True, blank=True, on_delete=models.SET_NULL, related_name='devices')
+    colour = models.CharField(max_length=7, default=COLOURS[0])
     notes = models.TextField(blank=True)
     version = models.PositiveIntegerField(default=0, editable=False)   # the last version saved
     created_at = models.DateTimeField(auto_now_add=True)
@@ -76,8 +74,8 @@ class Device(models.Model):
 
 class Connector(models.Model):
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='connectors')
-    designator = models.CharField(max_length=30, help_text='Its name on the device, e.g. J1.')
-    name = models.CharField(max_length=200, blank=True, help_text='What it is for, e.g. Power in.')
+    designator = models.CharField(max_length=30)
+    name = models.CharField(max_length=200, blank=True)
     part = models.ForeignKey(Part, null=True, blank=True, on_delete=models.SET_NULL, related_name='device_connectors')
     position = models.PositiveIntegerField(default=0)
 
@@ -99,7 +97,7 @@ class Connector(models.Model):
 class Pin(models.Model):
     connector = models.ForeignKey(Connector, on_delete=models.CASCADE, related_name='pins')
     number = models.CharField(max_length=20)
-    signal = models.CharField(max_length=100, blank=True, help_text='What it carries, e.g. CAN H, +24 V.')
+    signal = models.CharField(max_length=100, blank=True)
     description = models.CharField(max_length=200, blank=True)
 
     class Meta:

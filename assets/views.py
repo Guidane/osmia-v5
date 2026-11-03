@@ -35,7 +35,7 @@ class AssetForm(AttributesForm):
         widgets = {'calibrated_on': forms.DateInput(attrs={'type': 'date'}), 'built_on': forms.DateInput(attrs={'type': 'date'}),
                    'notes': forms.Textarea(attrs={'rows': 3})}
 
-    on_order = forms.BooleanField(required=False, label='Still to be bought', help_text='It is "On order" until an order brings it.')
+    on_order = forms.BooleanField(required=False, label='Still to be bought')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

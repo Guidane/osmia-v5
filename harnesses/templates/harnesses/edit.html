@@ -5,11 +5,9 @@
 {% block content %}
 <p class="small"><a href="{{ harness.get_absolute_url }}">← {{ harness }}</a></p>
 <h1>{{ title }} of {{ harness.number }}</h1>
-{% if help %}<p class="muted small">{{ help }}</p>{% endif %}
 <form method="post" class="card flush">{% csrf_token %}
   {% include "web/_rows.html" %}
   <datalist id="parts">{% for number, description in part_numbers %}<option value="{{ number }}">{{ description }}</option>{% endfor %}</datalist>
-  <div class="actions pad"><button class="btn primary">Save</button><a href="{{ harness.get_absolute_url }}">Cancel</a>
-    <span class="muted small">Fill in the empty rows to add more (save, and there are more); tick ✕ to take a row away.</span></div>
+  <div class="actions pad"><button class="btn primary">Save</button><a href="{{ harness.get_absolute_url }}">Cancel</a></div>
 </form>
 {% endblock %}

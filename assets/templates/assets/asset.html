@@ -7,6 +7,7 @@
   <span class="spacer"></span><a class="btn" href="{% url 'web:labels' 'asset' %}?ids={{ asset.pk }}">🏷 Label</a>{% document_button asset %}<a class="btn" href="{% url 'assets:edit' asset.pk %}">Change</a></div>
 {% if asset.calibration_overdue %}<div class="flash error">Calibration was due on {{ asset.calibration_due }}.</div>{% endif %}
 
+<div class="with-notes">
 <div class="columns">
   <section class="card">
     {% document_image asset %}
@@ -22,7 +23,6 @@
       <dt>Looked after by</dt><dd>{{ asset.keeper|default:"—" }}</dd>
       <dt>Bought from</dt><dd>{% if asset.vendor %}<a href="{{ asset.vendor.get_absolute_url }}">{{ asset.vendor }}</a>{% if asset.vendor_number %} · {{ asset.vendor_number }}{% endif %}{% if asset.price %} · {{ asset.price|money }}{% endif %}{% else %}—{% endif %}{% for l in order_lines %} · <a href="{{ l.order.get_absolute_url }}">{{ l.order.number }}</a>{% endfor %}</dd>
       <dt>Calibration</dt><dd>{% if asset.calibration_months %}every {{ asset.calibration_months }} month{{ asset.calibration_months|pluralize }}; last {{ asset.calibrated_on|default:"never" }}; due <b{% if asset.calibration_overdue %} class="error"{% endif %}>{{ asset.calibration_due }}</b>{% else %}not needed{% endif %}</dd>
-      {% if asset.notes %}<dt>Notes</dt><dd>{{ asset.notes|linebreaksbr }}</dd>{% endif %}
     </dl>
   </section>
   <section class="card">
@@ -56,11 +56,12 @@
         <button class="btn small ghost" name="action" value="retired" data-confirm="Retire {{ asset.number }}? It stays, with its history.">Retire</button></form>{% endif %}
   </section>
 </div>
+{% include "web/_notes.html" with notes=asset.notes %}
+</div>
 
 {% if checks %}
 <form method="post" action="{% url 'assets:checklist' asset.pk %}" class="card flush">{% csrf_token %}
-  <div class="card-head"><h3>Checklist <span class="muted small">{{ placed }} / {{ checks|length }} placed · {{ verified }} / {{ checks|length }} verified</span></h3>
-    <span class="muted small">Tick each wire as it is placed, then again when it is checked against the pinout.</span></div>
+  <div class="card-head"><h3>Checklist <span class="muted small">{{ placed }} / {{ checks|length }} placed · {{ verified }} / {{ checks|length }} verified</span></h3></div>
   <table class="list">
     <tr><th>Wire</th><th>Signal</th><th>Set</th><th>Colour</th><th>Placed</th><th>Verified</th></tr>
     {% for c in checks %}{% ifchanged c.between %}<tr class="group-row"><th colspan="6">{{ c.between }}</th></tr>{% endifchanged %}

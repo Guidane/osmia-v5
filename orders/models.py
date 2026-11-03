@@ -1,5 +1,6 @@
 """Orders to vendors, charged to a budget: parts and assets ordered, when they are expected, and what has arrived.
-Receiving books the parts into stock and makes the assets available (``orders.service``)."""
+Receiving books the parts into stock and makes the assets available (``orders.service``). An order can start as a
+request: someone describes what they need and asks someone else to order it, who adds the lines and places it."""
 from datetime import date
 
 from django.conf import settings
@@ -17,12 +18,19 @@ class Order(models.Model):
         RECEIVED = 'received', 'Received'
         CANCELLED = 'cancelled', 'Cancelled'
 
+    class Kind(models.TextChoices):
+        ORDER = 'order', 'Order'
+        REQUEST = 'request', 'Request to order'
+
     OPEN = (Status.ORDERED, Status.PARTLY)   # waiting for something to arrive
 
     number = models.CharField(max_length=20, unique=True, editable=False)
-    vendor = models.ForeignKey(Vendor, on_delete=models.PROTECT, related_name='orders')
-    budget = models.ForeignKey('budgets.Budget', null=True, blank=True, on_delete=models.PROTECT, related_name='orders',
-                               help_text='What it is paid from: once placed, it counts as spent on it.')
+    kind = models.CharField(max_length=10, choices=Kind, default=Kind.ORDER)
+    vendor = models.ForeignKey(Vendor, null=True, blank=True, on_delete=models.PROTECT, related_name='orders')
+    request = models.TextField('what is needed', blank=True)
+    ask = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='order_requests',
+                            verbose_name='who should order it')
+    budget = models.ForeignKey('budgets.Budget', null=True, blank=True, on_delete=models.PROTECT, related_name='orders')
     status = models.CharField(max_length=10, choices=Status, default=Status.DRAFT)
     vendor_reference = models.CharField("vendor's order number", max_length=100, blank=True)
     ordered_on = models.DateField(null=True, blank=True)

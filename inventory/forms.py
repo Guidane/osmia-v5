@@ -10,11 +10,11 @@ def attribute_field(attribute, required, initial):
     label = f'{attribute.name} ({attribute.unit})' if attribute.unit and attribute.kind in Attribute.NUMERIC else attribute.name
     common = {'label': label, 'required': required, 'initial': initial, 'help_text': attribute.help}
     if attribute.kind == Attribute.Kind.AUTO:   # given, not filled in
-        common.update(required=False, help_text=attribute.help or 'Given by itself when it is saved.')
+        common['required'] = False
         return forms.CharField(disabled=True, **common)
     if attribute.kind == Attribute.Kind.LINK and not attribute.to_assets:   # any part: by part number
-        common['help_text'] = attribute.help or 'Part numbers, separated by commas.'
-        return forms.CharField(widget=forms.TextInput(attrs={'list': 'part-numbers', 'autocomplete': 'off'}), **common)
+        return forms.CharField(widget=forms.TextInput(attrs={'list': 'part-numbers', 'autocomplete': 'off',
+                                                             'placeholder': 'Part numbers, separated by commas'}), **common)
     if attribute.is_link:   # a category's parts, or assets: picked from a list
         choices = [(c.pk, str(c) if attribute.to_assets else f'{c.number} {c.description}'.strip()) for c in attribute.candidates()]
         return forms.MultipleChoiceField(choices=choices, widget=forms.SelectMultiple(attrs={'size': min(max(len(choices), 2), 6)}), **common)

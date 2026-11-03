@@ -136,10 +136,9 @@ def parts_of(data):
 
 class HarnessEnd(models.Model):
     harness = models.ForeignKey(Harness, on_delete=models.CASCADE, related_name='ends')
-    designator = models.CharField(max_length=30, help_text='Its name on the harness, e.g. P1.')
+    designator = models.CharField(max_length=30)
     part = models.ForeignKey(Part, null=True, blank=True, on_delete=models.SET_NULL, related_name='harness_ends')
-    connector = models.ForeignKey(Connector, null=True, blank=True, on_delete=models.SET_NULL, related_name='harness_ends',
-                                  help_text='The device connector it plugs into.')
+    connector = models.ForeignKey(Connector, null=True, blank=True, on_delete=models.SET_NULL, related_name='harness_ends')
     position = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -157,10 +156,10 @@ class Wire(models.Model):
     to_end = models.ForeignKey(HarnessEnd, on_delete=models.CASCADE, related_name='wires_to')
     to_pin = models.CharField(max_length=20)
     signal = models.CharField(max_length=100, blank=True)
-    wire_set = models.CharField('set', max_length=20, blank=True, help_text='Wires of the same set (P1, P2, …) go together.')
+    wire_set = models.CharField('set', max_length=20, blank=True)
     set_type = models.CharField(max_length=20, default='Straight', choices=[(t, t) for t in SET_TYPES])
     colour = models.CharField(max_length=20, blank=True, choices=[(c, c) for c in COLOURS])
-    gauge = models.CharField(max_length=20, blank=True, help_text='e.g. 22 AWG, 0.5 mm²')
+    gauge = models.CharField(max_length=20, blank=True)
     length = models.DecimalField('length (mm)', max_digits=9, decimal_places=1, null=True, blank=True)
     part = models.ForeignKey(Part, null=True, blank=True, on_delete=models.SET_NULL, related_name='harness_wires')
 

@@ -19,6 +19,7 @@ from harnesses.models import Harness, HarnessEnd, HarnessItem, Wire
 from inventory import stock
 from inventory.models import Attribute, Category, Location, Part, PartLink, PartValue, Vendor
 from orders import service
+from orders.models import Order
 from projects import configs
 from projects.models import Configuration, Project
 from assets.models import Asset, PartAsset
@@ -114,6 +115,8 @@ def _make(user):
     coming.budget = eng_budget
     coming.save()
     service.place(coming, user, date.today() + timedelta(days=4))
+    Order.objects.create(kind=Order.Kind.REQUEST, budget=eng_budget, created_by=user,
+                         request='Heat shrink, 6 mm, a spool of black and one of red, for the load board harnesses.')
 
     devices = {}
     for number, name, colour in (('CTRL-100', 'Rack controller', '#3b7dd8'), ('LOAD-200', 'Load board', '#c2410c')):

@@ -5,14 +5,31 @@
 <div class="page-head">
   <h1>{{ order.number }}</h1>
   <span class="badge{% if order.status == 'received' %} ok{% elif order.overdue or order.status == 'cancelled' %} failed{% endif %}">{% if order.overdue %}Late{% else %}{{ order.get_status_display }}{% endif %}</span>
-  <span class="muted"><a href="{{ order.vendor.get_absolute_url }}">{{ order.vendor }}</a>{% if order.budget %} · <a href="{{ order.budget.get_absolute_url }}">{{ order.budget }}</a>{% endif %}{% if order.ordered_on %} · ordered {{ order.ordered_on }}{% endif %}{% if order.expected_on and order.status != 'received' %} · expected {{ order.expected_on }}{% endif %}{% if order.received_on %} · received {{ order.received_on }}{% endif %}</span>
+  <span class="muted">{% if order.vendor %}<a href="{{ order.vendor.get_absolute_url }}">{{ order.vendor }}</a>{% else %}no vendor yet{% endif %}{% if order.budget %} · <a href="{{ order.budget.get_absolute_url }}">{{ order.budget }}</a>{% endif %}{% if order.ordered_on %} · ordered {{ order.ordered_on }}{% endif %}{% if order.expected_on and order.status != 'received' %} · expected {{ order.expected_on }}{% endif %}{% if order.received_on %} · received {{ order.received_on }}{% endif %}</span>
   <span class="spacer"></span>
+  {% if order.status == 'draft' %}<button type="button" class="btn primary" data-find>＋ Add item</button>{% endif %}
   {% if order.status == 'draft' or order.status == 'ordered' %}<form method="post" action="{% url 'orders:cancel' order.pk %}" data-confirm="Cancel {{ order.number }}?">{% csrf_token %}<button class="btn ghost">Cancel order</button></form>{% endif %}
 </div>
 
+<form method="post" class="form with-notes">{% csrf_token %}
+  <div class="card">
+    <h3>{% if order.kind == 'request' %}Request details{% else %}Order details{% endif %}</h3>
+    <div class="fields">{% include "web/_form_fields.html" %}</div>
+    <div class="actions"><button class="btn">Save</button></div>
+  </div>
+  <div class="side">
+    {% if order.kind == 'request' %}<section class="card request">
+      <h3>Asked for{% if order.created_by %} by {{ order.created_by }}{% endif %} <span class="muted small">{{ order.created_at|date:"j M Y H:i" }}</span></h3>
+      <p class="request-text">{{ order.request|linebreaksbr }}</p>
+      <p class="muted small">Asked of {{ order.ask|default:"the administrators" }}</p>
+    </section>{% endif %}
+    {% include "web/_notes_field.html" %}
+  </div>
+</form>
+
 {% if order.status == 'draft' %}
 <section class="card flush">
-  <div class="card-head"><h3>What to order</h3><span class="muted small">A draft: change it, then place it.</span></div>
+  <div class="card-head"><h3>What to order</h3></div>
   <table class="list">
     <tr><th>Part</th><th colspan="3">Quantity · price each</th></tr>
     {% for line, where in lines %}<tr>
@@ -23,24 +40,37 @@
         <button class="btn small">Save</button> <button class="btn small ghost" name="remove" value="1" title="Take it off">✕</button></form></td>
     </tr>{% empty %}<tr><td colspan="4" class="empty small">Nothing on it yet.</td></tr>{% endfor %}
   </table>
-  <form method="post" action="{% url 'orders:line_add' order.pk %}" class="line-form add">{% csrf_token %}
-    <input type="text" name="part" list="parts" placeholder="Part number or asset tag" aria-label="Part number or asset tag on order" required autocomplete="off">
-    <datalist id="parts">{% for p in parts %}<option value="{{ p.number }}">{{ p.description }}</option>{% endfor %}{% for a in assets %}<option value="{{ a.number }}">🔧 {{ a.name }} (asset on order)</option>{% endfor %}</datalist>
-    <input type="text" name="quantity" inputmode="decimal" placeholder="How many" aria-label="How many">
-    <input type="text" name="price" inputmode="decimal" placeholder="Price (optional)" aria-label="Price each">
-    <button class="btn">＋ Add</button>
-  </form>
 </section>
+<dialog class="finder" id="finder" aria-label="Add to the order">
+  <div class="finder-head"><h3>Add to the order</h3>
+    <input type="search" id="finder-q" placeholder="Search: number, description, manufacturer…" aria-label="Search" autocomplete="off">
+    <span class="spacer"></span><a class="small" href="{% url 'inventory:part_new' %}" target="_blank">＋ Make a new part</a>
+    <button type="button" class="btn small ghost" data-close title="Close">✕</button></div>
+  <div class="finder-body">
+    <nav class="finder-tree" aria-label="Categories"><button type="button" data-category="" class="on">All parts</button>
+      {% for c, depth in categories %}<button type="button" data-category="{{ c.pk }}" style="padding-left: {{ depth|add:1 }}em">{{ c.name }}</button>{% endfor %}
+      {% if assets %}<button type="button" data-category="assets">🔧 Assets waiting to be ordered</button>{% endif %}</nav>
+    <div class="finder-results"><table class="list"><thead><tr><th>Part</th><th>Description</th><th>Category</th><th class="num">In stock</th></tr></thead>
+      <tbody id="finder-rows"></tbody></table><p class="muted small pad" id="finder-note"></p></div>
+  </div>
+  <form method="post" action="{% url 'orders:line_add' order.pk %}" class="finder-foot line-form">{% csrf_token %}
+    <input type="hidden" name="part" id="pick-number">
+    <span id="picked" class="muted">Pick one from the list.</span><span class="spacer"></span>
+    <input type="text" name="quantity" id="pick-quantity" inputmode="decimal" placeholder="How many" aria-label="How many">
+    <input type="text" name="price" id="pick-price" inputmode="decimal" placeholder="Price each" aria-label="Price each">
+    <button class="btn primary" id="pick-add" disabled>＋ Add</button>
+  </form>
+</dialog>
+{{ assets_json|json_script:"waiting-assets" }}
 {% if budget_left is not None and budget_left < 0 %}<div class="flash warning">Placing it takes {{ order.budget }} over its budget by {{ budget_left|money_abs }}.</div>{% endif %}
 {% if lines %}<form method="post" action="{% url 'orders:place' order.pk %}" class="card place-form">{% csrf_token %}
   <label>Expected <input type="date" name="expected_on" value="{{ order.expected_on|date:'Y-m-d' }}" min="{{ today|date:'Y-m-d' }}"></label>
-  <button class="btn primary">✓ Placed with {{ order.vendor }}</button>
-  <span class="muted small">Press once it is sent to the vendor: from then on it shows as still to come.</span>
+  {% if order.vendor %}<button class="btn primary">✓ Placed with {{ order.vendor }}</button>{% else %}<span class="muted">No vendor yet.</span>{% endif %}
 </form>{% endif %}
 
 {% else %}
 <section class="card flush">
-  <div class="card-head"><h3>Lines</h3>{% if order.status == 'ordered' or order.status == 'partly' %}<span class="muted small">Fill in what arrived, and where it goes.</span>{% endif %}</div>
+  <div class="card-head"><h3>Lines</h3></div>
   <form method="post" action="{% url 'orders:receive' order.pk %}">{% csrf_token %}
   <table class="list">
     <tr><th>Part</th><th class="num">Ordered</th><th class="num">Received</th>{% if order.status == 'ordered' or order.status == 'partly' %}<th>Arrived now</th><th>Into</th>{% endif %}</tr>
@@ -61,14 +91,68 @@
 </section>
 {% endif %}
 
-<form method="post" class="form card">{% csrf_token %}
-  <h3>Order details</h3>
-  <div class="fields">{% include "web/_form_fields.html" %}</div>
-  <div class="actions"><button class="btn">Save</button></div>
-</form>
 {% endblock %}
 {% block scripts %}<script>
   document.querySelectorAll('[data-all]').forEach(function (b) {
     b.addEventListener('click', function () { b.form.querySelector('[name="' + b.dataset.all + '"]').value = b.dataset.value; });
   });
+  /* Adding to the order: a part (by category, words, or the whole list) or an asset waiting to be ordered; picking
+     one fills in the line at the bottom. After adding, the popup opens again for the next one. */
+  var finder = document.getElementById('finder');
+  if (finder) {
+    var q = document.getElementById('finder-q'), rows = document.getElementById('finder-rows'), note = document.getElementById('finder-note');
+    var picked = document.getElementById('picked'), number = document.getElementById('pick-number'), add = document.getElementById('pick-add');
+    var quantity = document.getElementById('pick-quantity'), price = document.getElementById('pick-price');
+    var assets = JSON.parse(document.getElementById('waiting-assets').textContent);
+    var category = '', timer, asked = 0;
+    var pick = function (item, tr) {
+      rows.querySelectorAll('tr.on').forEach(function (o) { o.classList.remove('on'); });
+      tr.classList.add('on');
+      number.value = item.number;
+      picked.textContent = item.number + ' · ' + item.description;
+      picked.className = '';
+      quantity.disabled = item.asset; quantity.value = item.asset ? '1' : '';
+      price.placeholder = item.price ? 'Price each (last ' + item.price + ')' : 'Price each';
+      add.disabled = false;
+      (item.asset ? price : quantity).focus();
+    };
+    var show = function (items, more) {
+      rows.replaceChildren();
+      items.forEach(function (item) {
+        var tr = document.createElement('tr');
+        [item.number, item.description, item.category, item.have].forEach(function (text, i) {
+          var td = document.createElement('td'); td.textContent = text; if (i === 3) td.className = 'num'; tr.appendChild(td);
+        });
+        tr.tabIndex = 0; tr.className = 'pick';
+        tr.addEventListener('click', function () { pick(item, tr); });
+        tr.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); pick(item, tr); } });
+        rows.appendChild(tr);
+      });
+      note.textContent = items.length ? (more ? 'Showing the first ' + items.length + ': search or pick a category to narrow it down.' : '') : 'Nothing found.';
+    };
+    var search = function () {
+      var mine = ++asked, words = q.value.trim().toLowerCase();
+      if (category === 'assets') {
+        show(assets.filter(function (a) { return (a.number + ' ' + a.description).toLowerCase().indexOf(words) !== -1; }), false);
+        return;
+      }
+      fetch('{% url "inventory:find" %}?q=' + encodeURIComponent(q.value) + '&category=' + category)
+        .then(function (r) { return r.json(); }).then(function (data) {
+          if (mine !== asked) return;
+          show(data.parts.map(function (p) { p.have = p.have + ' ' + p.unit; return p; }), data.more);
+        });
+    };
+    var open = function () { finder.showModal(); q.focus(); search(); history.replaceState(null, '', '#add'); };
+    finder.addEventListener('close', function () { history.replaceState(null, '', location.pathname + location.search); });
+    document.querySelectorAll('[data-find]').forEach(function (b) { b.addEventListener('click', open); });
+    finder.querySelector('[data-close]').addEventListener('click', function () { finder.close(); });
+    q.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(search, 200); });
+    finder.querySelectorAll('[data-category]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        finder.querySelectorAll('[data-category]').forEach(function (o) { o.classList.toggle('on', o === b); });
+        category = b.dataset.category; search();
+      });
+    });
+    if (location.hash === '#add') open();
+  }
 </script>{% endblock %}
