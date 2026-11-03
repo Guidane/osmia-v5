@@ -29,6 +29,8 @@
 .diagram .wire.changed { stroke: #d97706; } .diagram .port.changed { fill: #d97706; }
 .diagram .wire.bad { stroke: var(--danger); stroke-dasharray: 6 4; } .diagram .port.bad { fill: var(--danger); }
 .diagram .pill { cursor: pointer; }
+.diagram .requested { fill: none; stroke: #d97706; stroke-width: 2; stroke-dasharray: 3 5; }
+.diagram .pill.requested-pill rect { fill: #d97706; }
 .diagram .sq { fill: var(--panel); stroke: var(--border-strong); stroke-width: 1.5; cursor: pointer; }
 .diagram .sq:hover { stroke: var(--brand); stroke-width: 2.5; }
 .diagram .sq.on { fill: var(--brand); stroke: var(--brand); }

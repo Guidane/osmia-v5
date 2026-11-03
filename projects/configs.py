@@ -159,6 +159,10 @@ def connect(config, ends, name, pairs, parts=(None, None)):
         Wire.objects.create(harness=harness, from_end=made[0], from_pin=a, to_end=made[1], to_pin=b, signal=pa.signal or pb.signal,
                             wire_set=in_set.wire_set, set_type=in_set.set_type)
     place(config, kind='harness', harness_id=harness.pk, ends={str(made[0].pk): ends[0][0], str(made[1].pk): ends[1][0]})
+    between = {ends[0][0], ends[1][0]}
+    for wanted in config.harness_requests.filter(status='open'):   # what someone asked for between these two: made
+        if {wanted.a, wanted.b} == between:
+            close_request(wanted, wanted.Status.DONE, harness=harness)
     return harness
 
 
@@ -233,3 +237,44 @@ def needs(config):
             parts[part] = parts.get(part, Decimal(0)) + quantity * n
     return devices, harnesses, [(part, quantity, part.on_hand, on_order(part))
                                 for part, quantity in sorted(parts.items(), key=lambda pq: pq[0].number)]
+
+
+# -- Asking for a harness between two devices ----------------------------------------------------------------------
+
+def ask_harness(config, a, b, text, ask, user):
+    """``user`` asks for a harness between the devices ``a`` and ``b`` of ``config``; who is asked (else the
+    administrators) hears of it."""
+    from django.contrib.auth import get_user_model
+    from web.notify import notify
+    from .models import HarnessRequest
+    rows = resolve(config)
+    if not text.strip():
+        raise ValidationError('Say what is needed.')
+    if any(rows.get(k, {}).get('kind') != 'device' for k in (a, b)):
+        raise ValidationError('Pick two devices of this configuration.')
+    wanted = HarnessRequest.objects.create(configuration=config, a=a, b=b, request=text.strip(), ask=ask, created_by=user)
+    people = [ask] if ask else list(get_user_model().objects.filter(is_superuser=True, is_active=True))
+    people = [p for p in people if p != user] or people
+    notify(people, f'{user or "Someone"} asks for a harness between {label_of(rows, a)} and {label_of(rows, b)}: {wanted.request[:200]}',
+           wanted.get_absolute_url())
+    return wanted
+
+
+def close_request(wanted, status, user=None, harness=None):
+    """A harness request made (with ``harness``) or cancelled; who asked hears."""
+    from django.utils import timezone
+    from web.notify import notify
+    if wanted.status != wanted.Status.OPEN:
+        raise ValidationError('That request is closed already.')
+    wanted.status, wanted.harness, wanted.closed_at = status, harness, timezone.now()
+    wanted.save(update_fields=['status', 'harness', 'closed_at'])
+    if wanted.created_by and wanted.created_by != user:
+        what = f'{harness} is made' if harness else (f'{user} made it' if status == wanted.Status.DONE else f'{user or "Someone"} won\'t make it')
+        notify([wanted.created_by], f'The harness you asked for: {what}.', wanted.get_absolute_url())
+
+
+def label_of(rows, key):
+    from devices.models import Device
+    row = rows.get(key) or {}
+    device = Device.objects.filter(pk=row.get('device_id')).first()
+    return row.get('label') or (device.number if device else '?')

@@ -34,7 +34,7 @@ def order_asset(asset, user):
 def on_order(part):
     """How many of ``part`` (or of the parts of a family) are ordered and not yet received."""
     lines = OrderLine.objects.filter(order__status__in=Order.OPEN)
-    lines = lines.filter(part__family=part) if hasattr(part, 'chosen') else lines.filter(part=part)
+    lines = lines.filter(part__in=part.members()) if hasattr(part, 'members') else lines.filter(part=part)
     left = lines.aggregate(n=Sum(F('quantity') - F('received')))['n']
     return max(left or Decimal(0), Decimal(0))
 

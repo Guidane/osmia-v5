@@ -27,7 +27,7 @@
   <section class="card flush"><div class="card-head"><h3>Budgets</h3></div>
     <table class="list">{% for b in budgets %}<tr><td><a href="{{ b.get_absolute_url }}">{{ b }}</a></td><td class="num">{{ b.amount|money }}</td></tr>
       {% empty %}<tr><td class="empty small">None.</td></tr>{% endfor %}</table></section>
-  <section class="card flush"><div class="card-head"><h3>Projects</h3></div>
+  <section class="card flush"><div class="card-head"><h3>Wire diagrams</h3></div>
     <table class="list">{% for p in projects %}<tr><td><a href="{{ p.get_absolute_url }}">{{ p }}</a></td></tr>
       {% empty %}<tr><td class="empty small">None.</td></tr>{% endfor %}</table></section>
 </div>

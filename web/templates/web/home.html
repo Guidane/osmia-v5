@@ -6,11 +6,18 @@
   <a class="tile" href="{% url 'orders:list' %}"><b>{{ waiting|length }}</b> order{{ waiting|length|pluralize }} still to come</a>
   <a class="tile{% if late %} bad{% endif %}" href="{% url 'orders:list' %}"><b>{{ late }}</b> late</a>
   <a class="tile{% if requests %} warn{% endif %}" href="{% url 'orders:list' %}?show=requests"><b>{{ requests }}</b> request{{ requests|pluralize }} to order</a>
+  {% if harness_requests %}<a class="tile warn" href="#harness-requests"><b>{{ harness_requests|length }}</b> harness{{ harness_requests|length|pluralize:"es" }} asked for</a>{% endif %}
   <a class="tile" href="{% url 'orders:list' %}?show=draft"><b>{{ drafts }}</b> draft{{ drafts|pluralize }} to place</a>
   <a class="tile{% if over_budget %} bad{% endif %}" href="{% url 'budgets:list' %}"><b>{{ over_budget|length }}</b> budget{{ over_budget|length|pluralize }} overspent</a>
   <a class="tile{% if assets_due %} warn{% endif %}" href="{% url 'assets:list' %}?due=1"><b>{{ assets_due|length }}</b> asset{{ assets_due|length|pluralize }} due for calibration</a>
 </div>
 {% if over_budget %}<div class="flash error">Overspent: {% for b in over_budget %}<a href="{{ b.get_absolute_url }}">{{ b }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}
+
+{% if harness_requests %}<section class="card flush" id="harness-requests">
+  <div class="card-head"><h3>Harnesses asked for</h3></div>
+  <table class="list">{% for r in harness_requests %}<tr><td><a href="{{ r.get_absolute_url }}">{{ r.configuration.project }} · {{ r.configuration }}</a>
+    <span class="small">{{ r.request|truncatechars:120 }}</span></td><td class="small nowrap">{{ r.created_by|default:"" }} → {{ r.ask|default:"the administrators" }}</td></tr>{% endfor %}</table>
+</section>{% endif %}
 
 <div class="columns">
   <section class="card flush">

@@ -2,24 +2,33 @@
 {% block title %}{{ family.name }} · Osmia{% endblock %}
 {% block content %}
 <p class="small"><a href="{% url 'inventory:families' %}">← Families</a></p>
-<div class="page-head"><h1>{{ family.name }}</h1><span class="muted">{{ family.description }}</span></div>
+<div class="page-head"><h1>{{ family.name }}</h1><span class="spacer"></span><a class="btn" href="{% url 'inventory:families' %}?edit={{ family.pk }}">Change</a></div>
 <div class="tiles">
   <div class="tile"><b>{{ family.on_hand|qty }}</b> {{ family.unit }} on hand, together</div>
   <div class="tile"><b>{{ parts|length }}</b> part{{ parts|length|pluralize }}</div>
 </div>
-<section class="card flush">
-  <div class="card-head"><h3>Parts</h3></div>
-  <table class="list">
-    <tr><th>Part</th><th>Manufacturer</th><th>Vendor</th><th class="num">On hand</th><th></th></tr>
-    {% for p in parts %}<tr><td><a href="{{ p.get_absolute_url }}">{{ p.number }}</a> <span class="muted small">{{ p.description }}</span></td>
-      <td class="small">{{ p.manufacturer }}{% if p.mpn %} · {{ p.mpn }}{% endif %}</td><td class="small">{{ p.vendor|default:"" }}</td>
-      <td class="num">{{ p.have|default:0|qty }} {{ p.unit }}</td><td>{% if p == family.chosen %}<span class="badge ok">ordered</span>{% endif %}</td></tr>
-    {% empty %}<tr><td colspan="5" class="empty small">No parts in it yet.</td></tr>{% endfor %}
-  </table>
-</section>
-<form method="post" class="form card">{% csrf_token %}
-  <h3>Change it</h3>
-  <div class="fields">{% include "web/_form_fields.html" %}</div>
-  <div class="actions"><button class="btn primary">Save</button></div>
-</form>
+<div class="columns">
+  <section class="card flush">
+    <div class="card-head"><h3>Branches</h3></div>
+    <table class="list">
+      {% for b in branches %}<tr><td>{{ b.name }}</td><td class="num">{{ b.n }} part{{ b.n|pluralize }}</td><td class="num">{{ b.on_hand|qty }} {{ b.unit }}</td>
+        <td class="small"><a href="?branch={{ b.pk }}">Change</a></td></tr>
+      {% empty %}<tr><td class="empty small">No branches.</td></tr>{% endfor %}
+    </table>
+    <form method="post" class="form pad">{% csrf_token %}
+      <div class="fields">{% include "web/_form_fields.html" %}</div>
+      <div class="actions"><button class="btn primary">{% if branch %}Save{% else %}＋ Add branch{% endif %}</button>{% if branch %} <a href="{{ family.get_absolute_url }}">Cancel</a>{% endif %}</div>
+    </form>
+  </section>
+  <section class="card flush">
+    <div class="card-head"><h3>Parts</h3></div>
+    <table class="list">
+      <tr><th>Part</th><th>Branch</th><th>Vendor</th><th class="num">On hand</th><th></th></tr>
+      {% for p in parts %}<tr><td><a href="{{ p.get_absolute_url }}">{{ p.number }}</a> <span class="muted small">{{ p.manufacturer }}</span></td>
+        <td class="small">{{ p.branch.name|default:"" }}</td><td class="small">{{ p.vendor|default:"" }}</td>
+        <td class="num">{{ p.have|default:0|qty }} {{ p.unit }}</td><td>{% if p == family.chosen %}<span class="badge ok">ordered</span>{% endif %}</td></tr>
+      {% empty %}<tr><td colspan="5" class="empty small">No parts in it yet.</td></tr>{% endfor %}
+    </table>
+  </section>
+</div>
 {% endblock %}

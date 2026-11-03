@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Harnesses · Osmia{% endblock %}
 {% block content %}
-<p class="small"><a href="{% url 'projects:list' %}">← Projects</a></p>
+<p class="small"><a href="{% url 'projects:list' %}">← Wire diagrams</a></p>
 <div class="page-head"><h1>Harnesses</h1><span class="spacer"></span>
   <a class="btn primary" href="{% url 'harnesses:new' %}{% if project %}?project={{ project.pk }}{% endif %}">＋ New harness</a></div>
-<form method="get" class="filters"><select name="project" aria-label="Project" onchange="this.form.submit()"><option value="">Every project</option>
+<form method="get" class="filters"><select name="project" aria-label="Wire diagram" onchange="this.form.submit()"><option value="">Every wire diagram</option>
   {% for p in projects %}<option value="{{ p.pk }}"{% if project.pk == p.pk %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></form>
 <div class="card flush">
   <table class="list">
-    <tr><th>Harness</th><th>Name</th><th>Project</th><th>Status</th><th>Version</th></tr>
+    <tr><th>Harness</th><th>Name</th><th>Wire diagram</th><th>Status</th><th>Version</th></tr>
     {% for h in harnesses %}<tr>
       <td><a href="{{ h.get_absolute_url }}">{{ h.number }}</a></td><td>{{ h.name }}</td>
       <td class="small"><a href="{{ h.project.get_absolute_url }}">{{ h.project }}</a></td>

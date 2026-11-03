@@ -1,6 +1,7 @@
-"""Projects and their configurations. A project's configurations form a tree: each one is what its parent is, with
-its own changes (``Placement`` rows): a device or harness added, taken away, swapped, moved on the diagram or
-plugged in differently. A configuration without a parent is a setup of its own. See ``projects.configs``."""
+"""Wire diagrams (``Project``) and their configurations. A project's configurations form a tree: each one is what its
+parent is, with its own changes (``Placement`` rows): a device or harness added, taken away, swapped, moved on the
+diagram or plugged in differently. A configuration without a parent is a setup of its own. See ``projects.configs``.
+Someone can ask for a harness between two devices of a configuration (``HarnessRequest``)."""
 from django.conf import settings
 from django.db import models
 from django.urls import reverse
@@ -18,6 +19,7 @@ class Project(models.Model):
 
     class Meta:
         ordering = ['name']
+        verbose_name = 'wire diagram'
 
     def __str__(self):
         return f'{self.code} {self.name}'.strip()
@@ -67,3 +69,33 @@ class Placement(models.Model):
 
     def __str__(self):
         return f'{self.configuration}: {self.key}'
+
+
+class HarnessRequest(models.Model):
+    """Someone asks for a harness between two devices of a configuration (``a`` and ``b``: their keys). Who is asked
+    (else the administrators) hears of it; a harness made between the two closes it, and who asked hears."""
+    class Status(models.TextChoices):
+        OPEN = 'open', 'Open'
+        DONE = 'done', 'Made'
+        CANCELLED = 'cancelled', 'Cancelled'
+
+    configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE, related_name='harness_requests')
+    a = models.CharField(max_length=40)
+    b = models.CharField(max_length=40)
+    request = models.TextField('what is needed')
+    ask = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+',
+                            verbose_name='who should make it')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=10, choices=Status, default=Status.OPEN)
+    harness = models.ForeignKey('harnesses.Harness', null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    closed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-pk']
+
+    def __str__(self):
+        return f'Harness request {self.pk}'
+
+    def get_absolute_url(self):
+        return f'{self.configuration.get_absolute_url()}#req-{self.pk}'

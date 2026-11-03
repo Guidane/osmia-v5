@@ -144,3 +144,47 @@ class ConnectTests(ProjectBase):
         self.assertContains(connect(b=self.ctrl, b_connector=self.board_j1.pk), 'That connector is not in this configuration.')
         self.assertContains(connect(b=self.load, b_connector=self.board_j1.pk, wire='["99", "1"]'), 'There is no pin 99 on that connector.')
         self.assertFalse(self.project.harnesses.filter(name='x').exists())
+
+
+class HarnessRequestTests(ProjectBase):
+    def ask(self, **post):
+        return self.client.post(reverse('projects:change', args=[self.project.pk]), {
+            'config': self.base.pk, 'action': 'request_harness', 'a': self.ctrl, 'b': self.load, **post}, follow=True)
+
+    def test_asked_made_between_the_two_and_who_asked_hears(self):
+        from django.contrib.auth import get_user_model
+        from projects.models import HarnessRequest
+        from web.models import Notification
+        sam = get_user_model().objects.create_user('sam', password='pw')
+        bob = get_user_model().objects.create_user('bob', password='pw')
+        self.client.force_login(sam)
+        self.assertContains(self.ask(request=''), 'Say what is needed.')
+        self.assertContains(self.ask(request='Sensor cable, 2 m', b='nope'), 'Pick two devices of this configuration.')
+        page = self.ask(request='Sensor cable, 2 m', ask=bob.pk)
+        self.assertContains(page, 'Controller ⇄ Load board 1')
+        wanted = HarnessRequest.objects.get()
+        self.assertTrue(Notification.objects.filter(user=bob, message__contains='harness between Controller and Load board 1').exists())
+        self.assertIn({'id': wanted.pk, 'a': self.ctrl, 'b': self.load, 'text': 'Sensor cable, 2 m'},
+                      page.context['diagram']['requests'])
+        self.client.force_login(self.ada)
+        self.assertContains(self.client.get('/'), '1</b> harness asked for', html=False)
+        self.client.post(reverse('projects:change', args=[self.project.pk]), {    # drawn between the two: made
+            'config': self.base.pk, 'action': 'connect', 'name': 'Sensor cable', 'a': self.load, 'a_connector': self.board_j1.pk,
+            'b': self.ctrl, 'b_connector': self.j1.pk})
+        wanted.refresh_from_db()
+        self.assertEqual((wanted.status, wanted.harness.name), ('done', 'Sensor cable'))
+        self.assertTrue(Notification.objects.filter(user=sam, message__contains='is made').exists())
+        self.assertNotContains(self.client.get('/'), 'harness asked for')
+
+    def test_done_or_cancelled_by_hand(self):
+        from projects.models import HarnessRequest
+        self.ask(request='A loom')
+        self.ask(request='Another loom')
+        first, second = HarnessRequest.objects.order_by('pk')
+        change = reverse('projects:change', args=[self.project.pk])
+        self.client.post(change, {'config': self.base.pk, 'action': 'request_done', 'request_id': first.pk, 'harness': self.harness.pk})
+        self.client.post(change, {'config': self.base.pk, 'action': 'request_cancel', 'request_id': second.pk})
+        first.refresh_from_db(); second.refresh_from_db()
+        self.assertEqual((first.status, first.harness, second.status), ('done', self.harness, 'cancelled'))
+        response = self.client.post(change, {'config': self.base.pk, 'action': 'request_cancel', 'request_id': first.pk}, follow=True)
+        self.assertContains(response, 'That request is closed already.')

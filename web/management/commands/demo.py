@@ -21,6 +21,6 @@ class Command(BaseCommand):
             else:
                 user = get_user_model().objects.filter(is_superuser=True).order_by('pk').first()
                 demo.switch_on(user)
-                self.stdout.write(self.style.SUCCESS('The demo data is on: open Home, the Burn-in rack project, or a device.'))
+                self.stdout.write(self.style.SUCCESS('The demo data is on: open Home, the Burn-in rack wire diagram, or a device.'))
         except ValidationError as exc:
             raise CommandError(' '.join(exc.messages))

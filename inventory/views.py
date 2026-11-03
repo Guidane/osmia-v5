@@ -17,7 +17,7 @@ from web.forms import initial_for
 from . import attributes as attributes_kept
 from . import stock
 from .attributes import PartStore
-from .forms import AttributeForm, CategoryForm, FamilyForm, LocationForm, PartForm, VendorForm
+from .forms import AttributeForm, BranchForm, CategoryForm, FamilyForm, LocationForm, PartForm, VendorForm
 from .models import Attribute, Category, Family, Location, Part, PartLink, PartValue, Stock, Vendor
 
 PAGE = 200   # parts listed at most
@@ -98,7 +98,7 @@ def part_form(request, pk=None):
 
 @login_required
 def part(request, pk):
-    part = get_object_or_404(Part.objects.select_related('category', 'vendor'), pk=pk)
+    part = get_object_or_404(Part.objects.select_related('category', 'vendor', 'family', 'branch'), pk=pk)
     return render(request, 'inventory/part.html', {
         'attributes': attributes_kept.shown(part, part.category), 'linked_here': attributes_kept.linked_here(part),
         'part': part, 'stock': part.stock.select_related('location').filter(quantity__gt=0),
@@ -193,25 +193,30 @@ def vendor_form(request, pk=None):
 
 @login_required
 def families(request):
-    """The families of parts that can take each other's place, with a form to make one."""
-    form = FamilyForm(request.POST or None)
+    """The families of parts that can take each other's place, with a form to make one (or rename one: ?edit=<pk>)."""
+    item = Family.objects.filter(pk=request.GET.get('edit') or 0).first()
+    form = FamilyForm(request.POST or None, instance=item)
     if request.method == 'POST' and form.is_valid():
-        return redirect(form.save())
-    return render(request, 'inventory/families.html', {'families': Family.objects.annotate(n=Count('parts')).select_related('preferred'),
-                                                       'form': form})
+        saved = form.save()
+        messages.success(request, f'{saved} is saved.')
+        return redirect('inventory:families')
+    return render(request, 'inventory/families.html', {'families': Family.objects.annotate(n=Count('parts')), 'form': form, 'item': item})
 
 
 @login_required
 def family(request, pk):
-    """A family: its parts (their stock together), the one it is ordered as, and changing it."""
+    """A family: its branches (added, or renamed: ?branch=<pk>), its parts, their stock together, the one it is
+    ordered as."""
     item = get_object_or_404(Family, pk=pk)
-    form = FamilyForm(request.POST or None, instance=item)
+    branch = item.branches.filter(pk=request.GET.get('branch') or 0).first()
+    form = BranchForm(request.POST or None, instance=branch, family=item)
     if request.method == 'POST' and form.is_valid():
-        form.save()
-        messages.success(request, f'{item} is saved.')
+        saved = form.save()
+        messages.success(request, f'{saved} is saved.')
         return redirect(item)
     return render(request, 'inventory/family.html', {
-        'family': item, 'form': form, 'parts': item.parts.select_related('vendor').annotate(have=Sum('stock__quantity'))})
+        'family': item, 'form': form, 'branch': branch, 'branches': item.branches.annotate(n=Count('parts')),
+        'parts': item.parts.select_related('vendor', 'branch').annotate(have=Sum('stock__quantity'))})
 
 
 @login_required

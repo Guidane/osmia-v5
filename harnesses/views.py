@@ -13,7 +13,7 @@ from django.views.decorators.http import require_POST
 
 from devices.models import Connector
 from inventory import stock
-from inventory.models import Family, Location, choices_of_parts, part_or_family
+from inventory.models import Location, PartGroup, choices_of_parts, part_or_family
 from projects.models import Project
 from assets.service import next_tag
 from web import excel, rows, versions
@@ -262,7 +262,7 @@ def build(harness, number, version, user, take_from=None):
         signal=w.get('signal', ''), colour=w.get('colour', ''), wire_set=w.get('set', '')) for i, w in enumerate(data['wires']))
     if take_from is not None:
         for part, quantity in parts_of(data):
-            take = stock.use_any if isinstance(part, Family) else stock.use
+            take = stock.use_any if isinstance(part, PartGroup) else stock.use
             take(part, quantity, take_from, user, note=f'built into {asset.number}')
     event(asset, 'built', user, f'{harness.number}' + (f' v{version.number}' if version else ''))
     return asset

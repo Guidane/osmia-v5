@@ -44,7 +44,7 @@ def budget_list(request):
     if not request.GET.get('all'):
         rows = [r for r in rows if r[0].active]
     if request.GET.get('export'):
-        return excel.download('budgets', [('Budgets', ['Number', 'Name', 'Part of', 'Project', 'Owner', 'Amount', 'Received',
+        return excel.download('budgets', [('Budgets', ['Number', 'Name', 'Part of', 'Wire diagram', 'Owner', 'Amount', 'Received',
                                                        'Still to come', 'Other costs', 'Spent', 'Left', 'Used %', 'In drafts'],
                                            [(b.number, b.name, str(b.parent or ''), str(b.project or ''), str(b.owner or ''), b.amount,
                                              t.received, t.coming, t.costs, t.spent, t.remaining, t.used, t.planned) for b, _, t in rows])])

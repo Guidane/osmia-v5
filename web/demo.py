@@ -17,7 +17,7 @@ from budgets.models import Budget, Cost
 from devices.models import Connector, Device, Pin
 from harnesses.models import Harness, HarnessEnd, HarnessItem, Wire
 from inventory import stock
-from inventory.models import Attribute, Category, Family, Location, Part, PartLink, PartValue, Vendor, part_or_family
+from inventory.models import Attribute, Branch, Category, Family, Location, Part, PartLink, PartValue, Vendor, part_or_family
 from orders import service
 from orders.models import Order
 from projects import configs
@@ -30,23 +30,23 @@ PARTS = [  # number, description, category, unit, vendor, price, minimum, on han
     ('DSUB-9-PLUG', 'D-sub 9 plug housing, crimp', 'D-sub', 'pcs', 'Acme Connectors', '2.40', 10, 6),
     ('DSUB-9-PLUG-B', 'D-sub 9 plug housing, crimp (other make)', 'D-sub', 'pcs', 'Acme Connectors', '2.95', 0, 4),
     ('DSUB-9-RECEPT', 'D-sub 9 receptacle, panel mount', 'D-sub', 'pcs', 'Acme Connectors', '3.10', 5, 8),
-    ('DSUB-CONTACT-M', 'D-sub crimp contact, male, 20-24 AWG', 'Contacts', 'pcs', 'Acme Connectors', '0.18', 100, 240),
-    ('M12-5-F', 'M12 5-pin cable socket, female', 'M12', 'pcs', 'Acme Connectors', '6.80', 4, 2),
+    ('DSUB-CONTACT-M', 'D-sub crimp contact, pin, 20-24 AWG', 'Contacts', 'pcs', 'Acme Connectors', '0.18', 100, 240),
+    ('M12-5-F', 'M12 5-pin cable socket', 'M12', 'pcs', 'Acme Connectors', '6.80', 4, 2),
     ('WIRE-22-RED', 'Hook-up wire 22 AWG red', 'Wire', 'm', 'Cable World', '0.12', 50, 80),
     ('WIRE-22-BLK', 'Hook-up wire 22 AWG black', 'Wire', 'm', 'Cable World', '0.12', 50, 35),
     ('WIRE-24-TP', 'Twisted pair 24 AWG, shielded', 'Wire', 'm', 'Cable World', '0.85', 20, 25),
     ('TIE-100', 'Cable tie 100 x 2.5 mm', 'Accessories', 'pcs', 'Cable World', '0.02', 200, 500),
 ]
 ATTRIBUTES = {   # category: [(name, kind, unit, choices)]
-    'Connectors': [('Positions', 'integer', '', ''), ('Gender', 'choice', '', 'male\nfemale')],
+    'Connectors': [('Positions', 'integer', '', ''), ('Contact type', 'choice', '', 'pin\nsocket')],
     'D-sub': [('Mounting', 'choice', '', 'cable\npanel'), ('Shielded', 'yesno', '', '')],
     'Wire': [('Gauge', 'integer', 'AWG', ''), ('Colour', 'text', '', ''), ('Max. temperature', 'decimal', '°C', '')],
 }
 VALUES = {   # part: {attribute: value}
-    'DSUB-9-PLUG': {'Positions': '9', 'Gender': 'male', 'Mounting': 'cable', 'Shielded': 'No'},
-    'DSUB-9-RECEPT': {'Positions': '9', 'Gender': 'female', 'Mounting': 'panel', 'Shielded': 'Yes'},
-    'DSUB-CONTACT-M': {'Gender': 'male'},
-    'M12-5-F': {'Positions': '5', 'Gender': 'female'},
+    'DSUB-9-PLUG': {'Positions': '9', 'Contact type': 'pin', 'Mounting': 'cable', 'Shielded': 'No'},
+    'DSUB-9-RECEPT': {'Positions': '9', 'Contact type': 'socket', 'Mounting': 'panel', 'Shielded': 'Yes'},
+    'DSUB-CONTACT-M': {'Contact type': 'pin'},
+    'M12-5-F': {'Positions': '5', 'Contact type': 'socket'},
     'WIRE-22-RED': {'Gauge': '22', 'Colour': 'red', 'Max. temperature': '105'},
     'WIRE-22-BLK': {'Gauge': '22', 'Colour': 'black', 'Max. temperature': '105'},
     'WIRE-24-TP': {'Gauge': '24', 'Colour': 'white/green', 'Max. temperature': '80'},
@@ -56,8 +56,8 @@ SETS = {'+24 V': ('PWR', 'Twisted'), '0 V': ('PWR', 'Twisted'), 'CAN H': ('CAN',
 PINS = {   # device: [(connector, name, part, [(pin, signal)])]
     'CTRL-100': [('J1', 'Bus', 'DSUB-9-RECEPT', [('1', '+24 V'), ('2', '0 V'), ('3', 'Enable'), ('6', 'CAN H'), ('7', 'CAN L'), ('9', 'CAN GND')]),
                  ('J2', 'Sensor', 'M12-5-F', [('1', '+24 V'), ('2', 'Signal'), ('3', '0 V')])],
-    'LOAD-200': [('J1', 'Bus in', 'DSUB-9-RECEPT', [('1', '+24 V'), ('3', '0 V'), ('5', 'Enable'), ('2', 'CAN H'), ('7', 'CAN L'), ('8', 'Shield')]),
-                 ('J2', 'Bus out', 'DSUB-9-RECEPT', [('1', '+24 V'), ('3', '0 V'), ('2', 'CAN H'), ('7', 'CAN L')])],
+    'LOAD-200': [('J1', 'Bus in', 'D-sub 9 / socket', [('1', '+24 V'), ('3', '0 V'), ('5', 'Enable'), ('2', 'CAN H'), ('7', 'CAN L'), ('8', 'Shield')]),
+                 ('J2', 'Bus out', 'D-sub 9 / socket', [('1', '+24 V'), ('3', '0 V'), ('2', 'CAN H'), ('7', 'CAN L')])],
 }
 
 
@@ -92,8 +92,10 @@ def _make(user):
     Part.objects.filter(pk=parts['DSUB-9-PLUG'].pk).update(notes='Use the gold plated contacts with it.\nKeep two spare in the lab.')
     vendors['Cable World'].notes = 'Free delivery above 200. Ask for Jan.'
     vendors['Cable World'].save()
-    plugs = Family.objects.create(name='D-sub 9 plug, crimp', preferred=parts['DSUB-9-PLUG'])
-    Part.objects.filter(number__in=['DSUB-9-PLUG', 'DSUB-9-PLUG-B']).update(family=plugs)
+    dsub9 = Family.objects.create(name='D-sub 9')
+    pin, socket = Branch.objects.create(family=dsub9, name='pin'), Branch.objects.create(family=dsub9, name='socket')
+    Part.objects.filter(number__in=['DSUB-9-PLUG', 'DSUB-9-PLUG-B']).update(family=dsub9, branch=pin)
+    Part.objects.filter(number='DSUB-9-RECEPT').update(family=dsub9, branch=socket)
     workshop = Category.objects.create(name='Workshop', kind='assets')
     crimpers = Category.objects.create(name='Crimp tools', parent=workshop, kind='assets')
     lab = Category.objects.create(name='Lab equipment', parent=workshop, kind='assets')
@@ -127,7 +129,7 @@ def _make(user):
     sam.set_unusable_password()
     sam.save()
     asked = Order.objects.create(kind=Order.Kind.REQUEST, budget=eng_budget, created_by=sam, ask=user,
-                                 request='200 D-sub crimp contacts, male, for the next load boards. Needed by Friday.')
+                                 request='200 D-sub crimp contacts (pins) for the next load boards. Needed by Friday.')
     service.ask(asked)
     mine = Order.objects.create(kind=Order.Kind.REQUEST, budget=eng_budget, created_by=user, vendor=vendors['Cable World'],
                                 request='A bag of small cable ties (100 mm) for the load board harnesses.')
@@ -138,7 +140,9 @@ def _make(user):
     for number, name, colour in (('CTRL-100', 'Rack controller', '#3b7dd8'), ('LOAD-200', 'Load board', '#c2410c')):
         devices[number] = Device.objects.create(number=number, name=name, colour=colour, manufacturer='In house')
         for position, (designator, title, part, pins) in enumerate(PINS[number]):
-            c = Connector.objects.create(device=devices[number], designator=designator, name=title, part=parts[part], position=position)
+            c = Connector(device=devices[number], designator=designator, name=title, position=position)
+            c.used = part_or_family(part)   # a part, or a family's branch
+            c.save()
             Pin.objects.bulk_create(Pin(connector=c, number=p, signal=s, wire_set=SETS.get(s, ('', ''))[0],
                                         set_type=SETS.get(s, ('', 'Straight'))[1]) for p, s in pins)
         versions.save(devices[number], user, 'first')
@@ -160,7 +164,7 @@ def _make(user):
                        [('1', '1', 'red', 'WIRE-22-RED', '', 'Twisted'), ('2', '3', 'black', 'WIRE-22-BLK', '', 'Twisted'),
                         ('3', '5', 'blue', '', '', 'Straight'), ('6', '2', 'white', 'WIRE-24-TP', 'P2', 'Shielded twisted'),
                         ('7', '7', 'green', 'WIRE-24-TP', 'P2', 'Shielded twisted')], parts, user)
-    link = _harness(project, 'Load board link', [('P1', plugs.name, devices['LOAD-200'], 'J2'), ('P2', plugs.name, devices['LOAD-200'], 'J1')],
+    link = _harness(project, 'Load board link', [('P1', pin.number, devices['LOAD-200'], 'J2'), ('P2', pin.number, devices['LOAD-200'], 'J1')],
                         [('1', '1', 'red', 'WIRE-22-RED', '', 'Straight'), ('3', '3', 'black', 'WIRE-22-BLK', '', 'Straight'),
                          ('2', '2', 'white', 'WIRE-24-TP', 'P1', 'Shielded twisted'), ('7', '7', 'green', 'WIRE-24-TP', 'P1', 'Shielded twisted')], parts, user)
     Harness.objects.filter(pk=bus.pk).update(notes='Keep it under 50 cm: the rack is tight behind the controller.')
@@ -172,6 +176,7 @@ def _make(user):
     second = configs.place(two, kind='device', device_id=devices['LOAD-200'].pk, label='Load board 2', x=420, y=260)
     configs.place(two, kind='harness', harness_id=link.pk, ends={str(e.pk): k for e, k in zip(link.ends.all(), (first, second))})
     Configuration.objects.create(project=project, name='Test rig', parent=two, description='Two load boards, on the bench.')
+    configs.ask_harness(two, ctrl, second, 'The sensor cable from the controller to load board 2, about 2 m, shielded.', user, sam)
     number_up(asset_id, list(Asset.objects.filter(category__in=workshop.below()).order_by('pk')))
 
 def _harness(project, name, ends, wires, parts, user):
@@ -228,20 +233,26 @@ def switch_on(user):
 
 @transaction.atomic
 def switch_off():
-    """Take away every row the demo made. What real data uses now (a real order line of a demo part) stays: returns
-    those, as text."""
+    """Take away every row the demo made. What real data uses now (a real order line of a demo part; a demo part real
+    stock movements went in or out of, with its stock) stays: returns those, as text."""
     from django.apps import apps
     from django.db.models import ProtectedError, RestrictedError
 
     from .models import DemoRecord
+    from inventory.models import Movement
     left = {}
     for record in DemoRecord.objects.all():
         left.setdefault(record.model, set()).add(record.object_id)
+    moved = set(Movement.objects.exclude(pk__in=left.get('inventory.Movement', ())).values_list('part_id', flat=True))
+    stays = {('inventory.Part', pk) for pk in moved} | {
+        ('inventory.Stock', pk) for pk in apps.get_model('inventory.Stock').objects.filter(part_id__in=moved).values_list('pk', flat=True)}
     for _ in range(20):   # deleting a row can free another (an order line, then its part)
         progress = False
         for label, ids in list(left.items()):
             model = apps.get_model(label)
             for pk in list(ids):
+                if (label, pk) in stays:
+                    continue
                 obj = model.objects.filter(pk=pk).first()
                 if obj is not None:
                     try:

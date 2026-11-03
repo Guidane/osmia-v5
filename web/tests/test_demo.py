@@ -48,6 +48,18 @@ class DemoTests(TestCase):
         self.assertFalse(Part.objects.filter(number='DSUB-9-PLUG').exists())
         self.assertFalse(DemoRecord.objects.exists())
 
+    def test_stock_real_movements_changed_is_kept(self):
+        from inventory import stock
+        from inventory.models import Stock
+        demo.switch_on(self.ada)
+        tie = Part.objects.get(number='TIE-100')
+        row = Stock.objects.get(part=tie)
+        stock.add(tie, 34, row.location, self.ada, 'received')                  # real: after the demo
+        kept = demo.switch_off()
+        self.assertIn('TIE-100', kept)
+        self.assertEqual(Stock.objects.get(part=tie).quantity, 534)             # what was there, and what came in
+        self.assertFalse(Part.objects.filter(number='DSUB-9-PLUG').exists())
+
     def test_names_already_taken_are_refused(self):
         Part.objects.create(number='DSUB-9-PLUG')
         with self.assertRaisesMessage(ValidationError, "can't go in"):

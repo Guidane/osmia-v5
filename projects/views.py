@@ -4,6 +4,7 @@ import json
 
 from django import forms
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
@@ -21,7 +22,7 @@ from web.shortcuts import edit_page, errors
 from web.forms import TreeForm, initial_for
 
 from . import configs
-from .models import Configuration, Project
+from .models import Configuration, HarnessRequest, Project
 
 GRID_X, GRID_Y = 300, 240   # where new devices go on the diagram: a grid of four across
 
@@ -63,7 +64,7 @@ def project_form(request, pk=None):
         if new:
             Configuration.objects.create(project=project, name='Base')
     return edit_page(request, ProjectForm(request.POST or None, instance=item, initial=initial_for(item, owner=request.user.pk)),
-                     'project', saved=first_configuration)
+                     'wire diagram', saved=first_configuration)
 
 
 def _selected(request, project):
@@ -90,7 +91,8 @@ def _diagram(config, rows, found):
             return 'added'
         return 'same' if all(before[f] == row[f] for f in ('device_id', 'harness_id', 'label', 'ends')) else 'changed'
 
-    out = {'devices': [], 'harnesses': [], 'ghosts': []}
+    out = {'devices': [], 'harnesses': [], 'ghosts': [],
+           'requests': [{'id': r.pk, 'a': r.a, 'b': r.b, 'text': r.request} for r in config.harness_requests.filter(status='open')]}
     for key, row in rows.items():
         if row['kind'] == 'device' and row['device_id'] in devices:
             d = devices[row['device_id']]
@@ -128,10 +130,12 @@ def project(request, pk):
     return render(request, 'projects/project.html', {
         'project': item, 'config': config, 'tree': _tree(item), 'changes': configs.changes(config) if config else [],
         'problems': [text for _, text in found],
-        'diagram': _diagram(config, rows, found) if config else {'devices': [], 'harnesses': [], 'ghosts': []},
+        'diagram': _diagram(config, rows, found) if config else {'devices': [], 'harnesses': [], 'ghosts': [], 'requests': []},
         'placed_devices': [(key, r, device_names.get(r['device_id'])) for key, r in placed_devices],
         'harness_rows': harness_rows, 'devices': Device.objects.all(), 'harnesses': item.harnesses.exclude(status=Harness.Status.OBSOLETE),
-        'part_choices': choices_of_parts() if config else []})
+        'part_choices': choices_of_parts() if config else [], 'people': get_user_model().objects.filter(is_active=True),
+        'requests': [(r, configs.label_of(rows, r.a), configs.label_of(rows, r.b)) for r in
+                     config.harness_requests.select_related('created_by', 'ask', 'harness')[:20]] if config else []})
 
 
 @login_required
@@ -165,7 +169,7 @@ def configuration(request, pk):
             if config.children.exists():
                 raise ValidationError(f'{config} has configurations under it: delete or detach those first.')
             if item.configurations.count() == 1:
-                raise ValidationError('A project keeps at least one configuration.')
+                raise ValidationError('A wire diagram keeps at least one configuration.')
             config.delete()
             return redirect(item)
     except ValidationError as exc:
@@ -206,6 +210,14 @@ def change(request, pk):
                     raise ValidationError(f'There is no part or family "{text}".')
             harness = configs.connect(config, ends, post.get('name', ''), [json.loads(w) for w in post.getlist('wire')], parts)
             messages.success(request, f'{harness} is made, with {harness.wires.count()} wires.')
+        elif action == 'request_harness':
+            ask = get_user_model().objects.filter(pk=post.get('ask') or 0, is_active=True).first()
+            configs.ask_harness(config, post.get('a', ''), post.get('b', ''), post.get('request', ''), ask, request.user)
+            messages.success(request, f'Asked for: {ask or "the administrators"} will make it.')
+        elif action in ('request_done', 'request_cancel'):
+            wanted = get_object_or_404(HarnessRequest, pk=post.get('request_id'), configuration=config)
+            made = Harness.objects.filter(pk=post.get('harness') or 0, project=item).first()
+            configs.close_request(wanted, wanted.Status.DONE if action == 'request_done' else wanted.Status.CANCELLED, request.user, made)
         elif action == 'add_harness':
             harness = get_object_or_404(Harness, pk=post.get('harness'), project=item)
             configs.place(config, kind='harness', harness_id=harness.pk, ends=configs.plug(config, harness))
@@ -237,7 +249,7 @@ def needs(request, pk):
     if request.method == 'POST':   # order what is missing
         ordered = []
         for part, _, _, _, missing in parts:
-            buy = getattr(part, 'chosen', part)   # a family: its preferred part
+            buy = getattr(part, 'chosen', part)   # a family: the part of it ordered
             if missing and buy and buy.vendor_id:
                 orders.reorder(buy, request.user, missing)
                 ordered.append(buy.number)

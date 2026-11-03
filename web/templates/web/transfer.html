@@ -4,7 +4,7 @@
 {% block content %}
 <section class="card">
   <h1>Export all the data</h1>
-  <p>One file with everything: parts, assets, orders, budgets, devices, harnesses, projects, documentation, users and
+  <p>One file with everything: parts, assets, orders, budgets, devices, harnesses, wire diagrams, documentation, users and
     departments, and every uploaded picture and file. Keep it as a backup, or import it in another Osmia.</p>
   <form method="post">{% csrf_token %}<button class="btn primary" name="action" value="export">⬇ Export</button></form>
 </section>

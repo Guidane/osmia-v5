@@ -3,7 +3,7 @@ from django.utils.html import format_html, format_html_join
 
 from web.forms import TreeForm, tree_choices
 
-from .models import Attribute, Category, Family, Location, Part, Vendor, choices_of_parts, part_or_family
+from .models import Attribute, Branch, Category, Family, Location, Part, Vendor, choices_of_parts, part_or_family
 
 
 class PartOrFamilyInput(forms.TextInput):
@@ -131,13 +131,30 @@ class PartForm(AttributesForm):
 
     class Meta:
         model = Part
-        fields = ['number', 'description', 'category', 'family', 'manufacturer', 'mpn', 'unit', 'datasheet', 'vendor', 'vendor_number',
+        fields = ['number', 'description', 'category', 'kin', 'manufacturer', 'mpn', 'unit', 'datasheet', 'vendor', 'vendor_number',
                   'price', 'minimum', 'reorder_quantity', 'notes', 'active']
         widgets = {'notes': forms.Textarea(attrs={'rows': 3})}
+
+    kin = forms.ChoiceField(label='Family', required=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['vendor'].queryset = Vendor.objects.filter(active=True) | Vendor.objects.filter(pk=self.instance.vendor_id)
+        branches = {}
+        for b in Branch.objects.select_related('family'):
+            branches.setdefault(b.family_id, []).append((f'b{b.pk}', b.number))
+        self.fields['kin'].choices = [('', '—')] + [(f.name, [(f'f{f.pk}', f'{f.name} (any)')] + branches.get(f.pk, []))
+                                                    for f in Family.objects.all()]
+        part = self.instance
+        self.initial['kin'] = f'b{part.branch_id}' if part.branch_id else f'f{part.family_id}' if part.family_id else ''
+
+    def clean_kin(self):
+        """The family, and the branch of it when one is picked."""
+        picked = self.cleaned_data['kin']
+        branch = Branch.objects.filter(pk=picked[1:]).first() if picked.startswith('b') else None
+        self.instance.branch = branch
+        self.instance.family = branch.family if branch else Family.objects.filter(pk=picked[1:] if picked.startswith('f') else 0).first()
+        return picked
 
 
 class AttributeForm(forms.ModelForm):
@@ -246,21 +263,32 @@ class LocationForm(TreeForm):
 
 
 class FamilyForm(forms.ModelForm):
-    """A family of parts; the one ordered for it is one of its own."""
+    """A family of parts: its name."""
     class Meta:
         model = Family
-        fields = ['name', 'description', 'preferred']
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['preferred'].queryset = self.instance.parts.all() if self.instance.pk else Part.objects.none()
-        if not self.instance.pk:
-            del self.fields['preferred']
+        fields = ['name']
 
     def clean_name(self):
         name = self.cleaned_data['name'].strip()
         if Part.objects.filter(number__iexact=name).exists():
             raise forms.ValidationError('That is a part number: give the family a name of its own.')
+        return name
+
+
+class BranchForm(forms.ModelForm):
+    """A branch of a family: its name."""
+    class Meta:
+        model = Branch
+        fields = ['name']
+
+    def __init__(self, *args, family, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.instance.family = family
+
+    def clean_name(self):
+        name = self.cleaned_data['name'].strip()
+        if Branch.objects.filter(family=self.instance.family, name__iexact=name).exclude(pk=self.instance.pk).exists():
+            raise forms.ValidationError(f'{self.instance.family} has a branch {name} already.')
         return name
 
 

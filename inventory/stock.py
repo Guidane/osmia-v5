@@ -68,9 +68,9 @@ def use(part, quantity, source, user, note=''):
 
 @transaction.atomic
 def use_any(family, quantity, source, user, note=''):
-    """Stock of a family going out: from the parts of it in ``source``, the most stocked first."""
+    """Stock of a family (or a branch of one) going out: from the parts of it in ``source``, the most stocked first."""
     quantity = amount(quantity)
-    rows = list(Stock.objects.filter(part__family=family, location=source, quantity__gt=0).select_related('part').order_by('-quantity'))
+    rows = list(Stock.objects.filter(part__in=family.members(), location=source, quantity__gt=0).select_related('part').order_by('-quantity'))
     if sum(r.quantity for r in rows) < quantity:
         raise ValidationError(f'There are only {Decimal(sum(r.quantity for r in rows)).normalize():f} {family.unit} of {family} in {source}.')
     for row in rows:

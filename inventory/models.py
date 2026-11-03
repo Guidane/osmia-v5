@@ -204,8 +204,8 @@ class Part(models.Model):
     datasheet = models.URLField(blank=True)
     vendor = models.ForeignKey(Vendor, null=True, blank=True, on_delete=models.SET_NULL, related_name='parts')
     vendor_number = models.CharField("vendor's part number", max_length=200, blank=True)
-    family = models.ForeignKey('Family', null=True, blank=True, on_delete=models.SET_NULL, related_name='parts',
-                               verbose_name='compatible with')
+    family = models.ForeignKey('Family', null=True, blank=True, on_delete=models.SET_NULL, related_name='parts')
+    branch = models.ForeignKey('Branch', null=True, blank=True, on_delete=models.SET_NULL, related_name='parts')
     price = models.DecimalField('last price', max_digits=12, decimal_places=4, null=True, blank=True)
     minimum = models.DecimalField('minimum stock', max_digits=12, decimal_places=3, default=0)
     reorder_quantity = models.DecimalField(max_digits=12, decimal_places=3, default=0)
@@ -230,14 +230,35 @@ class Part(models.Model):
         return self.stock.aggregate(n=Sum('quantity'))['n'] or Decimal(0)
 
 
-class Family(models.Model):
-    """Parts that can take each other's place: the same D-sub 9 plug from three manufacturers. Where a harness or
-    device names the family, any of them will do: their stock counts together, the most stocked is used first, and the
-    preferred one is ordered. It shows where a part would, so it answers to what a part does (number, unit, vendor)."""
+class PartGroup:
+    """Parts that can take each other's place (a family, or a branch of one). Where a harness or device names the
+    group, any of them will do: their stock counts together, the most stocked is used first, and the one last ordered
+    is ordered again. It shows where a part would, so it answers to what a part does (number, unit, vendor)."""
+    def members(self):
+        raise NotImplementedError
+
+    @property
+    def chosen(self):
+        """The part ordered for it: the one last ordered, else the first with a vendor, else the first."""
+        return self.members().order_by(models.F('order_lines__pk').desc(nulls_last=True), models.F('vendor').asc(nulls_last=True),
+                                       'number').first()
+
+    @property
+    def unit(self):
+        return self.chosen.unit if self.chosen else Part.Unit.PCS
+
+    @property
+    def vendor_id(self):
+        return self.chosen.vendor_id if self.chosen else None
+
+    @property
+    def on_hand(self):
+        return Stock.objects.filter(part__in=self.members()).aggregate(n=Sum('quantity'))['n'] or Decimal(0)
+
+
+class Family(PartGroup, models.Model):
+    """Parts that can take each other's place, by a name (D-sub 9), maybe split into branches (male, female, …)."""
     name = models.CharField(max_length=100)
-    description = models.CharField(max_length=300, blank=True)
-    preferred = models.ForeignKey(Part, null=True, blank=True, on_delete=models.SET_NULL, related_name='+',
-                                  verbose_name='ordered as')
 
     class Meta:
         ordering = ['name']
@@ -255,38 +276,51 @@ class Family(models.Model):
     def number(self):
         return self.name
 
-    @property
-    def chosen(self):
-        """The part ordered for it: the preferred one, else the first."""
-        return self.preferred or self.parts.first()
+    def members(self):
+        return Part.objects.filter(family=self)
+
+
+class Branch(PartGroup, models.Model):
+    """A part of a family (its male ones, its female ones): "D-sub 9 / female"."""
+    family = models.ForeignKey(Family, on_delete=models.CASCADE, related_name='branches')
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        ordering = ['family__name', 'name']
+        verbose_name_plural = 'branches'
+        constraints = [models.UniqueConstraint('family', Lower('name'), name='unique_branch_name',
+                                               violation_error_message='The family has a branch of this name already.')]
+
+    def __str__(self):
+        return self.number
+
+    def get_absolute_url(self):
+        return self.family.get_absolute_url()
 
     @property
-    def unit(self):
-        return self.chosen.unit if self.chosen else Part.Unit.PCS
+    def number(self):
+        return f'{self.family.name} / {self.name}'
 
-    @property
-    def vendor_id(self):
-        return self.chosen.vendor_id if self.chosen else None
-
-    @property
-    def on_hand(self):
-        return Stock.objects.filter(part__family=self).aggregate(n=Sum('quantity'))['n'] or Decimal(0)
+    def members(self):
+        return Part.objects.filter(branch=self)
 
 
 class PartOrFamily(models.Model):
-    """What names a part (a harness end, a wire, a device connector): one part, or any of a family."""
+    """What names a part (a harness end, a wire, a device connector): one part, or any of a family, or of a branch."""
     family = models.ForeignKey(Family, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    branch = models.ForeignKey(Branch, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
 
     class Meta:
         abstract = True
 
     @property
     def used(self):
-        return self.part or self.family
+        return self.part or self.branch or self.family
 
     @used.setter
     def used(self, found):
-        self.part, self.family = (found, None) if isinstance(found, Part) else (None, found)
+        self.part, self.branch, self.family = (found if isinstance(found, Part) else None, found if isinstance(found, Branch) else None,
+                                               found if isinstance(found, Family) else None)
 
     @property
     def used_name(self):
@@ -294,16 +328,22 @@ class PartOrFamily(models.Model):
 
 
 def part_or_family(text):
-    """The part numbered ``text``, else the family named so; None when neither."""
+    """The part numbered ``text``, else the branch ("family / branch") or the family named so; None when none."""
     text = (text or '').strip()
     if not text:
         return None
-    return Part.objects.filter(number__iexact=text).first() or Family.objects.filter(name__iexact=text).first()
+    family, _, branch = text.rpartition('/')
+    return (Part.objects.filter(number__iexact=text).first()
+            or (Branch.objects.filter(family__name__iexact=family.strip(), name__iexact=branch.strip()).first() if family.strip() else None)
+            or Family.objects.filter(name__iexact=text).first())
 
 
 def choices_of_parts():
-    """For a list to type from: (part number or family name, what it is)."""
-    return ([(f.name, f'family of {f.n} part{"s" if f.n != 1 else ""}') for f in Family.objects.annotate(n=models.Count('parts'))]
+    """For a list to type from: (part number, family or branch name, what it is)."""
+    def what(n):
+        return f'{n} part{"s" if n != 1 else ""}'
+    return ([(f.name, f'family: {what(f.n)}') for f in Family.objects.annotate(n=models.Count('parts'))]
+            + [(b.number, f'branch: {what(b.n)}') for b in Branch.objects.select_related('family').annotate(n=models.Count('parts'))]
             + list(Part.objects.filter(active=True).values_list('number', 'description')[:5000]))
 
 

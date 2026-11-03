@@ -3,7 +3,7 @@
 {% block head %}<link rel="stylesheet" href="{% static 'projects/diagram.css' %}">{% endblock %}
 {% block content_class %}wide{% endblock %}
 {% block content %}
-<p class="small"><a href="{% url 'projects:list' %}">← Projects</a></p>
+<p class="small"><a href="{% url 'projects:list' %}">← Wire diagrams</a></p>
 <div class="page-head"><h1>{{ project }}</h1><span class="muted">{{ project.description|truncatechars:120 }}</span><span class="spacer"></span>
   <a class="btn" href="{% url 'harnesses:list' %}?project={{ project.pk }}">Harnesses ({{ project.harnesses.count }})</a>
   {% for b in project.budgets.all %}<a class="btn" href="{{ b.get_absolute_url }}">💰 {{ b }}</a>{% empty %}<a class="btn" href="{% url 'budgets:new' %}?project={{ project.pk }}">＋ Budget</a>{% endfor %}
@@ -72,7 +72,7 @@
               <details class="inline-edit"><summary class="small">Change</summary>
                 <form method="post" action="{% url 'projects:change' project.pk %}" class="inline-form">{% csrf_token %}
                   <input type="hidden" name="config" value="{{ config.pk }}"><input type="hidden" name="key" value="{{ key }}">
-                  <input name="label" value="{{ row.label }}" aria-label="Name in the project" maxlength="100"><button class="btn small" name="action" value="rename">Rename</button></form>
+                  <input name="label" value="{{ row.label }}" aria-label="Name in the wire diagram" maxlength="100"><button class="btn small" name="action" value="rename">Rename</button></form>
                 <form method="post" action="{% url 'projects:change' project.pk %}" class="inline-form">{% csrf_token %}
                   <input type="hidden" name="config" value="{{ config.pk }}"><input type="hidden" name="key" value="{{ key }}">
                   <select name="device" aria-label="Swap for">{% for d in devices %}<option value="{{ d.pk }}"{% if d.pk == row.device_id %} selected{% endif %}>{{ d }}</option>{% endfor %}</select>
@@ -83,7 +83,7 @@
         </table>
         <form method="post" action="{% url 'projects:change' project.pk %}" class="inline-form pad">{% csrf_token %}<input type="hidden" name="config" value="{{ config.pk }}">
           <select name="device" aria-label="Device" required><option value="">Device…</option>{% for d in devices %}<option value="{{ d.pk }}">{{ d }}</option>{% endfor %}</select>
-          <input name="label" placeholder="Name (optional)" aria-label="Name in the project" maxlength="100">
+          <input name="label" placeholder="Name (optional)" aria-label="Name in the wire diagram" maxlength="100">
           <button class="btn" name="action" value="add_device">＋ Add</button></form>
       </section>
 
@@ -107,6 +107,30 @@
           <button class="btn" name="action" value="add_harness">＋ Add</button></form>{% endif %}
       </section>
     </div>
+
+    <section class="card flush" id="requests">
+      <div class="card-head"><h3>Harness requests</h3></div>
+      <table class="list">
+        {% for r, a, b in requests %}<tr id="req-{{ r.pk }}" class="placed{% if r.status != 'open' %} muted{% endif %}">
+          <td><b>{{ a }} ⇄ {{ b }}</b> <span class="small">{{ r.request|linebreaksbr }}</span>
+            <div class="small muted">{{ r.created_by|default:"" }}, {{ r.created_at|date:"j M Y" }} · {% if r.status == 'open' %}asked of {{ r.ask|default:"the administrators" }}{% else %}{{ r.get_status_display|lower }}{% if r.harness %}: <a href="{{ r.harness.get_absolute_url }}">{{ r.harness }}</a>{% endif %}{% endif %}</div></td>
+          <td class="nowrap">{% if r.status == 'open' %}<form method="post" action="{% url 'projects:change' project.pk %}" class="inline-form">{% csrf_token %}
+            <input type="hidden" name="config" value="{{ config.pk }}"><input type="hidden" name="request_id" value="{{ r.pk }}">
+            <select name="harness" aria-label="Made as"><option value="">Made as…</option>{% for h in harnesses %}<option value="{{ h.pk }}">{{ h }}</option>{% endfor %}</select>
+            <button class="btn small" name="action" value="request_done">✓ Done</button>
+            <button class="btn small ghost" name="action" value="request_cancel" data-confirm="Cancel this request?">Cancel</button></form>{% endif %}</td>
+        </tr>{% empty %}<tr><td class="empty small">None.</td></tr>{% endfor %}
+      </table>
+      <form method="post" action="{% url 'projects:change' project.pk %}" class="form pad">{% csrf_token %}<input type="hidden" name="config" value="{{ config.pk }}">
+        <div class="fields">
+          <div class="field"><label for="req-a">Between</label><select name="a" id="req-a" required><option value=""></option>{% for key, row, device in placed_devices %}<option value="{{ key }}">{{ row.label|default:device.number }}</option>{% endfor %}</select></div>
+          <div class="field"><label for="req-b">and</label><select name="b" id="req-b" required><option value=""></option>{% for key, row, device in placed_devices %}<option value="{{ key }}">{{ row.label|default:device.number }}</option>{% endfor %}</select></div>
+          <div class="field"><label for="req-ask">Who should make it</label><select name="ask" id="req-ask"><option value="">The administrators</option>{% for p in people %}<option value="{{ p.pk }}">{{ p }}</option>{% endfor %}</select></div>
+          <div class="field"><label for="req-text">What is needed</label><textarea name="request" id="req-text" rows="2" required placeholder="e.g. the sensor cable, 2 m, shielded"></textarea></div>
+        </div>
+        <div class="actions"><button class="btn primary" name="action" value="request_harness">Ask for it</button></div>
+      </form>
+    </section>
 
     <section class="card flush">
       <div class="card-head"><h3>Changes here</h3></div>

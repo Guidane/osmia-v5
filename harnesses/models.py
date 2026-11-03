@@ -8,7 +8,7 @@ from django.db import models, transaction
 from django.urls import reverse
 
 from devices.models import SET_TYPES as PIN_SET_TYPES, Connector, pin_order
-from inventory.models import Family, Part, PartOrFamily, part_or_family
+from inventory.models import Part, PartOrFamily, part_or_family
 from web.models import Version
 
 SET_TYPES = PIN_SET_TYPES + ['Shield']   # a shield's drain wire too
@@ -21,7 +21,7 @@ class Harness(models.Model):
         RELEASED = 'released', 'Released'
         OBSOLETE = 'obsolete', 'Obsolete'
 
-    project = models.ForeignKey('projects.Project', on_delete=models.PROTECT, related_name='harnesses')
+    project = models.ForeignKey('projects.Project', on_delete=models.PROTECT, related_name='harnesses', verbose_name='wire diagram')
     number = models.CharField(max_length=20, unique=True, editable=False)
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
@@ -127,9 +127,7 @@ def parts_of(data):
     wanted = [(e['part'], Decimal(1), None) for e in data.get('ends', []) if e.get('part')]
     wanted += [(w['part'], None, Decimal(w['length'] or 0)) for w in data.get('wires', []) if w.get('part')]
     wanted += [(i['part'], Decimal(i['quantity']), None) for i in data.get('items', [])]
-    names = {n for n, _, _ in wanted}
-    parts = {p.number.lower(): p for p in Part.objects.filter(number__in=names)}
-    parts.update({f.name.lower(): f for f in Family.objects.filter(name__in=names) if f.name.lower() not in parts})
+    parts = {n.lower(): part_or_family(n) for n in {n for n, _, _ in wanted}}
     need = OrderedDict()
     for number, quantity, length in wanted:
         part = parts.get(number.lower())

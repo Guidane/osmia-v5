@@ -85,6 +85,16 @@
         el('rect', { x: cx - w / 2, y: cy - 11, width: w, height: 22, rx: 11 }, pill);
         text(pill, cx, cy + 4, label, 'pill-label');
       });
+      (data.requests || []).forEach(function (r) {   // asked for, not made yet
+        var a = byKey[r.a], b = byKey[r.b];
+        if (!a || !b) return;
+        var ax = a.x < b.x ? a.x + W : a.x, bx = a.x < b.x ? b.x : b.x + W, ay = a.y + HEAD / 2, by = b.y + HEAD / 2;
+        el('path', { d: 'M' + ax + ',' + ay + ' L' + bx + ',' + by, class: 'requested' }, lines);
+        var mark = el('g', { class: 'pill requested-pill', 'data-request': r.id }, pills);
+        el('title', {}, mark).textContent = 'Asked for: ' + r.text;
+        el('rect', { x: (ax + bx) / 2 - 34, y: (ay + by) / 2 - 10, width: 68, height: 20, rx: 10 }, mark);
+        text(mark, (ax + bx) / 2, (ay + by) / 2 + 4, 'requested', 'pill-label');
+      });
       data.devices.forEach(function (d) {
         d.connectors.forEach(function (c, i) {
           var at = sides[d.key + ':' + c.id], y = d.y + HEAD + i * ROW + ROW / 2;
@@ -192,7 +202,7 @@
     }
     svg.addEventListener('pointerdown', function (ev) {
       var g = ev.target.closest('.device'), pill = ev.target.closest('.pill'), sq = ev.target.closest('.sq');
-      if (pill) { pick('har-' + pill.getAttribute('data-harness')); return; }
+      if (pill) { pick(pill.dataset.request ? 'req-' + pill.dataset.request : 'har-' + pill.getAttribute('data-harness')); return; }
       if (sq) {   // a click: its pinout; dragged onto another square: a harness between them
         link = { from: square(sq), x: +sq.getAttribute('x') + 6, y: +sq.getAttribute('y') + 6, moved: false };
         svg.setPointerCapture(ev.pointerId);

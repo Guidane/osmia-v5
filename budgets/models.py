@@ -10,7 +10,8 @@ from web.models import Tree
 
 class Budget(Tree):
     number = models.CharField(max_length=50, blank=True)
-    project = models.ForeignKey('projects.Project', null=True, blank=True, on_delete=models.SET_NULL, related_name='budgets')
+    project = models.ForeignKey('projects.Project', null=True, blank=True, on_delete=models.SET_NULL, related_name='budgets',
+                                verbose_name='wire diagram')
     department = models.ForeignKey('accounts.Department', null=True, blank=True, on_delete=models.SET_NULL, related_name='budgets')
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='budgets')
     amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
