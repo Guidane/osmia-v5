@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Osmia is updated · Osmia{% endblock %}
+{% block content_class %}narrow{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Osmia is updated <span class="muted small">{{ was }} → {{ release.version }}</span></h1>
+  {% if again %}
+    <p>It is starting again with the new code. <span id="wait">This page goes to Home when it is back…</span></p>
+  {% else %}
+    <p><b>Start Osmia again</b> (stop it and run <code>serve.py</code>, or the server you use) to run the new code.</p>
+  {% endif %}
+  <p class="small muted">The data and the code from before are in <code>data\backups\</code>.</p>
+</section>
+{% endblock %}
+{% block scripts %}{% if again %}<script>
+  /* Ask every two seconds whether Osmia is back; then go Home. */
+  setTimeout(function wait() {
+    fetch('{% url "web:home" %}', { cache: 'no-store' }).then(function (r) {
+      if (r.ok) location.href = '{% url "web:home" %}'; else setTimeout(wait, 2000);
+    }).catch(function () { setTimeout(wait, 2000); });
+  }, 4000);
+</script>{% endif %}{% endblock %}

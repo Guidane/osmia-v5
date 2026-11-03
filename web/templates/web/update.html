@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Update Osmia · Osmia{% endblock %}
+{% block content_class %}narrow{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Update Osmia <span class="muted small">this is {{ version }}</span></h1>
+  <ol>
+    <li>On Osmia's GitHub page, press <b>Code → Download ZIP</b> (or take the .zip of a release).</li>
+    <li>Upload it here. Osmia checks it is its code and not older than the data, saves the data and the code there is now
+      in <code>data\backups\</code>, puts the new code in place, installs what it needs and updates the database.</li>
+    <li>Osmia starts again by itself; the page is back in a moment.</li>
+  </ol>
+  <p class="small muted">If something doesn't work, the old code and the data are put back. Only upload Osmia's code from
+    your own GitHub page: what is uploaded here runs as Osmia.</p>
+  <form method="post" enctype="multipart/form-data" class="form" data-confirm="Install this code as the new Osmia?">{% csrf_token %}
+    <div class="field"><label for="file">Osmia's code (.zip)</label><input type="file" id="file" name="file" accept=".zip" required></div>
+    <div class="actions"><button class="btn primary">⬆ Update</button></div>
+  </form>
+</section>
+{% endblock %}

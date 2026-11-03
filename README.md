@@ -25,6 +25,21 @@ the console). Administrators add users, and can change anything in bulk, at `/ad
 switching it off (`manage.py demo --off`) takes exactly those away again; a demo item your real data uses by then (a real
 order of a demo part) is kept, and said. See `web/demo.py`.
 
+**Moving the data** to another Osmia (or keeping a backup): an administrator exports everything to one .zip file — the
+database and every uploaded file — on *their name → Export / import*, or with `manage.py export_data [file.zip]`.
+Importing it elsewhere (same page, or `manage.py import_data file.zip`) replaces *all* the data there, users too; what
+was there is first saved to `dataackups\`. An export from an older Osmia is brought up to date by the migrations; one
+from a newer Osmia is refused until that one is updated. See `web/backup.py`.
+
+**Updating Osmia**: an administrator downloads the code from GitHub (*Code → Download ZIP*) and uploads it on *their
+name → Update Osmia*. Osmia checks it is its code and not older than the data, saves the data and the code it has now
+in `dataackups\`, puts the new code in place, installs the requirements if they changed, runs the migrations and starts
+again by itself (when run with `serve.py`, which watches over the server; otherwise start it again yourself). If any of
+that fails, the old code and the data are put back. See `web/update.py`; the version is in `osmia/version.py`.
+
+**Migrations**: each part's database changes are in its `migrations/` folder, in git; they run on every start of
+`serve.py` and with each update, so new code brings its database changes with it.
+
 ## The parts
 
 | Part | What it is |

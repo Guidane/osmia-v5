@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Export / import · Osmia{% endblock %}
+{% block content_class %}narrow{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Export all the data</h1>
+  <p>One file with everything: parts, assets, orders, budgets, devices, harnesses, projects, documentation, users and
+    departments, and every uploaded picture and file. Keep it as a backup, or import it in another Osmia.</p>
+  <form method="post">{% csrf_token %}<button class="btn primary" name="action" value="export">⬇ Export</button></form>
+</section>
+<section class="card">
+  <h1>Import an export</h1>
+  <p><b>All the data here is replaced</b> by the export's, users too: afterwards you log in with an account of that data.
+    What is here now is saved first, as an export in <code>data\backups\</code>. Data from an older Osmia is brought up to
+    date; data from a newer one is refused (update this Osmia first).</p>
+  <form method="post" enctype="multipart/form-data" class="form" data-confirm="Replace all the data here with the export?">{% csrf_token %}
+    <div class="field"><label for="file">Export (.zip)</label><input type="file" id="file" name="file" accept=".zip" required></div>
+    <label class="small"><input type="checkbox" name="sure" value="1" required> Yes, replace all the data here</label>
+    <div class="actions"><button class="btn">⬆ Import</button></div>
+  </form>
+</section>
+{% endblock %}

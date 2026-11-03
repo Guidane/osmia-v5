@@ -56,6 +56,8 @@
       {% if user.is_superuser %}<div class="sep"></div><div class="label">Administrator</div>
         <a href="{% url 'accounts:users' %}">Users</a>
         <a href="{% url 'web:demo' %}">Demo data</a>
+        <a href="{% url 'web:transfer' %}">Export / import</a>
+        <a href="{% url 'web:update' %}">Update Osmia</a>
         <a href="/admin/">All data (/admin/)</a>{% endif %}
       <button type="button" onclick="osmiaTheme()">Light / dark</button>
       <div class="sep"></div>

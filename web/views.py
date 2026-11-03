@@ -90,6 +90,67 @@ def demo_data(request):
 
 
 @login_required
+def transfer(request):
+    """Administrators export all the data to a file, or replace it all with an export (from another Osmia)."""
+    from datetime import datetime
+
+    from django.contrib.auth import logout
+    from django.core.exceptions import ValidationError
+    from django.http import FileResponse, Http404
+
+    from . import backup
+    if not request.user.is_superuser:
+        raise Http404
+    if request.method == 'POST' and request.POST.get('action') == 'export':
+        import tempfile
+        out = tempfile.TemporaryFile()
+        backup.export_to(out)
+        out.seek(0)
+        return FileResponse(out, as_attachment=True, filename=f'osmia-{datetime.now():%Y-%m-%d-%H%M}.zip')
+    if request.method == 'POST':
+        upload = request.FILES.get('file')
+        if upload is None or not request.POST.get('sure'):
+            messages.error(request, 'Pick the export, and tick that all the data here is to be replaced.')
+            return redirect('web:transfer')
+        try:
+            manifest = backup.import_from(upload)
+        except ValidationError as exc:
+            for message in exc.messages:
+                messages.error(request, message)
+            return redirect('web:transfer')
+        logout(request)   # who is logged in, and how, is the export's now
+        messages.success(request, f'The data exported on {manifest["made"]} is in. Log in with an account of that data.')
+        return redirect('accounts:login')
+    return render(request, 'web/transfer.html')
+
+
+@login_required
+def update_osmia(request):
+    """Administrators install a newer Osmia from its code (.zip): see web.update."""
+    from django.core.exceptions import ValidationError
+    from django.http import Http404
+
+    from osmia.version import VERSION
+
+    from . import update
+    if not request.user.is_superuser:
+        raise Http404
+    if request.method == 'POST':
+        upload = request.FILES.get('file')
+        if upload is None:
+            messages.error(request, "Pick the .zip with Osmia's code.")
+            return redirect('web:update')
+        try:
+            release, again = update.update(upload)
+        except ValidationError as exc:
+            for message in exc.messages:
+                messages.error(request, message)
+            return redirect('web:update')
+        return render(request, 'web/updated.html', {'release': release, 'again': again, 'was': VERSION})
+    return render(request, 'web/update.html', {'version': VERSION})
+
+
+@login_required
 def notifications(request):
     if request.method == 'POST':
         Notification.objects.filter(user=request.user, read=False).update(read=True)
