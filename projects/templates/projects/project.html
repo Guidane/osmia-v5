@@ -34,11 +34,32 @@
     {% if config %}
     <div class="card flush diagram-card">
       <div class="card-head"><h3>{{ config.name }}{% if config.parent %} <span class="muted small">based on {{ config.parent.name }}</span>{% endif %}</h3>
-        <span class="legend small"><i class="lg added"></i> added <i class="lg changed"></i> changed <i class="lg gone"></i> taken away</span></div>
+        <span class="legend small"><i class="lg added"></i> added <i class="lg changed"></i> changed <i class="lg gone"></i> taken away</span>
+        <span class="zoom"><button type="button" class="btn small" data-zoom="out" title="Zoom out">−</button><button type="button" class="btn small" data-zoom="in" title="Zoom in">＋</button><button type="button" class="btn small" data-zoom="fit" title="Show all">Fit</button></span></div>
       <svg id="diagram" class="diagram" role="img" aria-label="Devices and the harnesses between them"></svg>
       {% if not diagram.devices %}<p class="empty small">No devices yet: add one below.</p>{% endif %}
     </div>
     {{ diagram|json_script:"diagram-data" }}
+    <dialog class="pinout" id="pinout" aria-label="Pinout">
+      <div class="finder-head"><h3 data-title></h3><span class="spacer"></span><a class="btn small" data-edit>Change pins</a>
+        <button type="button" class="btn small ghost" data-close title="Close">✕</button></div>
+      <table class="list"><thead><tr><th>Pin</th><th>Signal</th><th>Set</th><th>Set type</th><th>Description</th></tr></thead><tbody></tbody></table>
+      <p class="empty small" data-none>No pins yet.</p>
+    </dialog>
+    <dialog class="pinout" id="connect" aria-label="New harness">
+      <form method="post" action="{% url 'projects:change' project.pk %}">{% csrf_token %}
+        <input type="hidden" name="config" value="{{ config.pk }}"><input type="hidden" name="action" value="connect">
+        <input type="hidden" name="a"><input type="hidden" name="a_connector"><input type="hidden" name="b"><input type="hidden" name="b_connector">
+        <div class="finder-head"><h3>New harness</h3><input type="text" name="name" required maxlength="200" aria-label="Name" class="grow">
+          <button type="button" class="btn small ghost" data-close title="Close">✕</button></div>
+        <div class="plug-form pad"><label><span data-a></span> <input type="text" name="a_part" list="connect-parts" placeholder="Part or family" autocomplete="off"></label>
+          <label><span data-b></span> <input type="text" name="b_part" list="connect-parts" placeholder="Part or family" autocomplete="off"></label>
+          <datalist id="connect-parts">{% for number, what in part_choices %}<option value="{{ number }}">{{ what }}</option>{% endfor %}</datalist></div>
+        <table class="list"><thead><tr><th><input type="checkbox" data-all-wires checked aria-label="All wires"></th><th>P1</th><th>P2</th><th>Signal</th><th>Set</th></tr></thead><tbody></tbody></table>
+        <p class="empty small" data-none>No matching pins.</p>
+        <div class="actions pad"><button class="btn primary">Make the harness</button></div>
+      </form>
+    </dialog>
 
     {% if problems %}<div class="flash warning"><b>To look at:</b><ul class="tight">{% for p in problems %}<li>{{ p }}</li>{% endfor %}</ul></div>{% endif %}
 
@@ -88,7 +109,7 @@
     </div>
 
     <section class="card flush">
-      <div class="card-head"><h3>Changes here</h3><span class="muted small">{% if config.parent %}What {{ config.name }} changes of {{ config.parent.name }}; the rest comes from it.{% else %}A setup of its own: everything it has.{% endif %}</span></div>
+      <div class="card-head"><h3>Changes here</h3></div>
       <table class="list">
         {% for p, what, text in changes %}<tr class="change-{{ what }}"><td><span class="badge {{ what }}">{{ what }}</span> {{ text }}</td>
           <td>{% if config.parent %}<form method="post" action="{% url 'projects:change' project.pk %}">{% csrf_token %}<input type="hidden" name="config" value="{{ config.pk }}">
@@ -104,6 +125,8 @@
 <script src="{% static 'projects/diagram.js' %}"></script>
 <script>
   Diagram.draw(document.getElementById('diagram'), JSON.parse(document.getElementById('diagram-data').textContent), {
-    url: "{% url 'projects:change' project.pk %}", config: "{{ config.pk }}", csrf: window.OSMIA_CSRF });
+    url: "{% url 'projects:change' project.pk %}", config: "{{ config.pk }}", csrf: window.OSMIA_CSRF,
+    zoom: document.querySelectorAll('[data-zoom]'), pinout: document.getElementById('pinout'),
+    connect: document.getElementById('connect') });
 </script>
 {% endblock %}

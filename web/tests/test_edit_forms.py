@@ -41,8 +41,9 @@ class EditFormTests(TestCase):
         self.selected(reverse('budgets:edit', args=[budget.pk]), year.pk)
         harness = Harness.objects.create(project=project, name='Loom')
         self.selected(reverse('harnesses:edit', args=[harness.pk]), project.pk)
-        tool = Asset.objects.create(number='T-1', name='Crimper', category=wire, location=shelf)
-        self.selected(reverse('assets:edit', args=[tool.pk]), wire.pk)
+        tools = Category.objects.create(name='Tools', kind='assets')
+        tool = Asset.objects.create(number='T-1', name='Crimper', category=tools, location=shelf)
+        self.selected(reverse('assets:edit', args=[tool.pk]), tools.pk)
         self.selected(reverse('assets:edit', args=[tool.pk]), shelf.pk)
 
     def test_something_new_starts_from_the_address(self):

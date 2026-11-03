@@ -13,6 +13,8 @@
 .diagram { display: block; width: 100%; background: var(--panel-2); touch-action: none; user-select: none; }
 .diagram .box { fill: var(--panel); stroke: var(--border-strong); stroke-width: 1.5; }
 .diagram .device { cursor: grab; }
+.diagram { cursor: grab; } .diagram.panning { cursor: grabbing; }
+.zoom { display: inline-flex; gap: 2px; }
 .diagram .device.added .box { stroke: #16a34a; stroke-width: 2.5; }
 .diagram .device.changed .box { stroke: #d97706; stroke-width: 2.5; }
 .diagram .label { font: 600 13px system-ui, sans-serif; fill: var(--text); }
@@ -27,6 +29,17 @@
 .diagram .wire.changed { stroke: #d97706; } .diagram .port.changed { fill: #d97706; }
 .diagram .wire.bad { stroke: var(--danger); stroke-dasharray: 6 4; } .diagram .port.bad { fill: var(--danger); }
 .diagram .pill { cursor: pointer; }
+.diagram .sq { fill: var(--panel); stroke: var(--border-strong); stroke-width: 1.5; cursor: pointer; }
+.diagram .sq:hover { stroke: var(--brand); stroke-width: 2.5; }
+.diagram .sq.on { fill: var(--brand); stroke: var(--brand); }
+.diagram .linking { fill: none; stroke: var(--brand); stroke-width: 2; stroke-dasharray: 6 4; pointer-events: none; }
+dialog.pinout .finder-head input.grow { flex: 1; }
+dialog.pinout table { width: 100%; }
+.diagram .sq.on.added { fill: #16a34a; stroke: #16a34a; } .diagram .sq.on.changed { fill: #d97706; stroke: #d97706; }
+.diagram .sq.on.bad { fill: var(--danger); stroke: var(--danger); }
+dialog.pinout { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 0; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
+dialog.pinout::backdrop { background: rgba(0, 0, 0, .35); }
 .diagram .pill rect { fill: var(--brand); }
 .diagram .pill.added rect { fill: #16a34a; } .diagram .pill.changed rect { fill: #d97706; } .diagram .pill.bad rect { fill: var(--danger); }
 .diagram .pill-label { font: 600 12px system-ui, sans-serif; fill: #fff; text-anchor: middle; }

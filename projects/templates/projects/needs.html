@@ -23,7 +23,7 @@
     {% for p, q, have, coming, missing in parts %}<tr>
       <td><a href="{{ p.get_absolute_url }}">{{ p.number }}</a> <span class="muted small">{{ p.description }}</span></td>
       <td class="num">{{ q|qty }} {{ p.unit }}</td><td class="num">{{ have|qty }}</td><td class="num">{{ coming|qty }}</td>
-      <td class="num{% if missing %} low{% endif %}">{% if missing %}{{ missing|qty }}{% if not p.vendor %} <span class="muted small">(no vendor)</span>{% endif %}{% else %}—{% endif %}</td>
+      <td class="num{% if missing %} low{% endif %}">{% if missing %}{{ missing|qty }}{% if not p.vendor_id %} <span class="muted small">(no vendor)</span>{% endif %}{% else %}—{% endif %}</td>
     </tr>{% empty %}<tr><td colspan="5" class="empty small">No parts: give its harnesses and devices their parts.</td></tr>{% endfor %}
   </table>
 </form>

@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import Count, Q, Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from orders import service as orders
@@ -16,8 +17,8 @@ from web.forms import initial_for
 from . import attributes as attributes_kept
 from . import stock
 from .attributes import PartStore
-from .forms import AttributeForm, CategoryForm, LocationForm, PartForm, VendorForm
-from .models import Attribute, Category, Location, Part, PartLink, PartValue, Stock, Vendor
+from .forms import AttributeForm, CategoryForm, FamilyForm, LocationForm, PartForm, VendorForm
+from .models import Attribute, Category, Family, Location, Part, PartLink, PartValue, Stock, Vendor
 
 PAGE = 200   # parts listed at most
 
@@ -60,7 +61,7 @@ def parts(request):
         return redirect(found.get())
     return render(request, 'inventory/parts.html', {
         'rows': attributes_kept.columns(list(found[:PAGE]), attributes, PartStore()), 'count': found.count(), 'q': q,
-        'category': category, 'categories': Category.ordered(), 'page': PAGE, 'attributes': attributes,
+        'category': category, 'categories': Category.of(Category.Kind.PARTS), 'page': PAGE, 'attributes': attributes,
         'filters': attributes_kept.filters(attributes, request.GET)})
 
 
@@ -191,18 +192,48 @@ def vendor_form(request, pk=None):
 
 
 @login_required
+def families(request):
+    """The families of parts that can take each other's place, with a form to make one."""
+    form = FamilyForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        return redirect(form.save())
+    return render(request, 'inventory/families.html', {'families': Family.objects.annotate(n=Count('parts')).select_related('preferred'),
+                                                       'form': form})
+
+
+@login_required
+def family(request, pk):
+    """A family: its parts (their stock together), the one it is ordered as, and changing it."""
+    item = get_object_or_404(Family, pk=pk)
+    form = FamilyForm(request.POST or None, instance=item)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        messages.success(request, f'{item} is saved.')
+        return redirect(item)
+    return render(request, 'inventory/family.html', {
+        'family': item, 'form': form, 'parts': item.parts.select_related('vendor').annotate(have=Sum('stock__quantity'))})
+
+
+@login_required
 def categories(request):
-    """The part categories as a tree, with a form to add one (or change one: ?edit=<pk>)."""
+    """The categories of parts (or of assets: ?kind=assets) as a tree, with a form to add one (or change one: ?edit=<pk>)."""
+    from assets.models import Asset
     item = Category.objects.filter(pk=request.GET.get('edit') or 0).first()
-    form = CategoryForm(request.POST or None, instance=item)
+    kind = item.kind if item else request.GET.get('kind') if request.GET.get('kind') in Category.Kind.values else Category.Kind.PARTS
+    form = CategoryForm(request.POST or None, instance=item, kind=kind)
     if request.method == 'POST' and form.is_valid():
         saved = form.save()
         messages.success(request, f'{saved} is saved.')
-        return redirect('inventory:categories')
-    counts = dict(Part.objects.filter(active=True).values('category').annotate(n=Count('pk')).values_list('category', 'n'))
+        return redirect(f"{reverse('inventory:categories')}?kind={kind}")
+    if kind == Category.Kind.ASSETS:
+        counts = Asset.objects.exclude(status='retired')
+    else:
+        counts = Part.objects.filter(active=True)
+    counts = dict(counts.values('category').annotate(n=Count('pk')).values_list('category', 'n'))
     own = dict(Attribute.objects.values('category').annotate(n=Count('pk')).values_list('category', 'n'))
     return render(request, 'inventory/categories.html', {
-        'categories': [(c, depth, counts.get(c.pk, 0), own.get(c.pk, 0)) for c, depth in Category.ordered()], 'form': form, 'item': item})
+        'categories': [(c, depth, counts.get(c.pk, 0), own.get(c.pk, 0)) for c, depth in Category.of(kind)], 'form': form, 'item': item,
+        'kind': kind, 'kinds': Category.Kind.choices})
 
 
 def _category_page(request, item, form):

@@ -6,16 +6,20 @@
 <h1>Pins of {{ connector.designator }} <span class="muted small">{{ connector.name }}</span></h1>
 <form method="post" class="card flush">{% csrf_token %}
   <table class="list rows-form">
-    <tr><th>Pin</th><th>Signal</th><th>Description</th><th title="Take it away">✕</th></tr>
+    <tr><th>Pin</th><th>Signal</th><th>Set</th><th>Set type</th><th>Description</th><th title="Take it away">✕</th></tr>
     {% for p in pins %}<tr>
       <td><input name="number_{{ p.pk }}" value="{{ p.number }}" aria-label="Pin number" class="pin-no" required></td>
       <td><input name="signal_{{ p.pk }}" value="{{ p.signal }}" aria-label="Signal of pin {{ p.number }}"></td>
+      <td><input name="set_{{ p.pk }}" value="{{ p.wire_set }}" aria-label="Set of pin {{ p.number }}" class="pin-set"></td>
+      <td><select name="set_type_{{ p.pk }}" aria-label="Set type of pin {{ p.number }}">{% for t in set_types %}<option{% if t == p.set_type %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></td>
       <td><input name="description_{{ p.pk }}" value="{{ p.description }}" aria-label="Description of pin {{ p.number }}"></td>
       <td><input type="checkbox" name="gone_{{ p.pk }}" aria-label="Take pin {{ p.number }} away"></td>
     </tr>{% endfor %}
     {% for i in new %}<tr class="new">
       <td><input name="number_new{{ i }}" aria-label="New pin number" class="pin-no" placeholder="New"></td>
-      <td><input name="signal_new{{ i }}" aria-label="Signal"></td><td><input name="description_new{{ i }}" aria-label="Description"></td><td></td>
+      <td><input name="signal_new{{ i }}" aria-label="Signal"></td><td><input name="set_new{{ i }}" aria-label="Set" class="pin-set"></td>
+      <td><select name="set_type_new{{ i }}" aria-label="Set type">{% for t in set_types %}<option>{{ t }}</option>{% endfor %}</select></td>
+      <td><input name="description_new{{ i }}" aria-label="Description"></td><td></td>
     </tr>{% endfor %}
   </table>
   <input type="hidden" name="new" value="{{ new|length }}">

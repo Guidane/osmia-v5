@@ -1,6 +1,7 @@
 {% extends "base.html" %}{% load osmia %}
 {% block title %}Budgets · Osmia{% endblock %}
 {% block content %}
+<p class="small"><a href="{% url 'orders:list' %}">← Orders</a></p>
 <div class="page-head"><h1>Budgets</h1><span class="spacer"></span>
   <a class="btn" href="?export=1{% if request.GET.all %}&amp;all=1{% endif %}">⬇ Excel</a>
   <a class="btn primary" href="{% url 'budgets:new' %}">＋ New budget</a></div>

@@ -134,7 +134,7 @@ def order(request, pk):
     return render(request, 'orders/order.html', {
         'budget_left': left,
         'order': item, 'form': form, 'lines': [(line, _where(line)) for line in lines], 'locations': Location.ordered(),
-        'today': date.today(), 'categories': Category.ordered(),
+        'today': date.today(), 'categories': Category.of(Category.Kind.PARTS),
         'assets_json': [{'number': a.number, 'description': a.name, 'category': a.get_kind_display(), 'have': '', 'asset': True,
                          'price': qty(a.price)} for a in Asset.objects.filter(status=Asset.Status.ORDERED, order_lines=None)]})
 

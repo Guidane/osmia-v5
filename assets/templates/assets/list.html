@@ -4,12 +4,10 @@
 <div class="page-head"><h1>Assets</h1><span class="spacer"></span>
   <a class="btn" href="?{{ request.GET.urlencode }}{% if request.GET %}&amp;{% endif %}export=1">⬇ Excel</a>
   <button type="button" class="btn" data-labels="{% url 'web:labels' 'asset' %}" title="Labels of the ticked assets (none ticked: of all listed)">🏷 Labels</button>
-  <a class="btn" href="{% url 'inventory:categories' %}">Categories</a>
-  <a class="btn primary" href="{% url 'assets:new' %}{% if kind %}?kind={{ kind }}{% endif %}">＋ New asset</a></div>
+  <a class="btn" href="{% url 'inventory:categories' %}?kind=assets">Categories</a>
+  <a class="btn primary" href="{% url 'assets:new' %}{% if category %}?category={{ category.pk }}{% endif %}">＋ New asset</a></div>
 <form method="get" class="filters">
-  <nav class="tabs"><a href="?"{% if not kind %} class="on"{% endif %}>All</a>{% for value, label in kinds %}<a href="?kind={{ value }}"{% if kind == value %} class="on"{% endif %}>{{ label }}</a>{% endfor %}</nav>
-  {% if kind %}<input type="hidden" name="kind" value="{{ kind }}">{% endif %}
-  <input type="search" name="q" value="{{ q }}" placeholder="Asset tag, name, model, serial…" aria-label="Search assets">
+  <input type="search" name="q" value="{{ q }}" placeholder="Asset tag, name, category, model, serial…" aria-label="Search assets">
   <select name="category" aria-label="Category" onchange="this.form.submit()"><option value="">Every category</option>
     {% for c, depth in categories %}<option value="{{ c.pk }}"{% if category.pk == c.pk %} selected{% endif %}>{% for _ in ""|ljust:depth %}&nbsp;&nbsp;&nbsp;{% endfor %}{{ c.name }}</option>{% endfor %}</select>
   <select name="status" aria-label="Status" onchange="this.form.submit()"><option value="">Not retired</option>

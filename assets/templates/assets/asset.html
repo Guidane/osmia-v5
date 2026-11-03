@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% load osmia %}
 {% block title %}{{ asset.number }} · Osmia{% endblock %}
 {% block content %}
-<p class="small"><a href="{% url 'assets:list' %}?kind={{ asset.kind }}">← Assets</a></p>
+<p class="small"><a href="{% url 'assets:list' %}">← Assets</a></p>
 <div class="page-head"><h1>{{ asset.number }}</h1><span class="muted">{{ asset.name }}</span><span class="badge">{{ asset.get_kind_display }}</span>
   <span class="badge{% if asset.status == 'available' or asset.status == 'in_use' %} ok{% elif asset.status == 'retired' or asset.status == 'repair' %} failed{% endif %}">{{ asset.get_status_display }}{% if asset.holder %}: {{ asset.holder }}{% endif %}</span>
   <span class="spacer"></span><a class="btn" href="{% url 'web:labels' 'asset' %}?ids={{ asset.pk }}">🏷 Label</a>{% document_button asset %}<a class="btn" href="{% url 'assets:edit' asset.pk %}">Change</a></div>

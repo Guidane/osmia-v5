@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Vendors · Osmia{% endblock %}
 {% block content %}
+<p class="small"><a href="{% url 'inventory:parts' %}">← Parts</a> · <a href="{% url 'orders:list' %}">← Orders</a></p>
 <div class="page-head"><h1>Vendors</h1><span class="spacer"></span><a class="btn primary" href="{% url 'inventory:vendor_new' %}">＋ New vendor</a></div>
 <div class="card flush">
   <table class="list">

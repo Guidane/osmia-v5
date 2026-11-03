@@ -4,7 +4,7 @@
 <div class="page-head"><h1>Parts</h1><span class="spacer"></span>
   <a class="btn" href="?{{ request.GET.urlencode }}{% if request.GET %}&amp;{% endif %}export=1">⬇ Excel</a>
   <button type="button" class="btn" data-labels="{% url 'web:labels' 'part' %}" title="Labels of the ticked parts (none ticked: of all listed)">🏷 Labels</button>
-  <a class="btn" href="{% url 'inventory:categories' %}">Categories</a>
+  <a class="btn" href="{% url 'inventory:categories' %}">Categories</a><a class="btn" href="{% url 'inventory:families' %}">Families</a><a class="btn" href="{% url 'inventory:vendors' %}">Vendors</a>
   <a class="btn primary" href="{% url 'inventory:part_new' %}">＋ New part</a></div>
 <form method="get" class="filters">
   <input type="search" name="q" value="{{ q }}" placeholder="Part number, description, manufacturer…" aria-label="Search parts">

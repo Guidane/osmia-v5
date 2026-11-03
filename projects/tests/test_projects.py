@@ -117,3 +117,30 @@ class PageTests(ProjectBase):
         HarnessEnd.objects.create(harness=other, designator='P1', connector=self.j1)
         configs.place(self.base, kind='harness', harness_id=other.pk, ends=configs.plug(self.base, other))
         self.assertTrue(any('both plug into Controller J1' in t for _, t in configs.problems(self.base)))
+
+
+class ConnectTests(ProjectBase):
+    def test_a_harness_made_between_two_connectors(self):
+        self.j1.pins.filter(number__in=['6', '7']).update(wire_set='CAN', set_type='Twisted')
+        response = self.client.post(reverse('projects:change', args=[self.project.pk]), {
+            'config': self.child.pk, 'action': 'connect', 'name': 'Controller J1 to board J1',
+            'a': self.ctrl, 'a_connector': self.j1.pk, 'b': self.load, 'b_connector': self.board_j1.pk,
+            'wire': ['["1", "1"]', '["2", "3"]', '["6", "2"]']}, follow=True)
+        harness = self.project.harnesses.get(name='Controller J1 to board J1')
+        self.assertContains(response, f'{harness} is made, with 3 wires.')
+        p1, p2 = harness.ends.all()
+        self.assertEqual((p1.designator, p1.connector, p2.designator, p2.connector), ('P1', self.j1, 'P2', self.board_j1))
+        self.assertEqual(sorted((w.from_pin, w.to_pin, w.signal, w.wire_set, w.set_type) for w in harness.wires.all()),
+                         [('1', '1', '+24 V', '', 'Straight'), ('2', '3', '0 V', '', 'Straight'), ('6', '2', 'CAN H', 'CAN', 'Twisted')])
+        row = next(r for r in configs.resolve(self.child).values() if r['harness_id'] == harness.pk)
+        self.assertEqual(row['ends'], {str(p1.pk): self.ctrl, str(p2.pk): self.load})   # placed here, plugged in
+        self.assertFalse(any(r['harness_id'] == harness.pk for r in configs.resolve(self.base).values()))
+
+    def test_what_can_t_be_connected(self):
+        def connect(**post):
+            return self.client.post(reverse('projects:change', args=[self.project.pk]), {
+                'config': self.base.pk, 'action': 'connect', 'name': 'x', 'a': self.ctrl, 'a_connector': self.j1.pk, **post}, follow=True)
+        self.assertContains(connect(b=self.ctrl, b_connector=self.j1.pk), 'Pick two different connectors.')
+        self.assertContains(connect(b=self.ctrl, b_connector=self.board_j1.pk), 'That connector is not in this configuration.')
+        self.assertContains(connect(b=self.load, b_connector=self.board_j1.pk, wire='["99", "1"]'), 'There is no pin 99 on that connector.')
+        self.assertFalse(self.project.harnesses.filter(name='x').exists())

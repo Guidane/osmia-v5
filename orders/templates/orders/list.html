@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% load osmia %}
 {% block title %}Orders · Osmia{% endblock %}
 {% block content %}
-<div class="page-head"><h1>Orders</h1><span class="spacer"></span><a class="btn" href="?show={{ shown }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}&amp;export=1">⬇ Excel</a><a class="btn primary" href="{% url 'orders:new' %}">＋ New order</a></div>
+<div class="page-head"><h1>Orders</h1><span class="spacer"></span><a class="btn" href="?show={{ shown }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}&amp;export=1">⬇ Excel</a><a class="btn" href="{% url 'budgets:list' %}">Budgets</a><a class="btn" href="{% url 'inventory:vendors' %}">Vendors</a><a class="btn primary" href="{% url 'orders:new' %}">＋ New order</a></div>
 <div class="filters">
   <nav class="tabs">{% for key, label in tabs %}<a href="?show={{ key }}"{% if key == shown %} class="on"{% endif %}>{{ label }}{% if key == 'requests' and requests %} <span class="badge">{{ requests }}</span>{% endif %}</a>{% endfor %}</nav>
   <form method="get"><input type="hidden" name="show" value="{{ shown }}">

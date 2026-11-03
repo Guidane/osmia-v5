@@ -7,11 +7,11 @@ from decimal import Decimal
 from django.db import models, transaction
 from django.urls import reverse
 
-from devices.models import Connector, pin_order
-from inventory.models import Part
+from devices.models import SET_TYPES as PIN_SET_TYPES, Connector, pin_order
+from inventory.models import Family, Part, PartOrFamily, part_or_family
 from web.models import Version
 
-SET_TYPES = ['Straight', 'Twisted', 'Shielded twisted', 'Shielded', 'Shield']
+SET_TYPES = PIN_SET_TYPES + ['Shield']   # a shield's drain wire too
 COLOURS = ['black', 'brown', 'red', 'orange', 'yellow', 'green', 'blue', 'violet', 'grey', 'white', 'green/yellow']
 
 
@@ -50,7 +50,7 @@ class Harness(models.Model):
         return super().save(*args, **kwargs)
 
     def ordered_wires(self):
-        return sorted(self.wires.select_related('from_end', 'to_end', 'part'),
+        return sorted(self.wires.select_related('from_end', 'to_end', 'part', 'family'),
                       key=lambda w: (w.from_end.designator, w.to_end.designator, pin_order(w.from_pin)))
 
     def parts_list(self):
@@ -82,18 +82,17 @@ class Harness(models.Model):
 
     def snapshot(self):
         return {'name': self.name, 'description': self.description, 'notes': self.notes,
-                'ends': [{'designator': e.designator, 'part': e.part.number if e.part else '',
+                'ends': [{'designator': e.designator, 'part': e.used_name,
                           'connector': [e.connector.device.number, e.connector.designator] if e.connector else None}
-                         for e in self.ends.select_related('part', 'connector__device')],
+                         for e in self.ends.select_related('part', 'family', 'connector__device')],
                 'wires': [{'from': w.from_end.designator, 'from_pin': w.from_pin, 'to': w.to_end.designator, 'to_pin': w.to_pin,
                            'signal': w.signal, 'set': w.wire_set, 'set_type': w.set_type, 'colour': w.colour, 'gauge': w.gauge,
-                           'length': str(w.length) if w.length is not None else None, 'part': w.part.number if w.part else ''}
+                           'length': str(w.length) if w.length is not None else None, 'part': w.used_name}
                           for w in self.ordered_wires()],
-                'items': [{'part': i.part.number, 'quantity': str(i.quantity), 'note': i.note} for i in self.items.select_related('part')]}
+                'items': [{'part': i.used_name, 'quantity': str(i.quantity), 'note': i.note}
+                          for i in self.items.select_related('part', 'family')]}
 
     def restore(self, data):
-        def part(number):
-            return Part.objects.filter(number=number or '').first()
         self.name, self.description, self.notes = data.get('name', ''), data.get('description', ''), data.get('notes', '')
         self.save()
         self.wires.all().delete()
@@ -105,27 +104,35 @@ class Harness(models.Model):
             where = e.get('connector')
             connector = Connector.objects.filter(device__number=where[0], designator=where[1]).first() if where else None
             ends[designator], _ = HarnessEnd.objects.update_or_create(harness=self, designator=designator, defaults={
-                'part': part(e.get('part')), 'connector': connector, 'position': position})
+                'connector': connector, 'position': position})
+            ends[designator].used = part_or_family(e.get('part'))
+            ends[designator].save()
         for w in data.get('wires', []):
-            Wire.objects.create(harness=self, from_end=ends[w['from']], from_pin=w['from_pin'], to_end=ends[w['to']], to_pin=w['to_pin'],
-                                signal=w.get('signal', ''), wire_set=w.get('set', ''), set_type=w.get('set_type', 'Straight'),
-                                colour=w.get('colour', ''), gauge=w.get('gauge', ''), part=part(w.get('part')),
-                                length=Decimal(w['length']) if w.get('length') else None)
+            wire = Wire(harness=self, from_end=ends[w['from']], from_pin=w['from_pin'], to_end=ends[w['to']], to_pin=w['to_pin'],
+                        signal=w.get('signal', ''), wire_set=w.get('set', ''), set_type=w.get('set_type', 'Straight'),
+                        colour=w.get('colour', ''), gauge=w.get('gauge', ''), length=Decimal(w['length']) if w.get('length') else None)
+            wire.used = part_or_family(w.get('part'))
+            wire.save()
         for i in data.get('items', []):
-            if part(i['part']):
-                HarnessItem.objects.create(harness=self, part=part(i['part']), quantity=Decimal(i['quantity']), note=i.get('note', ''))
+            found = part_or_family(i['part'])
+            if found:
+                line = HarnessItem(harness=self, quantity=Decimal(i['quantity']), note=i.get('note', ''))
+                line.used = found
+                line.save()
 
 
 def parts_of(data):
-    """What a harness as in ``data`` (a snapshot) is made of: [(part, quantity)], its ends' connectors, its wire (in
-    metres when the wire's part is counted in metres) and its other items."""
+    """What a harness as in ``data`` (a snapshot) is made of: [(part or family, quantity)], its ends' connectors, its
+    wire (in metres when the wire's part is counted in metres) and its other items."""
     wanted = [(e['part'], Decimal(1), None) for e in data.get('ends', []) if e.get('part')]
     wanted += [(w['part'], None, Decimal(w['length'] or 0)) for w in data.get('wires', []) if w.get('part')]
     wanted += [(i['part'], Decimal(i['quantity']), None) for i in data.get('items', [])]
-    parts = {p.number: p for p in Part.objects.filter(number__in={n for n, _, _ in wanted})}
+    names = {n for n, _, _ in wanted}
+    parts = {p.number.lower(): p for p in Part.objects.filter(number__in=names)}
+    parts.update({f.name.lower(): f for f in Family.objects.filter(name__in=names) if f.name.lower() not in parts})
     need = OrderedDict()
     for number, quantity, length in wanted:
-        part = parts.get(number)
+        part = parts.get(number.lower())
         if part is None:
             continue
         if quantity is None:   # a wire
@@ -134,7 +141,7 @@ def parts_of(data):
     return list(need.items())
 
 
-class HarnessEnd(models.Model):
+class HarnessEnd(PartOrFamily):
     harness = models.ForeignKey(Harness, on_delete=models.CASCADE, related_name='ends')
     designator = models.CharField(max_length=30)
     part = models.ForeignKey(Part, null=True, blank=True, on_delete=models.SET_NULL, related_name='harness_ends')
@@ -149,7 +156,7 @@ class HarnessEnd(models.Model):
         return self.designator
 
 
-class Wire(models.Model):
+class Wire(PartOrFamily):
     harness = models.ForeignKey(Harness, on_delete=models.CASCADE, related_name='wires')
     from_end = models.ForeignKey(HarnessEnd, on_delete=models.CASCADE, related_name='wires_from')
     from_pin = models.CharField(max_length=20)
@@ -170,10 +177,10 @@ class Wire(models.Model):
         return f'{self.from_end.designator}:{self.from_pin} → {self.to_end.designator}:{self.to_pin}'
 
 
-class HarnessItem(models.Model):
+class HarnessItem(PartOrFamily):
     """Something else it is made of: contacts, ties, sleeving, labels."""
     harness = models.ForeignKey(Harness, on_delete=models.CASCADE, related_name='items')
-    part = models.ForeignKey(Part, on_delete=models.PROTECT, related_name='harness_items')
+    part = models.ForeignKey(Part, null=True, blank=True, on_delete=models.PROTECT, related_name='harness_items')
     quantity = models.DecimalField(max_digits=12, decimal_places=3)
     note = models.CharField(max_length=200, blank=True)
 

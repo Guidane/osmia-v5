@@ -2,15 +2,16 @@
 {% block title %}Categories · Osmia{% endblock %}
 {% block content_class %}narrow{% endblock %}
 {% block content %}
-<p class="small"><a href="{% url 'inventory:parts' %}">← Parts</a></p>
-<div class="page-head"><h1>Part categories</h1></div>
+<p class="small">{% if kind == 'assets' %}<a href="{% url 'assets:list' %}">← Assets</a>{% else %}<a href="{% url 'inventory:parts' %}">← Parts</a>{% endif %}</p>
+<div class="page-head"><h1>Categories</h1></div>
+<nav class="tabs">{% for key, label in kinds %}<a href="?kind={{ key }}"{% if key == kind %} class="on"{% endif %}>{{ label }}</a>{% endfor %}</nav>
 <div class="card flush">
   <table class="list">
-    <tr><th>Category</th><th class="num">Attributes</th><th class="num">Parts</th><th></th></tr>
+    <tr><th>Category</th><th class="num">Attributes</th><th class="num">{% if kind == 'assets' %}Assets{% else %}Parts{% endif %}</th><th></th></tr>
     {% for c, depth, n, attributes in categories %}<tr>
       <td style="padding-left:{{ depth|add:1 }}em"><a href="{{ c.get_absolute_url }}">{{ c.name }}</a></td>
       <td class="num">{{ attributes|default:"" }}</td>
-      <td class="num">{% if n %}<a href="{% url 'inventory:parts' %}?category={{ c.pk }}">{{ n }}</a>{% endif %}</td>
+      <td class="num">{% if n %}<a href="{% if kind == 'assets' %}{% url 'assets:list' %}{% else %}{% url 'inventory:parts' %}{% endif %}?category={{ c.pk }}">{{ n }}</a>{% endif %}</td>
       <td class="small"><a href="?edit={{ c.pk }}">Change</a></td>
     </tr>{% empty %}<tr><td colspan="4" class="empty small">No categories yet.</td></tr>{% endfor %}
   </table>
@@ -18,6 +19,6 @@
 <form method="post" class="form card">{% csrf_token %}
   <h3>{% if item %}Change {{ item.name }}{% else %}New category{% endif %}</h3>
   <div class="fields">{% include "web/_form_fields.html" %}</div>
-  <div class="actions"><button class="btn primary">Save</button>{% if item %} <a href="{% url 'inventory:categories' %}">Cancel</a>{% endif %}</div>
+  <div class="actions"><button class="btn primary">Save</button>{% if item %} <a href="?kind={{ kind }}">Cancel</a>{% endif %}</div>
 </form>
 {% endblock %}

@@ -28,19 +28,13 @@
       <a href="{% url 'web:home' %}">🏠 Home</a>
       <div class="label">Stock</div>
       <a href="{% url 'inventory:parts' %}">Parts</a>
-      <a href="{% url 'inventory:categories' %}">Categories</a>
-      <a href="{% url 'inventory:locations' %}">Locations</a>
       <a href="{% url 'orders:list' %}">Orders</a>
-      <a href="{% url 'inventory:vendors' %}">Vendors</a>
-      <a href="{% url 'budgets:list' %}">Budgets</a>
+      <a href="{% url 'inventory:locations' %}">Locations</a>
       <div class="label">Design</div>
       <a href="{% url 'projects:list' %}">Projects</a>
       <a href="{% url 'devices:list' %}">Devices</a>
-      <a href="{% url 'harnesses:list' %}">Harnesses</a>
-      <div class="label">Assets</div>
-      <a href="{% url 'assets:list' %}">All assets</a>
-      <a href="{% url 'assets:list' %}?kind=tool">Tools</a>
-      <a href="{% url 'assets:list' %}?kind=lab">Lab equipment</a>
+      <div class="label">Equipment</div>
+      <a href="{% url 'assets:list' %}">Assets</a>
     </nav>
   </details>
   <a class="brand" href="{% url 'web:home' %}">Osmia</a>
@@ -88,6 +82,12 @@
     var by = e.submitter && e.submitter.dataset.confirm ? e.submitter : e.target;
     if (by.dataset && by.dataset.confirm && !confirm(by.dataset.confirm)) e.preventDefault();
   }, true);
+  /* An open menu closes on a click outside it, on Escape, and when the other one opens. */
+  function closeMenus(except) {
+    document.querySelectorAll('details.menu[open]').forEach(function (m) { if (m !== except) m.open = false; });
+  }
+  document.addEventListener('click', function (e) { closeMenus(e.target.closest('details.menu')); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenus(null); });
 </script>
 {% block scripts %}{% endblock %}
 </body>

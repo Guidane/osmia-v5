@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Harnesses · Osmia{% endblock %}
 {% block content %}
+<p class="small"><a href="{% url 'projects:list' %}">← Projects</a></p>
 <div class="page-head"><h1>Harnesses</h1><span class="spacer"></span>
   <a class="btn primary" href="{% url 'harnesses:new' %}{% if project %}?project={{ project.pk }}{% endif %}">＋ New harness</a></div>
 <form method="get" class="filters"><select name="project" aria-label="Project" onchange="this.form.submit()"><option value="">Every project</option>

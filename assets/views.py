@@ -26,7 +26,7 @@ from .models import Asset
 
 class AssetForm(AttributesForm):
     """An asset, and the attributes of its category (and of those above it)."""
-    tree_fields = {'category': Category, 'location': Location}
+    tree_fields = {'category': (Category, {'kind': Category.Kind.ASSETS}), 'location': Location}
 
     class Meta:
         model = Asset
@@ -54,11 +54,9 @@ def asset_list(request):
     q = request.GET.get('q', '').strip()
     found = Asset.objects.select_related('category', 'location', 'keeper', 'holder')
     if q:
-        found = found.filter(Q(number__icontains=q) | Q(name__icontains=q) | Q(manufacturer__icontains=q) | Q(model__icontains=q)
-                             | Q(serial__icontains=q))
-    kind = request.GET.get('kind', '')
-    if kind in Asset.Kind.values:
-        found = found.filter(kind=kind)
+        for word in q.split():
+            found = found.filter(Q(number__icontains=word) | Q(name__icontains=word) | Q(category__name__icontains=word)
+                                 | Q(manufacturer__icontains=word) | Q(model__icontains=word) | Q(serial__icontains=word))
     category = Category.objects.filter(pk=request.GET.get('category') or 0).first()
     if category is not None:
         found = found.filter(category_id__in=category.below())
@@ -82,7 +80,7 @@ def asset_list(request):
                                             str(a.holder or ''), a.calibrated_on, a.calibration_due) for a in assets])])
     return render(request, 'assets/list.html', {
         'rows': kept.columns(assets, attributes, AssetStore()), 'attributes': attributes, 'filters': kept.filters(attributes, request.GET),
-        'q': q, 'kind': kind, 'kinds': Asset.Kind.choices, 'category': category, 'status': status, 'categories': Category.ordered(),
+        'q': q, 'category': category, 'status': status, 'categories': Category.of(Category.Kind.ASSETS),
         'statuses': Asset.Status.choices})
 
 

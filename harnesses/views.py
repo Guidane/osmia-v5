@@ -13,7 +13,7 @@ from django.views.decorators.http import require_POST
 
 from devices.models import Connector
 from inventory import stock
-from inventory.models import Location, Part
+from inventory.models import Family, Location, choices_of_parts, part_or_family
 from projects.models import Project
 from assets.service import next_tag
 from web import excel, rows, versions
@@ -51,10 +51,10 @@ def _sheets(harness):
     wires = harness.ordered_wires()
     return [('Pinout', ['From', 'Pin', 'To', 'Pin', 'Signal', 'Set', 'Set type', 'Colour', 'Gauge', 'Length (mm)', 'Wire part'],
              [(w.from_end.designator, w.from_pin, w.to_end.designator, w.to_pin, w.signal, w.wire_set, w.set_type, w.colour,
-               w.gauge, w.length, w.part.number if w.part else '') for w in wires]),
+               w.gauge, w.length, w.used_name) for w in wires]),
             ('Ends', ['End', 'Connector part', 'Plugs into'],
-             [(e.designator, e.part.number if e.part else '', str(e.connector) if e.connector else '')
-              for e in harness.ends.select_related('part', 'connector__device')]),
+             [(e.designator, e.used_name, str(e.connector) if e.connector else '')
+              for e in harness.ends.select_related('part', 'family', 'connector__device')]),
             ('Parts list', ['Part', 'Description', 'Quantity', 'Unit'],
              [(p.number, p.description, q, p.unit) for p, q in harness.parts_list()])]
 
@@ -83,11 +83,12 @@ def harness(request, pk):
 # -- Editing as tables -------------------------------------------------------------------------------
 
 def _part(number, row):
+    """The part (or family) a row names."""
     if not number:
         return None
-    part = Part.objects.filter(number__iexact=number).first()
+    part = part_or_family(number)
     if part is None:
-        raise ValidationError(f'Row {row}: there is no part "{number}".')
+        raise ValidationError(f'Row {row}: there is no part or family "{number}".')
     return part
 
 
@@ -123,7 +124,7 @@ def _edit(request, harness, title, columns, records, values, apply):
         return redirect(harness)
     return render(request, 'harnesses/edit.html', {
         'harness': harness, 'title': title, 'columns': columns, 'rows': rows.rows(records, values, blank=5),
-        'part_numbers': Part.objects.filter(active=True).values_list('number', 'description')[:5000]})
+        'part_numbers': choices_of_parts()})
 
 
 @login_required
@@ -131,9 +132,9 @@ def ends(request, pk):
     item = get_object_or_404(Harness, pk=pk)
     connectors = [(c.pk, f'{c.device.number} {c.designator}{" · " + c.name if c.name else ""}')
                   for c in Connector.objects.select_related('device').order_by('device__number', 'position')]
-    columns = [rows.Column('designator', 'End', width='70px'), rows.Column('part', 'Connector part', datalist='parts', width='160px'),
+    columns = [rows.Column('designator', 'End', width='70px'), rows.Column('part', 'Connector part or family', datalist='parts', width='180px'),
                rows.Column('connector', 'Plugs into', 'select', connectors, width='220px')]
-    records = list(item.ends.select_related('part'))
+    records = list(item.ends.select_related('part', 'family'))
 
     def apply(row, end, cells):
         if not cells['designator']:
@@ -142,11 +143,11 @@ def ends(request, pk):
         if clash.exists():
             raise ValidationError(f'Row {row}: there is already an end {cells["designator"]}.')
         end = end or HarnessEnd(harness=item, position=item.ends.count())
-        end.designator, end.part = cells['designator'][:30], _part(cells['part'], row)
+        end.designator, end.used = cells['designator'][:30], _part(cells['part'], row)
         end.connector = Connector.objects.filter(pk=cells['connector']).first() if cells['connector'].isdigit() else None
         end.save()
     return _edit(request, item, 'The ends', columns, records,
-                 lambda e: {'designator': e.designator, 'part': e.part.number if e.part else '', 'connector': e.connector_id}, apply)
+                 lambda e: {'designator': e.designator, 'part': e.used_name, 'connector': e.connector_id}, apply)
 
 
 @login_required
@@ -162,7 +163,7 @@ def pinout(request, pk):
                rows.Column('signal', 'Signal', width='120px'), rows.Column('wire_set', 'Set', width='60px'),
                rows.Column('set_type', 'Set type', 'select', [(t, t) for t in SET_TYPES]),
                rows.Column('colour', 'Colour', 'select', [(c, c) for c in COLOURS]), rows.Column('gauge', 'Gauge', width='80px'),
-               rows.Column('length', 'Length (mm)', 'number', width='80px'), rows.Column('part', 'Wire part', datalist='parts', width='140px')]
+               rows.Column('length', 'Length (mm)', 'number', width='80px'), rows.Column('part', 'Wire part or family', datalist='parts', width='160px')]
     ends_by_id = {e.pk: e for e in end_list}
     records = item.ordered_wires()
 
@@ -170,27 +171,29 @@ def pinout(request, pk):
         a, b = ends_by_id.get(int(cells['from_end'] or 0)), ends_by_id.get(int(cells['to_end'] or 0))
         if a is None or b is None or not cells['from_pin'] or not cells['to_pin']:
             raise ValidationError(f'Row {row}: a wire goes from an end\'s pin to an end\'s pin.')
-        signal = cells['signal']
-        if not signal and a.connector_id:   # blank: what the device's pin carries
-            pin = a.connector.pins.filter(number__iexact=cells['from_pin']).first()
-            signal = pin.signal if pin else ''
+        signal, wire_set = cells['signal'], cells['wire_set']
+        set_type = cells['set_type'] if cells['set_type'] in SET_TYPES else 'Straight'
+        pin = a.connector.pins.filter(number__iexact=cells['from_pin']).first() if a.connector_id else None
+        if pin and not signal:   # blank: what the device's pin carries
+            signal = pin.signal
+        if pin and not wire_set and pin.wire_set:   # and the set it is in
+            wire_set, set_type = pin.wire_set, pin.set_type
         wire = wire or Wire(harness=item)
         wire.from_end, wire.from_pin, wire.to_end, wire.to_pin = a, cells['from_pin'][:20], b, cells['to_pin'][:20]
-        wire.signal, wire.wire_set, wire.gauge = signal[:100], cells['wire_set'][:20], cells['gauge'][:20]
-        wire.set_type = cells['set_type'] if cells['set_type'] in SET_TYPES else 'Straight'
+        wire.signal, wire.wire_set, wire.gauge, wire.set_type = signal[:100], wire_set[:20], cells['gauge'][:20], set_type
         wire.colour = cells['colour'] if cells['colour'] in COLOURS else ''
-        wire.length, wire.part = _number(cells['length'], row, 'length'), _part(cells['part'], row)
+        wire.length, wire.used = _number(cells['length'], row, 'length'), _part(cells['part'], row)
         wire.save()
     return _edit(request, item, 'The pinout', columns, records, lambda w: {
         'from_end': w.from_end_id, 'from_pin': w.from_pin, 'to_end': w.to_end_id, 'to_pin': w.to_pin, 'signal': w.signal,
         'wire_set': w.wire_set, 'set_type': w.set_type, 'colour': w.colour, 'gauge': w.gauge,
-        'length': f'{w.length.normalize():f}' if w.length is not None else '', 'part': w.part.number if w.part else ''}, apply)
+        'length': f'{w.length.normalize():f}' if w.length is not None else '', 'part': w.used_name}, apply)
 
 
 @login_required
 def items(request, pk):
     item = get_object_or_404(Harness, pk=pk)
-    columns = [rows.Column('part', 'Part', datalist='parts', width='180px'), rows.Column('quantity', 'Quantity', 'number', width='90px'),
+    columns = [rows.Column('part', 'Part or family', datalist='parts', width='180px'), rows.Column('quantity', 'Quantity', 'number', width='90px'),
                rows.Column('note', 'Note', width='240px')]
 
     def apply(row, line, cells):
@@ -199,10 +202,10 @@ def items(request, pk):
         if part is None or not quantity:
             raise ValidationError(f'Row {row}: give the part and how many.')
         line = line or HarnessItem(harness=item)
-        line.part, line.quantity, line.note = part, quantity, cells['note'][:200]
+        line.used, line.quantity, line.note = part, quantity, cells['note'][:200]
         line.save()
-    return _edit(request, item, 'The other items', columns, list(item.items.select_related('part')),
-                 lambda i: {'part': i.part.number, 'quantity': f'{i.quantity.normalize():f}', 'note': i.note}, apply)
+    return _edit(request, item, 'The other items', columns, list(item.items.select_related('part', 'family')),
+                 lambda i: {'part': i.used_name, 'quantity': f'{i.quantity.normalize():f}', 'note': i.note}, apply)
 
 
 # -- Versions ------------------------------------------------------------------------------------------
@@ -259,7 +262,8 @@ def build(harness, number, version, user, take_from=None):
         signal=w.get('signal', ''), colour=w.get('colour', ''), wire_set=w.get('set', '')) for i, w in enumerate(data['wires']))
     if take_from is not None:
         for part, quantity in parts_of(data):
-            stock.use(part, quantity, take_from, user, note=f'built into {asset.number}')
+            take = stock.use_any if isinstance(part, Family) else stock.use
+            take(part, quantity, take_from, user, note=f'built into {asset.number}')
     event(asset, 'built', user, f'{harness.number}' + (f' v{version.number}' if version else ''))
     return asset
 

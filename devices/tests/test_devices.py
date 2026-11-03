@@ -28,9 +28,12 @@ class DeviceTests(DeviceBase):
         pins = {p.number: p for p in j2.pins.all()}
         self.client.post(reverse('devices:pins', args=[self.controller.pk, j2.pk]), {
             f'number_{pins["1"].pk}': '1', f'signal_{pins["1"].pk}': '+24 V',
-            f'number_{pins["2"].pk}': '2', f'signal_{pins["2"].pk}': '0 V', f'gone_{pins["3"].pk}': 'on',
-            'new': '2', 'number_new0': '10', 'signal_new0': 'PE', 'number_new1': ''})
-        self.assertEqual([(p.number, p.signal) for p in j2.ordered_pins()], [('1', '+24 V'), ('2', '0 V'), ('10', 'PE')])
+            f'set_{pins["1"].pk}': 'PWR', f'set_type_{pins["1"].pk}': 'Twisted',
+            f'number_{pins["2"].pk}': '2', f'signal_{pins["2"].pk}': '0 V', f'set_{pins["2"].pk}': 'PWR', f'set_type_{pins["2"].pk}': 'Twisted',
+            f'gone_{pins["3"].pk}': 'on',
+            'new': '2', 'number_new0': '10', 'signal_new0': 'PE', 'set_type_new0': 'nonsense', 'number_new1': ''})
+        self.assertEqual([(p.number, p.signal, p.wire_set, p.set_type) for p in j2.ordered_pins()],
+                         [('1', '+24 V', 'PWR', 'Twisted'), ('2', '0 V', 'PWR', 'Twisted'), ('10', 'PE', '', 'Straight')])
         page = self.client.get(reverse('devices:device', args=[self.controller.pk]))
         self.assertContains(page, 'CAN H')
 
@@ -68,4 +71,4 @@ class DeviceTests(DeviceBase):
         book = load_workbook(BytesIO(response.content))
         rows = list(book['Pins'].values)
         self.assertEqual(rows[0][:5], ('Device', 'Connector', 'Connector name', 'Connector part', 'Pin'))
-        self.assertIn(('CTRL-1', 'J1', 'Bus', 'DSUB-9-PLUG', '6', 'CAN H', None), rows)
+        self.assertIn(('CTRL-1', 'J1', 'Bus', 'DSUB-9-PLUG', '6', 'CAN H', None, None, None), rows)

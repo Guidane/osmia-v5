@@ -74,10 +74,10 @@ class Tree(TreeWalk, models.Model):
 
 
     @classmethod
-    def ordered(cls):
-        """Every node, depth first, as (node, depth): for lists and dropdowns."""
+    def ordered(cls, nodes=None):
+        """Every node (or those of ``nodes``, whole trees), depth first, as (node, depth): for lists and dropdowns."""
         children = {}
-        for node in cls.objects.all():
+        for node in cls.objects.all() if nodes is None else nodes:
             children.setdefault(node.parent_id, []).append(node)
         out = []
 

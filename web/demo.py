@@ -17,7 +17,7 @@ from budgets.models import Budget, Cost
 from devices.models import Connector, Device, Pin
 from harnesses.models import Harness, HarnessEnd, HarnessItem, Wire
 from inventory import stock
-from inventory.models import Attribute, Category, Location, Part, PartLink, PartValue, Vendor
+from inventory.models import Attribute, Category, Family, Location, Part, PartLink, PartValue, Vendor, part_or_family
 from orders import service
 from orders.models import Order
 from projects import configs
@@ -28,6 +28,7 @@ from web import versions
 
 PARTS = [  # number, description, category, unit, vendor, price, minimum, on hand
     ('DSUB-9-PLUG', 'D-sub 9 plug housing, crimp', 'D-sub', 'pcs', 'Acme Connectors', '2.40', 10, 6),
+    ('DSUB-9-PLUG-B', 'D-sub 9 plug housing, crimp (other make)', 'D-sub', 'pcs', 'Acme Connectors', '2.95', 0, 4),
     ('DSUB-9-RECEPT', 'D-sub 9 receptacle, panel mount', 'D-sub', 'pcs', 'Acme Connectors', '3.10', 5, 8),
     ('DSUB-CONTACT-M', 'D-sub crimp contact, male, 20-24 AWG', 'Contacts', 'pcs', 'Acme Connectors', '0.18', 100, 240),
     ('M12-5-F', 'M12 5-pin cable socket, female', 'M12', 'pcs', 'Acme Connectors', '6.80', 4, 2),
@@ -50,6 +51,8 @@ VALUES = {   # part: {attribute: value}
     'WIRE-22-BLK': {'Gauge': '22', 'Colour': 'black', 'Max. temperature': '105'},
     'WIRE-24-TP': {'Gauge': '24', 'Colour': 'white/green', 'Max. temperature': '80'},
 }
+SETS = {'+24 V': ('PWR', 'Twisted'), '0 V': ('PWR', 'Twisted'), 'CAN H': ('CAN', 'Shielded twisted'),
+        'CAN L': ('CAN', 'Shielded twisted')}   # signal: the set its pins are in
 PINS = {   # device: [(connector, name, part, [(pin, signal)])]
     'CTRL-100': [('J1', 'Bus', 'DSUB-9-RECEPT', [('1', '+24 V'), ('2', '0 V'), ('3', 'Enable'), ('6', 'CAN H'), ('7', 'CAN L'), ('9', 'CAN GND')]),
                  ('J2', 'Sensor', 'M12-5-F', [('1', '+24 V'), ('2', 'Signal'), ('3', '0 V')])],
@@ -86,9 +89,14 @@ def _make(user):
         for name, raw in VALUES.get(number, {}).items():
             value, figure = attributes[name].clean_value(raw)
             PartValue.objects.create(part=parts[number], attribute=attributes[name], value=value, number=figure)
-    workshop = Category.objects.create(name='Workshop')
-    crimpers = Category.objects.create(name='Crimp tools', parent=workshop)
-    lab = Category.objects.create(name='Lab equipment', parent=workshop)
+    Part.objects.filter(pk=parts['DSUB-9-PLUG'].pk).update(notes='Use the gold plated contacts with it.\nKeep two spare in the lab.')
+    vendors['Cable World'].notes = 'Free delivery above 200. Ask for Jan.'
+    vendors['Cable World'].save()
+    plugs = Family.objects.create(name='D-sub 9 plug, crimp', preferred=parts['DSUB-9-PLUG'])
+    Part.objects.filter(number__in=['DSUB-9-PLUG', 'DSUB-9-PLUG-B']).update(family=plugs)
+    workshop = Category.objects.create(name='Workshop', kind='assets')
+    crimpers = Category.objects.create(name='Crimp tools', parent=workshop, kind='assets')
+    lab = Category.objects.create(name='Lab equipment', parent=workshop, kind='assets')
     Attribute.objects.create(category=crimpers, name='Wire size', kind='text', help='e.g. 20-24 AWG')
     Attribute.objects.create(category=lab, name='Output', kind='text', help='e.g. 0-30 V, 5 A')
     crimp = Asset.objects.create(number='T-001', name='D-sub crimp tool', kind='tool', category=crimpers, manufacturer='TE',
@@ -108,22 +116,31 @@ def _make(user):
     Budget.objects.create(number='FY26-OPS', name='Operations', parent=year, amount=15000, owner=user)
     Cost.objects.create(budget=eng_budget, spent_on=date.today(), description='EMC test lab, one day', amount=1800, created_by=user)
     late = service.reorder(parts['M12-5-F'], user).order
-    late.budget = eng_budget
+    late.budget, late.notes = eng_budget, 'Acme says it ships next week.'
     late.save()
     service.place(late, user, date.today() - timedelta(days=3))
     coming = service.reorder(parts['WIRE-22-BLK'], user).order
     coming.budget = eng_budget
     coming.save()
     service.place(coming, user, date.today() + timedelta(days=4))
-    Order.objects.create(kind=Order.Kind.REQUEST, budget=eng_budget, created_by=user,
-                         request='Heat shrink, 6 mm, a spool of black and one of red, for the load board harnesses.')
+    sam = get_user_model().objects.create_user('demo.sam', first_name='Sam', last_name='Lee', department=engineering.children.get())
+    sam.set_unusable_password()
+    sam.save()
+    asked = Order.objects.create(kind=Order.Kind.REQUEST, budget=eng_budget, created_by=sam, ask=user,
+                                 request='200 D-sub crimp contacts, male, for the next load boards. Needed by Friday.')
+    service.ask(asked)
+    mine = Order.objects.create(kind=Order.Kind.REQUEST, budget=eng_budget, created_by=user, vendor=vendors['Cable World'],
+                                request='A bag of small cable ties (100 mm) for the load board harnesses.')
+    mine.lines.create(part=parts['TIE-100'], quantity=100, price=parts['TIE-100'].price)
+    service.place(mine, user, date.today() + timedelta(days=6))
 
     devices = {}
     for number, name, colour in (('CTRL-100', 'Rack controller', '#3b7dd8'), ('LOAD-200', 'Load board', '#c2410c')):
         devices[number] = Device.objects.create(number=number, name=name, colour=colour, manufacturer='In house')
         for position, (designator, title, part, pins) in enumerate(PINS[number]):
             c = Connector.objects.create(device=devices[number], designator=designator, name=title, part=parts[part], position=position)
-            Pin.objects.bulk_create(Pin(connector=c, number=p, signal=s) for p, s in pins)
+            Pin.objects.bulk_create(Pin(connector=c, number=p, signal=s, wire_set=SETS.get(s, ('', ''))[0],
+                                        set_type=SETS.get(s, ('', 'Straight'))[1]) for p, s in pins)
         versions.save(devices[number], user, 'first')
     for n in (1, 2, 3):
         Asset.objects.create(number=f'LOAD-200-{n:03d}', name='Load board', kind='device', device=devices['LOAD-200'], version=1,
@@ -143,9 +160,10 @@ def _make(user):
                        [('1', '1', 'red', 'WIRE-22-RED', '', 'Twisted'), ('2', '3', 'black', 'WIRE-22-BLK', '', 'Twisted'),
                         ('3', '5', 'blue', '', '', 'Straight'), ('6', '2', 'white', 'WIRE-24-TP', 'P2', 'Shielded twisted'),
                         ('7', '7', 'green', 'WIRE-24-TP', 'P2', 'Shielded twisted')], parts, user)
-    link = _harness(project, 'Load board link', [('P1', 'DSUB-9-PLUG', devices['LOAD-200'], 'J2'), ('P2', 'DSUB-9-PLUG', devices['LOAD-200'], 'J1')],
+    link = _harness(project, 'Load board link', [('P1', plugs.name, devices['LOAD-200'], 'J2'), ('P2', plugs.name, devices['LOAD-200'], 'J1')],
                         [('1', '1', 'red', 'WIRE-22-RED', '', 'Straight'), ('3', '3', 'black', 'WIRE-22-BLK', '', 'Straight'),
                          ('2', '2', 'white', 'WIRE-24-TP', 'P1', 'Shielded twisted'), ('7', '7', 'green', 'WIRE-24-TP', 'P1', 'Shielded twisted')], parts, user)
+    Harness.objects.filter(pk=bus.pk).update(notes='Keep it under 50 cm: the rack is tight behind the controller.')
     base = Configuration.objects.create(project=project, name='Base', description='One load board.')
     ctrl = configs.place(base, kind='device', device_id=devices['CTRL-100'].pk, label='Controller', x=40, y=60)
     first = configs.place(base, kind='device', device_id=devices['LOAD-200'].pk, label='Load board 1', x=420, y=40)
@@ -159,9 +177,11 @@ def _make(user):
 def _harness(project, name, ends, wires, parts, user):
     h = Harness.objects.create(project=project, name=name, status='released')
     made = []
-    for position, (designator, part, device, connector) in enumerate(ends):
-        made.append(HarnessEnd.objects.create(harness=h, designator=designator, part=parts[part], position=position,
-                                              connector=device.connectors.get(designator=connector)))
+    for position, (designator, part, device, connector) in enumerate(ends):   # a part, or a family
+        end = HarnessEnd(harness=h, designator=designator, position=position, connector=device.connectors.get(designator=connector))
+        end.used = part_or_family(part)
+        end.save()
+        made.append(end)
     for a, b, colour, part, wire_set, set_type in wires:
         signal = made[0].connector.pins.get(number=a).signal
         Wire.objects.create(harness=h, from_end=made[0], from_pin=a, to_end=made[1], to_pin=b, signal=signal, colour=colour,

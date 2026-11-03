@@ -1,8 +1,46 @@
 from django import forms
+from django.utils.html import format_html, format_html_join
 
 from web.forms import TreeForm, tree_choices
 
-from .models import Attribute, Category, Location, Part, Vendor
+from .models import Attribute, Category, Family, Location, Part, Vendor, choices_of_parts, part_or_family
+
+
+class PartOrFamilyInput(forms.TextInput):
+    """A box for a part number or a family name, suggesting both."""
+    def render(self, name, value, attrs=None, renderer=None):
+        listed = f'{(attrs or {}).get("id") or name}-list'
+        box = super().render(name, value, {**(attrs or {}), 'list': listed, 'autocomplete': 'off'}, renderer)
+        return box + format_html('<datalist id="{}">{}</datalist>', listed,
+                                 format_html_join('', '<option value="{}">{}</option>', choices_of_parts()))
+
+
+class PartOrFamilyField(forms.CharField):
+    """A part, or a family of them, by its number or name."""
+    widget = PartOrFamilyInput
+
+    def prepare_value(self, value):
+        return getattr(value, 'number', value)
+
+    def to_python(self, value):
+        text = super().to_python(value)
+        found = part_or_family(text)
+        if text and found is None:
+            raise forms.ValidationError(f'There is no part or family "{text}".')
+        return found
+
+
+class PartOrFamilyForm(forms.ModelForm):
+    """A form of something that names a part or a family (``used``)."""
+    used = PartOrFamilyField(required=False, label='Part or family')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.initial.setdefault('used', self.instance.used)
+
+    def save(self, commit=True):
+        self.instance.used = self.cleaned_data.get('used')
+        return super().save(commit)
 
 
 def attribute_field(attribute, required, initial):
@@ -89,11 +127,11 @@ class AttributesForm(TreeForm):
 
 class PartForm(AttributesForm):
     """A part, and the attributes of its category (and of those above it)."""
-    tree_fields = {'category': Category}
+    tree_fields = {'category': (Category, {'kind': Category.Kind.PARTS})}
 
     class Meta:
         model = Part
-        fields = ['number', 'description', 'category', 'manufacturer', 'mpn', 'unit', 'datasheet', 'vendor', 'vendor_number',
+        fields = ['number', 'description', 'category', 'family', 'manufacturer', 'mpn', 'unit', 'datasheet', 'vendor', 'vendor_number',
                   'price', 'minimum', 'reorder_quantity', 'notes', 'active']
         widgets = {'notes': forms.Textarea(attrs={'rows': 3})}
 
@@ -113,7 +151,7 @@ class AttributeForm(forms.ModelForm):
     def __init__(self, *args, category, **kwargs):
         super().__init__(*args, **kwargs)
         self.category = category
-        self.fields['target'].choices = tree_choices(Category)
+        self.fields['target'].choices = tree_choices(Category, kind=Category.Kind.PARTS)
         self.fields['digits'].required = False
 
     def _values(self):
@@ -207,13 +245,36 @@ class LocationForm(TreeForm):
         return self._not_inside_itself('parent', "A location can't be inside itself.")
 
 
-class CategoryForm(TreeForm):
-    tree_fields = {'parent': Category}
+class FamilyForm(forms.ModelForm):
+    """A family of parts; the one ordered for it is one of its own."""
+    class Meta:
+        model = Family
+        fields = ['name', 'description', 'preferred']
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['preferred'].queryset = self.instance.parts.all() if self.instance.pk else Part.objects.none()
+        if not self.instance.pk:
+            del self.fields['preferred']
+
+    def clean_name(self):
+        name = self.cleaned_data['name'].strip()
+        if Part.objects.filter(number__iexact=name).exists():
+            raise forms.ValidationError('That is a part number: give the family a name of its own.')
+        return name
+
+
+class CategoryForm(TreeForm):
+    """A category of parts or of assets (``kind``), under one of the same kind."""
     class Meta:
         model = Category
         fields = ['name', 'parent']
         labels = {'parent': 'Part of'}
+
+    def __init__(self, *args, kind, **kwargs):
+        self.tree_fields = {'parent': (Category, {'kind': kind})}
+        super().__init__(*args, **kwargs)
+        self.instance.kind = kind
 
     def clean_parent(self):
         return self._not_inside_itself('parent', "A category can't be part of itself.")

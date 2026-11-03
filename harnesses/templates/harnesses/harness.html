@@ -19,7 +19,7 @@
     <div class="card-head"><h3>Ends</h3><a class="btn small" href="{% url 'harnesses:ends' harness.pk %}">Change</a></div>
     <table class="list">
       <tr><th>End</th><th>Connector part</th><th>Plugs into</th></tr>
-      {% for e in ends %}<tr><td><b>{{ e.designator }}</b></td><td class="small">{% if e.part %}<a href="{{ e.part.get_absolute_url }}">{{ e.part }}</a>{% endif %}</td>
+      {% for e in ends %}<tr><td><b>{{ e.designator }}</b></td><td class="small">{% if e.used %}<a href="{{ e.used.get_absolute_url }}">{{ e.used }}</a>{% endif %}</td>
         <td class="small">{% if e.connector %}<a href="{{ e.connector.device.get_absolute_url }}#c{{ e.connector_id }}">{{ e.connector }}</a>{% else %}<span class="muted">—</span>{% endif %}</td></tr>
       {% empty %}<tr><td colspan="3" class="empty small">No ends yet.</td></tr>{% endfor %}
     </table>
@@ -45,7 +45,7 @@
       {% for w in wires %}<tr{% if w.pk in bad_wires %} class="bad"{% endif %}>
         <td>{{ w.from_end }}</td><td>{{ w.from_pin }}</td><td>{{ w.to_end }}</td><td>{{ w.to_pin }}</td><td>{{ w.signal }}</td>
         <td>{{ w.wire_set }}</td><td class="small">{{ w.set_type }}</td><td>{% if w.colour %}<span class="wire-colour" data-colour="{{ w.colour }}"></span>{{ w.colour }}{% endif %}</td>
-        <td class="small">{{ w.gauge }}</td><td class="num">{{ w.length|qty }}</td><td class="small">{{ w.part|default:"" }}</td></tr>{% endfor %}
+        <td class="small">{{ w.gauge }}</td><td class="num">{{ w.length|qty }}</td><td class="small">{{ w.used|default:"" }}</td></tr>{% endfor %}
     {% empty %}<tr><td colspan="11" class="empty small">No wires yet.</td></tr>{% endfor %}
   </table></div>
 </section>
@@ -53,7 +53,7 @@
 <div class="columns">
   <section class="card flush">
     <div class="card-head"><h3>Other items</h3><a class="btn small" href="{% url 'harnesses:items' harness.pk %}">Change</a></div>
-    <table class="list">{% for i in items %}<tr><td><a href="{{ i.part.get_absolute_url }}">{{ i.part }}</a> <span class="muted small">{{ i.note }}</span></td><td class="num">{{ i.quantity|qty }} {{ i.part.unit }}</td></tr>
+    <table class="list">{% for i in items %}<tr><td><a href="{{ i.used.get_absolute_url }}">{{ i.used }}</a> <span class="muted small">{{ i.note }}</span></td><td class="num">{{ i.quantity|qty }} {{ i.used.unit }}</td></tr>
       {% empty %}<tr><td class="empty small">None.</td></tr>{% endfor %}</table>
   </section>
   <section class="card flush">

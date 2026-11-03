@@ -165,9 +165,8 @@ kbd { font: 11px ui-monospace, Consolas, monospace; padding: 1px 5px; border: 1p
 .page-head h1 { margin: 0; }
 .page-head .spacer { flex: 1; }
 .with-notes { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 0 10px; align-items: start; }
-.with-notes:not(:has(> .notes-card, > .side)) { display: block; }
-.with-notes > .side { display: flex; flex-direction: column; gap: 10px; }
-.with-notes > .side > .card { margin-bottom: 0; }
+.with-notes:not(:has(> .notes-card)) { display: block; }
+.with-notes > .main > .card:not(:last-child) { margin-bottom: 10px; }
 .notes-card h3 { margin: 0 0 6px; }
 .notes-card textarea { width: 100%; min-height: 180px; resize: vertical; }
 .notes-text { margin: 0; overflow-wrap: anywhere; }
@@ -243,6 +242,7 @@ ul.tight { margin: 4px 0 0; padding-left: 18px; }
 .rows-form input:not([type=checkbox]), .rows-form select { width: 100%; min-width: 70px; }
 .rows-form tr.new td { background: var(--panel-2); }
 .rows-form input.pin-no { width: 80px; min-width: 0; }
+.rows-form input.pin-set { width: 70px; min-width: 0; }
 
 /* -- How much of a budget is spent ----------------------------------------------------------------- */
 .meter { display: inline-block; width: 90px; height: 8px; border-radius: 4px; background: var(--hover); overflow: hidden; vertical-align: middle; }

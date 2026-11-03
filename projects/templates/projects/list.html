@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Projects · Osmia{% endblock %}
 {% block content %}
-<div class="page-head"><h1>Projects</h1><span class="spacer"></span><a class="btn primary" href="{% url 'projects:new' %}">＋ New project</a></div>
+<div class="page-head"><h1>Projects</h1><span class="spacer"></span><a class="btn" href="{% url 'harnesses:list' %}">Harnesses</a><a class="btn primary" href="{% url 'projects:new' %}">＋ New project</a></div>
 <div class="card flush">
   <table class="list">
     <tr><th>Project</th><th>Configurations</th><th class="num">Harnesses</th><th>Owner</th></tr>

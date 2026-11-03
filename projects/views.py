@@ -1,16 +1,20 @@
 """Projects: the list, a project's page (its configurations as a tree, the selected one drawn as devices and the
 harnesses between them, its changes and what is wrong), changing a configuration, and what building one needs."""
+import json
+
 from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from accounts.models import Department
-from devices.models import Device
+from devices.models import Connector, Device
 from harnesses.models import Harness
+from inventory.models import choices_of_parts, part_or_family
 from orders import service as orders
 from web import excel
 from web.shortcuts import edit_page, errors
@@ -72,7 +76,8 @@ def _diagram(config, rows, found):
     the parent has that this configuration took away."""
     base = configs.resolve(config.parent)
     device_ids = {r['device_id'] for r in list(rows.values()) + list(base.values()) if r['kind'] == 'device'}
-    devices = {d.pk: d for d in Device.objects.filter(pk__in=device_ids).prefetch_related('connectors')}
+    devices = {d.pk: d for d in Device.objects.filter(pk__in=device_ids).prefetch_related('connectors__pins', 'connectors__part',
+                                                                                        'connectors__family')}
     harnesses = {h.pk: h for h in Harness.objects.filter(pk__in={r['harness_id'] for r in rows.values() if r['harness_id']})
                  .prefetch_related('ends')}
     bad = {key for key, _ in found}
@@ -91,7 +96,10 @@ def _diagram(config, rows, found):
             d = devices[row['device_id']]
             out['devices'].append({'key': key, 'label': row['label'] or d.number, 'number': d.number, 'name': d.name, 'colour': d.colour,
                                    'url': d.get_absolute_url(), 'x': row['x'], 'y': row['y'], 'state': state(key, row),
-                                   'connectors': [{'id': c.pk, 'designator': c.designator, 'name': c.name} for c in d.connectors.all()]})
+                                   'connectors': [{'id': c.pk, 'designator': c.designator, 'name': c.name, 'part': c.used_name,
+                                                   'pins_url': reverse('devices:pins', args=[d.pk, c.pk]),
+                                                   'pins': [[p.number, p.signal, p.wire_set, p.set_type if p.wire_set else '', p.description]
+                                                            for p in c.ordered_pins()]} for c in d.connectors.all()]})
         elif row['kind'] == 'harness' and row['harness_id'] in harnesses:
             h = harnesses[row['harness_id']]
             out['harnesses'].append({'key': key, 'number': h.number, 'name': h.name, 'url': h.get_absolute_url(), 'state': state(key, row),
@@ -122,7 +130,8 @@ def project(request, pk):
         'problems': [text for _, text in found],
         'diagram': _diagram(config, rows, found) if config else {'devices': [], 'harnesses': [], 'ghosts': []},
         'placed_devices': [(key, r, device_names.get(r['device_id'])) for key, r in placed_devices],
-        'harness_rows': harness_rows, 'devices': Device.objects.all(), 'harnesses': item.harnesses.exclude(status=Harness.Status.OBSOLETE)})
+        'harness_rows': harness_rows, 'devices': Device.objects.all(), 'harnesses': item.harnesses.exclude(status=Harness.Status.OBSOLETE),
+        'part_choices': choices_of_parts() if config else []})
 
 
 @login_required
@@ -168,7 +177,7 @@ def configuration(request, pk):
 @require_POST
 def change(request, pk):
     """A change to the selected configuration: add, move, rename, swap or take away a device; add, plug in or take
-    away a harness; take a change back. Moves come from the diagram (JSON back)."""
+    away a harness, or make one between two connectors; take a change back. Moves come from the diagram (JSON back)."""
     item = get_object_or_404(Project, pk=pk)
     config = _selected(request, item)
     post, action, key = request.POST, request.POST.get('action'), request.POST.get('key') or None
@@ -187,6 +196,16 @@ def change(request, pk):
             configs.place(config, key, label=post.get('label', '').strip()[:100])
         elif action == 'swap':
             configs.place(config, key, device_id=get_object_or_404(Device, pk=post.get('device')).pk)
+        elif action == 'connect':
+            ends = [(post.get(side), get_object_or_404(Connector, pk=post.get(f'{side}_connector') or 0)) for side in 'ab']
+            parts = []
+            for side in 'ab':
+                text = post.get(f'{side}_part', '').strip()
+                parts.append(part_or_family(text))
+                if text and parts[-1] is None:
+                    raise ValidationError(f'There is no part or family "{text}".')
+            harness = configs.connect(config, ends, post.get('name', ''), [json.loads(w) for w in post.getlist('wire')], parts)
+            messages.success(request, f'{harness} is made, with {harness.wires.count()} wires.')
         elif action == 'add_harness':
             harness = get_object_or_404(Harness, pk=post.get('harness'), project=item)
             configs.place(config, kind='harness', harness_id=harness.pk, ends=configs.plug(config, harness))
@@ -200,7 +219,7 @@ def change(request, pk):
             configs.undo(config, post.get('placement'))
         else:
             raise ValidationError('What should change?')
-    except (ValidationError, KeyError, ValueError) as exc:
+    except (ValidationError, KeyError, ValueError, TypeError) as exc:
         if action == 'move':
             return JsonResponse({'ok': False}, status=400)
         errors(request, exc if isinstance(exc, ValidationError) else ValidationError('That is not in this configuration.'))
@@ -218,9 +237,10 @@ def needs(request, pk):
     if request.method == 'POST':   # order what is missing
         ordered = []
         for part, _, _, _, missing in parts:
-            if missing and part.vendor_id:
-                orders.reorder(part, request.user, missing)
-                ordered.append(part.number)
+            buy = getattr(part, 'chosen', part)   # a family: its preferred part
+            if missing and buy and buy.vendor_id:
+                orders.reorder(buy, request.user, missing)
+                ordered.append(buy.number)
         messages.success(request, f'On the draft orders: {", ".join(ordered)}.' if ordered else 'Nothing missing could be ordered.')
         return redirect(f'{request.path}?config={config.pk}&count={count}')
     if request.GET.get('export'):

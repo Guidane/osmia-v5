@@ -131,6 +131,37 @@ def copy(config, name):
     return new
 
 
+@transaction.atomic
+def connect(config, ends, name, pairs, parts=(None, None)):
+    """A new harness between two connectors in ``config``, placed and plugged in: ``ends`` [(device key, connector)]
+    its P1 and P2 (``parts``: what each is made of, a part or a family), ``pairs`` [(pin of the first, pin of the
+    second)] its wires, with the signals and sets of the pins."""
+    from harnesses.models import Harness, HarnessEnd, Wire
+    rows = resolve(config)
+    if ends[0] == ends[1]:
+        raise ValidationError('Pick two different connectors.')
+    for key, connector in ends:
+        if key not in rows or rows[key]['device_id'] != connector.device_id:
+            raise ValidationError('That connector is not in this configuration.')
+    harness = Harness.objects.create(project=config.project, name=name.strip()[:200] or 'Harness')
+    made = []
+    for i, ((_, connector), part) in enumerate(zip(ends, parts)):
+        end = HarnessEnd(harness=harness, designator=f'P{i + 1}', connector=connector, position=i)
+        end.used = part
+        end.save()
+        made.append(end)
+    pins = [{p.number: p for p in c.pins.all()} for _, c in ends]
+    for a, b in pairs:
+        pa, pb = pins[0].get(a), pins[1].get(b)
+        if pa is None or pb is None:
+            raise ValidationError(f'There is no pin {a if pa is None else b} on that connector.')
+        in_set = pa if pa.wire_set else pb
+        Wire.objects.create(harness=harness, from_end=made[0], from_pin=a, to_end=made[1], to_pin=b, signal=pa.signal or pb.signal,
+                            wire_set=in_set.wire_set, set_type=in_set.set_type)
+    place(config, kind='harness', harness_id=harness.pk, ends={str(made[0].pk): ends[0][0], str(made[1].pk): ends[1][0]})
+    return harness
+
+
 def plug(config, harness, wanted=None):
     """How ``harness``'s ends plug in: ``wanted`` ({end id: device key}) where given, else the one device of the
     configuration each end's connector is on (when there is just one)."""
@@ -191,12 +222,12 @@ def needs(config):
             device_count[row['device_id']] = device_count.get(row['device_id'], 0) + 1
         elif row['kind'] == 'harness' and row['harness_id']:
             harness_count[row['harness_id']] = harness_count.get(row['harness_id'], 0) + 1
-    devices = [(d, device_count[d.pk]) for d in Device.objects.filter(pk__in=device_count).select_related('part')]
+    devices = [(d, device_count[d.pk]) for d in Device.objects.filter(pk__in=device_count).select_related('part', 'family')]
     harnesses = [(h, harness_count[h.pk]) for h in Harness.objects.filter(pk__in=harness_count)]
     parts = {}
     for device, n in devices:
-        if device.part is not None:
-            parts[device.part] = parts.get(device.part, Decimal(0)) + n
+        if device.used is not None:
+            parts[device.used] = parts.get(device.used, Decimal(0)) + n
     for harness, n in harnesses:
         for part, quantity in harness.parts_list():
             parts[part] = parts.get(part, Decimal(0)) + quantity * n

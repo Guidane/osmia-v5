@@ -35,6 +35,7 @@ class HarnessBase(DeviceBase):
 class PinoutTests(HarnessBase):
     def test_the_pinout_as_a_table_and_what_is_wrong(self):
         p1, p2 = self.p1.pk, self.p2.pk
+        self.j1.pins.filter(number='6').update(wire_set='CAN', set_type='Twisted')
         response = self.client.post(reverse('harnesses:pinout', args=[self.harness.pk]), {
             'r0_seen': 1, 'r0_from_end': p1, 'r0_from_pin': '1', 'r0_to_end': p2, 'r0_to_pin': '1', 'r0_length': '450',
             'r0_part': 'wire-22-red', 'r0_colour': 'red',
@@ -44,6 +45,8 @@ class PinoutTests(HarnessBase):
         self.assertRedirects(response, reverse('harnesses:harness', args=[self.harness.pk]))
         wires = {w.from_pin: w for w in self.harness.wires.all()}
         self.assertEqual(wires['1'].signal, '+24 V')                           # taken from the device's pin
+        self.assertEqual((wires['6'].wire_set, wires['6'].set_type), ('CAN', 'Twisted'))   # its set too
+        self.assertEqual((wires['1'].wire_set, wires['1'].set_type), ('', 'Straight'))
         texts = [t for _, t in self.harness.problems()]
         self.assertIn('P1:6 → P2:7: the wire carries "CAN H", LOAD-1 J1:7 is "CAN L".', texts)
         self.assertIn('CTRL-1 J1 has no pin 9 (P1:9 → P2:3).', texts)
@@ -51,7 +54,7 @@ class PinoutTests(HarnessBase):
         self.assertIn((self.plug, Decimal(2)), self.harness.parts_list())                 # its two ends
         response = self.client.post(reverse('harnesses:pinout', args=[self.harness.pk]), {
             'r0_seen': 1, 'r0_from_end': p1, 'r0_from_pin': '2', 'r0_to_end': p2, 'r0_to_pin': '3', 'r0_part': 'NOPE'}, follow=True)
-        self.assertContains(response, 'Row 1: there is no part &quot;NOPE&quot;.')
+        self.assertContains(response, 'Row 1: there is no part or family &quot;NOPE&quot;.')
         self.assertEqual(self.harness.wires.count(), 3)                         # nothing of it was kept
 
     def test_one_pin_two_wires(self):

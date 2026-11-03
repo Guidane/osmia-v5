@@ -7,29 +7,28 @@
   <span class="badge{% if order.status == 'received' %} ok{% elif order.overdue or order.status == 'cancelled' %} failed{% endif %}">{% if order.overdue %}Late{% else %}{{ order.get_status_display }}{% endif %}</span>
   <span class="muted">{% if order.vendor %}<a href="{{ order.vendor.get_absolute_url }}">{{ order.vendor }}</a>{% else %}no vendor yet{% endif %}{% if order.budget %} · <a href="{{ order.budget.get_absolute_url }}">{{ order.budget }}</a>{% endif %}{% if order.ordered_on %} · ordered {{ order.ordered_on }}{% endif %}{% if order.expected_on and order.status != 'received' %} · expected {{ order.expected_on }}{% endif %}{% if order.received_on %} · received {{ order.received_on }}{% endif %}</span>
   <span class="spacer"></span>
-  {% if order.status == 'draft' %}<button type="button" class="btn primary" data-find>＋ Add item</button>{% endif %}
   {% if order.status == 'draft' or order.status == 'ordered' %}<form method="post" action="{% url 'orders:cancel' order.pk %}" data-confirm="Cancel {{ order.number }}?">{% csrf_token %}<button class="btn ghost">Cancel order</button></form>{% endif %}
 </div>
 
 <form method="post" class="form with-notes">{% csrf_token %}
-  <div class="card">
-    <h3>{% if order.kind == 'request' %}Request details{% else %}Order details{% endif %}</h3>
-    <div class="fields">{% include "web/_form_fields.html" %}</div>
-    <div class="actions"><button class="btn">Save</button></div>
-  </div>
-  <div class="side">
+  <div class="main">
     {% if order.kind == 'request' %}<section class="card request">
       <h3>Asked for{% if order.created_by %} by {{ order.created_by }}{% endif %} <span class="muted small">{{ order.created_at|date:"j M Y H:i" }}</span></h3>
       <p class="request-text">{{ order.request|linebreaksbr }}</p>
       <p class="muted small">Asked of {{ order.ask|default:"the administrators" }}</p>
     </section>{% endif %}
-    {% include "web/_notes_field.html" %}
+    <div class="card">
+      <h3>{% if order.kind == 'request' %}Request details{% else %}Order details{% endif %}</h3>
+      <div class="fields">{% include "web/_form_fields.html" %}</div>
+      <div class="actions"><button class="btn">Save</button></div>
+    </div>
   </div>
+  {% include "web/_notes_field.html" %}
 </form>
 
 {% if order.status == 'draft' %}
 <section class="card flush">
-  <div class="card-head"><h3>What to order</h3></div>
+  <div class="card-head"><h3>What to order</h3><button type="button" class="btn small primary" data-find>＋ Add item</button></div>
   <table class="list">
     <tr><th>Part</th><th colspan="3">Quantity · price each</th></tr>
     {% for line, where in lines %}<tr>

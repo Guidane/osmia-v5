@@ -1,5 +1,6 @@
 """Parts and where they are: vendors, part categories (a tree, each with attributes its parts fill in, trickling
-down to the categories under it), parts with their attribute values, locations (a tree:
+down to the categories under it), parts with their attribute values, families of parts that can take each other's
+place (the same plug from other manufacturers), locations (a tree:
 building → room → shelf → bin), how many of a part are in each location, and every movement of stock.
 
 Stock only changes through ``inventory.stock``, which keeps a Movement for each change.
@@ -37,13 +38,25 @@ class Vendor(models.Model):
 
 
 class Category(Tree):
-    """A kind of part. Its attributes, and those of the categories above it, are what its parts fill in."""
+    """A kind of part, or of asset: each has its own tree. Its attributes, and those of the categories above it, are
+    what its parts (or assets) fill in."""
+    class Kind(models.TextChoices):
+        PARTS = 'parts', 'Parts'
+        ASSETS = 'assets', 'Assets'
+
+    kind = models.CharField(max_length=10, choices=Kind, default=Kind.PARTS)
+
     class Meta(Tree.Meta):
         verbose_name_plural = 'categories'
         constraints = [models.UniqueConstraint(fields=['parent', 'name'], name='unique_category_name')]
 
     def get_absolute_url(self):
         return reverse('inventory:category', args=[self.pk])
+
+    @classmethod
+    def of(cls, kind):
+        """The categories of parts (or assets), depth first, as (category, depth)."""
+        return cls.ordered(cls.objects.filter(kind=kind))
 
     def all_attributes(self):
         """Its attributes and those it gets from above: the top category's first."""
@@ -191,6 +204,8 @@ class Part(models.Model):
     datasheet = models.URLField(blank=True)
     vendor = models.ForeignKey(Vendor, null=True, blank=True, on_delete=models.SET_NULL, related_name='parts')
     vendor_number = models.CharField("vendor's part number", max_length=200, blank=True)
+    family = models.ForeignKey('Family', null=True, blank=True, on_delete=models.SET_NULL, related_name='parts',
+                               verbose_name='compatible with')
     price = models.DecimalField('last price', max_digits=12, decimal_places=4, null=True, blank=True)
     minimum = models.DecimalField('minimum stock', max_digits=12, decimal_places=3, default=0)
     reorder_quantity = models.DecimalField(max_digits=12, decimal_places=3, default=0)
@@ -213,6 +228,83 @@ class Part(models.Model):
     @property
     def on_hand(self):
         return self.stock.aggregate(n=Sum('quantity'))['n'] or Decimal(0)
+
+
+class Family(models.Model):
+    """Parts that can take each other's place: the same D-sub 9 plug from three manufacturers. Where a harness or
+    device names the family, any of them will do: their stock counts together, the most stocked is used first, and the
+    preferred one is ordered. It shows where a part would, so it answers to what a part does (number, unit, vendor)."""
+    name = models.CharField(max_length=100)
+    description = models.CharField(max_length=300, blank=True)
+    preferred = models.ForeignKey(Part, null=True, blank=True, on_delete=models.SET_NULL, related_name='+',
+                                  verbose_name='ordered as')
+
+    class Meta:
+        ordering = ['name']
+        verbose_name_plural = 'families'
+        constraints = [models.UniqueConstraint(Lower('name'), name='unique_family_name',
+                                               violation_error_message='There is already a family with this name.')]
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse('inventory:family', args=[self.pk])
+
+    @property
+    def number(self):
+        return self.name
+
+    @property
+    def chosen(self):
+        """The part ordered for it: the preferred one, else the first."""
+        return self.preferred or self.parts.first()
+
+    @property
+    def unit(self):
+        return self.chosen.unit if self.chosen else Part.Unit.PCS
+
+    @property
+    def vendor_id(self):
+        return self.chosen.vendor_id if self.chosen else None
+
+    @property
+    def on_hand(self):
+        return Stock.objects.filter(part__family=self).aggregate(n=Sum('quantity'))['n'] or Decimal(0)
+
+
+class PartOrFamily(models.Model):
+    """What names a part (a harness end, a wire, a device connector): one part, or any of a family."""
+    family = models.ForeignKey(Family, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+
+    class Meta:
+        abstract = True
+
+    @property
+    def used(self):
+        return self.part or self.family
+
+    @used.setter
+    def used(self, found):
+        self.part, self.family = (found, None) if isinstance(found, Part) else (None, found)
+
+    @property
+    def used_name(self):
+        return self.used.number if self.used else ''
+
+
+def part_or_family(text):
+    """The part numbered ``text``, else the family named so; None when neither."""
+    text = (text or '').strip()
+    if not text:
+        return None
+    return Part.objects.filter(number__iexact=text).first() or Family.objects.filter(name__iexact=text).first()
+
+
+def choices_of_parts():
+    """For a list to type from: (part number or family name, what it is)."""
+    return ([(f.name, f'family of {f.n} part{"s" if f.n != 1 else ""}') for f in Family.objects.annotate(n=models.Count('parts'))]
+            + list(Part.objects.filter(active=True).values_list('number', 'description')[:5000]))
 
 
 class PartValue(models.Model):

@@ -1,23 +1,29 @@
 from django import forms
 
+from inventory.forms import PartOrFamilyForm
+
 from .models import Connector, Device
 
 
-class DeviceForm(forms.ModelForm):
+class DeviceForm(PartOrFamilyForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['used'].label = 'As a part'
+
     class Meta:
         model = Device
-        fields = ['number', 'name', 'origin', 'description', 'manufacturer', 'model', 'part', 'colour', 'notes']
+        fields = ['number', 'name', 'origin', 'description', 'manufacturer', 'model', 'used', 'colour', 'notes']
         widgets = {'description': forms.Textarea(attrs={'rows': 2}), 'notes': forms.Textarea(attrs={'rows': 3}),
                    'colour': forms.TextInput(attrs={'type': 'color'})}
 
 
-class ConnectorForm(forms.ModelForm):
+class ConnectorForm(PartOrFamilyForm):
     pins = forms.CharField(required=False, label='Pins',
                            widget=forms.TextInput(attrs={'placeholder': 'How many (e.g. 9), or their numbers: A1, A2, B1'}))
 
     class Meta:
         model = Connector
-        fields = ['designator', 'name', 'part']
+        fields = ['designator', 'name', 'used']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

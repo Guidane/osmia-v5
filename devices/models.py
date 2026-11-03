@@ -5,9 +5,10 @@ from django.db import models
 from django.db.models.functions import Lower
 from django.urls import reverse
 
-from inventory.models import Part
+from inventory.models import Part, PartOrFamily, part_or_family
 from web.models import Version
 
+SET_TYPES = ['Straight', 'Twisted', 'Shielded twisted', 'Shielded']   # how the wires of a set go together
 COLOURS = ['#3b7dd8', '#2e7d5b', '#c2410c', '#7c3aed', '#be185d', '#0891b2', '#a16207', '#4b5563']
 
 
@@ -17,7 +18,7 @@ def pin_order(number):
     return [(0, int(p), '') if p.isdigit() else (1, 0, p.lower()) for p in re.split(r'(\d+)', number or '') if p]
 
 
-class Device(models.Model):
+class Device(PartOrFamily):
     class Origin(models.TextChoices):
         IN_HOUSE = 'in_house', 'Made in-house'
         EXTERNAL = 'external', 'Bought (external)'
@@ -48,15 +49,15 @@ class Device(models.Model):
 
     def snapshot(self):
         return {'number': self.number, 'name': self.name, 'description': self.description, 'manufacturer': self.manufacturer,
-                'model': self.model, 'part': self.part.number if self.part else '', 'notes': self.notes,
-                'connectors': [c.snapshot() for c in self.connectors.prefetch_related('pins').select_related('part')]}
+                'model': self.model, 'part': self.used_name, 'notes': self.notes,
+                'connectors': [c.snapshot() for c in self.connectors.prefetch_related('pins').select_related('part', 'family')]}
 
     def restore(self, data):
         """As it was in ``data``: its fields, and its connectors and pins matched by designator and number (what
         harnesses plug into keeps its connector)."""
         for key in ('number', 'name', 'description', 'manufacturer', 'model', 'notes'):
             setattr(self, key, data.get(key, ''))
-        self.part = Part.objects.filter(number=data.get('part') or '').first()
+        self.used = part_or_family(data.get('part'))
         self.save()
         wanted = {c['designator']: c for c in data.get('connectors', [])}
         for connector in self.connectors.all():
@@ -64,15 +65,18 @@ class Device(models.Model):
                 connector.delete()
         for position, (designator, c) in enumerate(wanted.items()):
             connector, _ = Connector.objects.update_or_create(device=self, designator=designator, defaults={
-                'name': c.get('name', ''), 'part': Part.objects.filter(number=c.get('part') or '').first(), 'position': position})
+                'name': c.get('name', ''), 'position': position})
+            connector.used = part_or_family(c.get('part'))
+            connector.save()
             pins = {p['number']: p for p in c.get('pins', [])}
             connector.pins.exclude(number__in=pins).delete()
             for number, p in pins.items():
                 Pin.objects.update_or_create(connector=connector, number=number,
-                                             defaults={'signal': p.get('signal', ''), 'description': p.get('description', '')})
+                                             defaults={'signal': p.get('signal', ''), 'wire_set': p.get('set', ''),
+                                                       'set_type': p.get('set_type', 'Straight'), 'description': p.get('description', '')})
 
 
-class Connector(models.Model):
+class Connector(PartOrFamily):
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='connectors')
     designator = models.CharField(max_length=30)
     name = models.CharField(max_length=200, blank=True)
@@ -87,8 +91,9 @@ class Connector(models.Model):
         return f'{self.device.number} {self.designator}'
 
     def snapshot(self):
-        return {'designator': self.designator, 'name': self.name, 'part': self.part.number if self.part else '',
-                'pins': [{'number': p.number, 'signal': p.signal, 'description': p.description} for p in self.ordered_pins()]}
+        return {'designator': self.designator, 'name': self.name, 'part': self.used_name,
+                'pins': [{'number': p.number, 'signal': p.signal, 'set': p.wire_set, 'set_type': p.set_type, 'description': p.description}
+                         for p in self.ordered_pins()]}
 
     def ordered_pins(self):
         return sorted(self.pins.all(), key=lambda p: pin_order(p.number))
@@ -98,6 +103,8 @@ class Pin(models.Model):
     connector = models.ForeignKey(Connector, on_delete=models.CASCADE, related_name='pins')
     number = models.CharField(max_length=20)
     signal = models.CharField(max_length=100, blank=True)
+    wire_set = models.CharField('set', max_length=20, blank=True)
+    set_type = models.CharField(max_length=20, default='Straight', choices=[(t, t) for t in SET_TYPES])
     description = models.CharField(max_length=200, blank=True)
 
     class Meta:

@@ -17,7 +17,7 @@
     <dl class="details">
       {% if device.description %}<dt>Description</dt><dd>{{ device.description|linebreaksbr }}</dd>{% endif %}
       <dt>Manufacturer</dt><dd>{{ device.manufacturer|default:"—" }}{% if device.model %} · {{ device.model }}{% endif %}</dd>
-      <dt>As a part</dt><dd>{% if device.part %}<a href="{{ device.part.get_absolute_url }}">{{ device.part }}</a>{% else %}—{% endif %}</dd>
+      <dt>As a part</dt><dd>{% if device.used %}<a href="{{ device.used.get_absolute_url }}">{{ device.used }}</a>{% else %}—{% endif %}</dd>
     </dl>
   </section>
   <section class="card">
@@ -38,14 +38,14 @@
 {% for c, pins, ends in connectors %}
   <section class="card flush" id="c{{ c.pk }}">
     <div class="card-head"><h3>{{ c.designator }} <span class="muted small">{{ c.name }}</span></h3>
-      {% if c.part %}<a class="small" href="{{ c.part.get_absolute_url }}">{{ c.part }}</a>{% endif %}
+      {% if c.used %}<a class="small" href="{{ c.used.get_absolute_url }}">{{ c.used }}</a>{% endif %}
       <a class="btn small" href="{% url 'devices:pins' device.pk c.pk %}">Pins</a>
       <a class="btn small ghost" href="{% url 'devices:connector_edit' device.pk c.pk %}">Change</a>
       <form method="post" action="{% url 'devices:connector_delete' device.pk c.pk %}" data-confirm="Take {{ c.designator }} away, with its pins?">{% csrf_token %}<button class="btn small ghost" title="Take it away">✕</button></form></div>
     <table class="list compact">
-      <tr><th>Pin</th><th>Signal</th><th>Description</th></tr>
-      {% for p in pins %}<tr><td>{{ p.number }}</td><td>{{ p.signal }}</td><td class="small muted">{{ p.description }}</td></tr>
-      {% empty %}<tr><td colspan="3" class="empty small">No pins yet.</td></tr>{% endfor %}
+      <tr><th>Pin</th><th>Signal</th><th>Set</th><th>Description</th></tr>
+      {% for p in pins %}<tr><td>{{ p.number }}</td><td>{{ p.signal }}</td><td class="small">{% if p.wire_set %}{{ p.wire_set }} · {{ p.set_type|lower }}{% endif %}</td><td class="small muted">{{ p.description }}</td></tr>
+      {% empty %}<tr><td colspan="4" class="empty small">No pins yet.</td></tr>{% endfor %}
     </table>
     {% if ends %}<p class="small pad">Plugged in: {% for e in ends %}<a href="{{ e.harness.get_absolute_url }}">{{ e.harness.number }} {{ e.designator }}</a> <span class="muted">({{ e.harness.project }})</span>{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
   </section>

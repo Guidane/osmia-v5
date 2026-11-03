@@ -1,6 +1,6 @@
 """Assets: checked out and back, calibration (due after its interval, overdue on Home), sent away, in use and retired;
-the list by kind and category; the category's attributes, shared with parts (an auto number counts across both); a
-tool linking to the parts it crimps."""
+the list by kind and category; categories of their own (not parts'), with attributes (an auto number counting through
+the tree); a tool linking to the parts it crimps."""
 from datetime import date, timedelta
 
 from django.core.exceptions import ValidationError
@@ -8,7 +8,7 @@ from django.urls import reverse
 
 from assets import service
 from assets.models import Asset
-from inventory.models import Attribute, Category, Part, PartValue
+from inventory.models import Attribute, Category, Part
 from inventory.tests.test_inventory import Base
 
 
@@ -16,7 +16,7 @@ class AssetTests(Base):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
-        cls.tools = Category.objects.create(name='Crimp tools')
+        cls.tools = Category.objects.create(name='Crimp tools', kind='assets')
         cls.tool = Asset.objects.create(number='T-001', name='D-sub crimp tool', kind='tool', category=cls.tools,
                                         calibration_months=12, calibrated_on=date(2025, 1, 31), keeper=cls.ada)
 
@@ -47,51 +47,66 @@ class AssetTests(Base):
         with self.assertRaises(ValidationError):
             service.calibrated(tool, self.ada, date.today() + timedelta(days=1))
 
-    def test_the_list_by_kind_and_category_and_retiring(self):
+    def test_the_list_by_words_and_category_and_retiring(self):
         Asset.objects.create(number='PSU-01', name='Lab power supply', kind='lab')
-        page = self.client.get(reverse('assets:list'), {'kind': 'lab'})
+        page = self.client.get(reverse('assets:list'), {'q': 'power lab'})
         self.assertContains(page, 'PSU-01')
         self.assertNotContains(page, 'T-001')
-        self.assertContains(self.client.get(reverse('assets:list'), {'category': self.tools.pk}), 'T-001')
+        self.assertContains(self.client.get(reverse('assets:list'), {'q': 'crimp tools'}), 'T-001')   # its category's name
+        page = self.client.get(reverse('assets:list'), {'category': self.tools.pk})
+        self.assertContains(page, 'T-001')
+        self.assertNotContains(page, 'PSU-01')
         service.send_away(self.tool, self.ada, Asset.Status.RETIRED)
         self.assertNotContains(self.client.get(reverse('assets:list')), 'T-001')
         self.assertContains(self.client.get(reverse('assets:list'), {'status': 'retired'}), 'T-001')
         self.assertEqual(service.due(), [])
 
 
-class SharedCategoryTests(Base):
-    """Parts and assets in the same categories fill in the same attributes."""
+class AssetCategoryTests(Base):
+    """Assets have categories of their own, with attributes as parts' have (linking to parts too)."""
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.workshop = Category.objects.create(name='Workshop', kind='assets')
+        cls.crimpers = Category.objects.create(name='Crimp tools', parent=cls.workshop, kind='assets')
+
     def test_an_asset_fills_in_its_category_s_attributes_and_links_to_parts(self):
-        wire = Attribute.objects.create(category=self.connectors, name='Wire size', kind='decimal', unit='mm²')
-        crimps = Attribute.objects.create(category=self.connectors, name='Crimps', kind='interacts', target=self.dsub,
-                                          reverse_name='Crimped by', position=1)
-        tool = Asset.objects.create(number='T-002', name='Crimp tool', category=self.connectors)
+        wire = Attribute.objects.create(category=self.workshop, name='Wire size', kind='decimal', unit='mm²')
+        crimps = Attribute.objects.create(category=self.crimpers, name='Crimps', kind='interacts', target=self.dsub, reverse_name='Crimped by')
+        tool = Asset.objects.create(number='T-002', name='Crimp tool', category=self.crimpers)
         response = self.client.post(reverse('assets:edit', args=[tool.pk]), {
-            'number': 'T-002', 'name': 'Crimp tool', 'kind': 'tool', 'category': self.connectors.pk, 'attributes_of': self.connectors.pk,
+            'number': 'T-002', 'name': 'Crimp tool', 'kind': 'tool', 'category': self.crimpers.pk, 'attributes_of': self.crimpers.pk,
             f'attr_{wire.pk}': '0,5', f'attr_{crimps.pk}': [self.plug.pk]})
         self.assertRedirects(response, reverse('assets:asset', args=[tool.pk]))
         self.assertContains(self.client.get(reverse('assets:asset', args=[tool.pk])), '0.5 mm²')
         self.assertContains(self.client.get(reverse('inventory:part', args=[self.plug.pk])), 'Crimped by')
-        page = self.client.get(reverse('inventory:category', args=[self.connectors.pk]))
-        self.assertContains(page, '1 asset')
-        self.assertContains(self.client.get(reverse('assets:list'), {'category': self.connectors.pk, f'a{wire.pk}_min': '0.4'}), 'T-002')
+        self.assertContains(self.client.get(reverse('inventory:category', args=[self.workshop.pk])), '1 asset')
+        self.assertContains(self.client.get(reverse('assets:list'), {'category': self.workshop.pk, f'a{wire.pk}_min': '0.4'}), 'T-002')
 
-    def test_an_auto_number_counts_across_parts_and_assets(self):
-        tool = Asset.objects.create(number='T-003', name='Stripper', category=self.dsub)
-        self.client.post(reverse('inventory:attribute_new', args=[self.connectors.pk]),
-                         {'name': 'ID', 'kind': 'auto', 'prefix': 'ID-', 'digits': 4})
-        given = {v.part.number: v.value for v in PartValue.objects.select_related('part')}
-        self.assertEqual(given, {'DSUB-9-PLUG': 'ID-0001'})                    # those there already, oldest first
-        self.assertEqual(tool.values.get().value, 'ID-0002')
-        response = self.client.post(reverse('inventory:part_new'), {
-            'number': 'DSUB-25', 'unit': 'pcs', 'category': self.dsub.pk, 'minimum': 0, 'reorder_quantity': 0, 'active': 'on',
-            'attributes_of': self.dsub.pk, f'attr_{Attribute.objects.get(name="ID").pk}': 'ID-9999'})   # can't be typed over
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(Part.objects.get(number='DSUB-25').values.get().value, 'ID-0003')
-        page = self.client.post(reverse('inventory:attribute_edit', args=[self.connectors.pk, Attribute.objects.get(name='ID').pk]),
-                                {'name': 'ID', 'kind': 'auto', 'prefix': 'C-', 'digits': 3})
-        self.assertEqual(Part.objects.get(number='DSUB-25').values.get().value, 'C-003')   # shown anew
-        self.assertEqual(page.status_code, 302)
+    def test_each_has_its_own_tree(self):
+        page = self.client.get(reverse('assets:new'))
+        self.assertContains(page, 'Crimp tools')
+        self.assertNotContains(page, 'D-sub')
+        self.assertNotContains(self.client.get(reverse('inventory:part_new')), 'Crimp tools')
+        response = self.client.post(reverse('assets:new'), {'number': 'T-009', 'name': 'Meter', 'kind': 'measuring', 'category': self.dsub.pk})
+        self.assertEqual(response.status_code, 200)                              # a part category is not one of assets
+        self.assertFalse(Asset.objects.filter(number='T-009').exists())
+        tabs = self.client.get(reverse('inventory:categories'), {'kind': 'assets'})
+        self.assertContains(tabs, 'Crimp tools')
+        self.assertNotContains(tabs, 'D-sub')
+        self.client.post(reverse('inventory:categories') + '?kind=assets', {'name': 'Meters', 'parent': self.workshop.pk})
+        self.assertEqual(Category.objects.get(name='Meters').kind, 'assets')
+        self.client.post(reverse('inventory:categories') + '?kind=parts', {'name': 'Sleeves', 'parent': self.workshop.pk})
+        self.assertFalse(Category.objects.filter(name='Sleeves').exists())        # not under an asset category
+
+    def test_an_auto_number_counts_through_its_tree(self):
+        tool = Asset.objects.create(number='T-003', name='Stripper', category=self.crimpers)
+        self.client.post(reverse('inventory:attribute_new', args=[self.workshop.pk]),
+                         {'name': 'ID', 'kind': 'auto', 'prefix': 'WS-', 'digits': 4})
+        self.assertEqual(tool.values.get().value, 'WS-0001')                     # those there already
+        self.client.post(reverse('assets:new'), {'number': 'T-004', 'name': 'Cutter', 'kind': 'tool', 'category': self.crimpers.pk,
+                                                 'attributes_of': self.crimpers.pk})
+        self.assertEqual(Asset.objects.get(number='T-004').values.get().value, 'WS-0002')
 
 
 class DocumentAndLabelTests(Base):
