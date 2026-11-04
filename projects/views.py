@@ -99,14 +99,16 @@ def _diagram(config, rows, found):
             out['devices'].append({'key': key, 'label': row['label'] or d.number, 'number': d.number, 'name': d.name, 'colour': d.colour,
                                    'url': d.get_absolute_url(), 'x': row['x'], 'y': row['y'], 'state': state(key, row),
                                    'connectors': [{'id': c.pk, 'designator': c.designator, 'name': c.name, 'part': c.used_name,
+                                                   'side': c.side, 'along': c.along,
                                                    'pins_url': reverse('devices:pins', args=[d.pk, c.pk]),
                                                    'pins': [[p.number, p.signal, p.wire_set, p.set_type if p.wire_set else '', p.description]
                                                             for p in c.ordered_pins()]} for c in d.connectors.all()]})
         elif row['kind'] == 'harness' and row['harness_id'] in harnesses:
             h = harnesses[row['harness_id']]
             out['harnesses'].append({'key': key, 'number': h.number, 'name': h.name, 'url': h.get_absolute_url(), 'state': state(key, row),
-                                     'bad': key in bad, 'ends': [{'designator': e.designator, 'device': row['ends'].get(str(e.pk)),
-                                                                  'connector': e.connector_id} for e in h.ends.all()]})
+                                     'bad': key in bad, 'handles': row['handles'],
+                                     'ends': [{'id': str(e.pk), 'designator': e.designator, 'device': row['ends'].get(str(e.pk)),
+                                               'connector': e.connector_id} for e in h.ends.all()]})
     for key, row in base.items():
         if key not in rows and row['kind'] == 'device' and row['device_id'] in devices:
             out['ghosts'].append({'label': row['label'] or devices[row['device_id']].number, 'x': row['x'], 'y': row['y']})
@@ -189,6 +191,20 @@ def change(request, pk):
         if action == 'move':
             configs.place(config, key, x=int(float(post.get('x', 0))), y=int(float(post.get('y', 0))))
             return JsonResponse({'ok': True})
+        if action == 'handle':   # a harness line pinned at (x, y), or let go (no x)
+            handles = dict(configs.resolve(config)[key]['handles'])
+            if post.get('x'):
+                handles[post['end']] = [round(float(post['x'])), round(float(post['y']))]
+            else:
+                handles.pop(post.get('end'), None)
+            configs.place(config, key, handles=handles)
+            return JsonResponse({'ok': True})
+        if action == 'place_connector':   # a connector's place on its device's outline
+            side = post.get('side')
+            if side not in ('top', 'right', 'bottom', 'left'):
+                raise ValueError(side)
+            Connector.objects.filter(pk=post.get('connector')).update(side=side, along=min(max(float(post.get('along', 0.5)), 0), 1))
+            return JsonResponse({'ok': True})
         if action == 'add_device':
             device = get_object_or_404(Device, pk=post.get('device'))
             n = sum(1 for r in configs.resolve(config).values() if r['kind'] == 'device')
@@ -232,7 +248,7 @@ def change(request, pk):
         else:
             raise ValidationError('What should change?')
     except (ValidationError, KeyError, ValueError, TypeError) as exc:
-        if action == 'move':
+        if action in ('move', 'handle', 'place_connector'):
             return JsonResponse({'ok': False}, status=400)
         errors(request, exc if isinstance(exc, ValidationError) else ValidationError('That is not in this configuration.'))
     return redirect(config.get_absolute_url())

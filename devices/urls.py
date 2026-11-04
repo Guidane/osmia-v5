@@ -10,6 +10,7 @@ urlpatterns = [
     path('<int:pk>/', views.device, name='device'),
     path('<int:pk>/edit/', views.device_form, name='edit'),
     path('<int:pk>/connectors/new/', views.connector_form, name='connector_new'),
+    path('<int:pk>/connectors/copy/', views.connectors_copy, name='connectors_copy'),
     path('<int:pk>/connectors/<int:connector>/', views.connector_form, name='connector_edit'),
     path('<int:pk>/connectors/<int:connector>/delete/', views.connector_delete, name='connector_delete'),
     path('<int:pk>/connectors/<int:connector>/pins/', views.pins, name='pins'),

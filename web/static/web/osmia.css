@@ -242,7 +242,12 @@ ul.tight { margin: 4px 0 0; padding-left: 18px; }
 .rows-form input:not([type=checkbox]), .rows-form select { width: 100%; min-width: 70px; }
 .rows-form tr.new td { background: var(--panel-2); }
 .rows-form input.pin-no { width: 80px; min-width: 0; }
-.rows-form input.pin-set { width: 70px; min-width: 0; }
+.rows-form select[data-set] { width: 90px; min-width: 0; }
+.copy-tree, .copy-tree ul { list-style: none; margin: 0; padding: 0; }
+.copy-tree > li { padding: 4px 0; border-bottom: 1px solid var(--border); }
+.copy-tree ul { padding: 4px 0 4px 26px; }
+.copy-tree ul li { padding: 2px 0; }
+.copy-tree summary { cursor: pointer; }
 
 /* -- How much of a budget is spent ----------------------------------------------------------------- */
 .meter { display: inline-block; width: 90px; height: 8px; border-radius: 4px; background: var(--hover); overflow: hidden; vertical-align: middle; }

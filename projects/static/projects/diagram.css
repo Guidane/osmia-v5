@@ -17,12 +17,10 @@
 .zoom { display: inline-flex; gap: 2px; }
 .diagram .device.added .box { stroke: #16a34a; stroke-width: 2.5; }
 .diagram .device.changed .box { stroke: #d97706; stroke-width: 2.5; }
-.diagram .label { font: 600 13px system-ui, sans-serif; fill: var(--text); }
-.diagram .sub, .diagram .conn-name { font: 11px system-ui, sans-serif; fill: var(--muted); }
-.diagram .conn { font: 600 12px system-ui, sans-serif; fill: var(--text); }
+.diagram .label { font: 600 13px system-ui, sans-serif; fill: var(--text); text-anchor: middle; pointer-events: none; }
 .diagram .row-line { stroke: var(--border); }
 .diagram .ghost { fill: none; stroke: var(--border-strong); stroke-dasharray: 5 4; }
-.diagram .ghost-label { font: 12px system-ui, sans-serif; fill: var(--faint); }
+.diagram .ghost-label { font: 12px system-ui, sans-serif; fill: var(--faint); text-anchor: middle; }
 .diagram .wire { fill: none; stroke: var(--brand); stroke-width: 2.5; }
 .diagram .port { fill: var(--brand); }
 .diagram .wire.added { stroke: #16a34a; } .diagram .port.added { fill: #16a34a; }
@@ -31,14 +29,18 @@
 .diagram .pill { cursor: pointer; }
 .diagram .requested { fill: none; stroke: #d97706; stroke-width: 2; stroke-dasharray: 3 5; }
 .diagram .pill.requested-pill rect { fill: #d97706; }
-.diagram .sq { fill: var(--panel); stroke: var(--border-strong); stroke-width: 1.5; cursor: pointer; }
-.diagram .sq:hover { stroke: var(--brand); stroke-width: 2.5; }
-.diagram .sq.on { fill: var(--brand); stroke: var(--brand); }
+.diagram .sq { cursor: grab; }
+.diagram .sq rect { fill: var(--panel); stroke: var(--border-strong); stroke-width: 1.5; }
+.diagram .sq:hover rect { stroke: var(--brand); stroke-width: 2.5; }
+.diagram .sq-label { font: 600 11px system-ui, sans-serif; fill: var(--text); text-anchor: middle; pointer-events: none; }
+.diagram .sq.on rect { fill: var(--brand); stroke: var(--brand); } .diagram .sq.on .sq-label { fill: #fff; }
+.diagram .handle { fill: #9ca3af; stroke: var(--panel); stroke-width: 2; cursor: move; }
+.diagram .handle.pinned { fill: #2563eb; }
 .diagram .linking { fill: none; stroke: var(--brand); stroke-width: 2; stroke-dasharray: 6 4; pointer-events: none; }
 dialog.pinout .finder-head input.grow { flex: 1; }
 dialog.pinout table { width: 100%; }
-.diagram .sq.on.added { fill: #16a34a; stroke: #16a34a; } .diagram .sq.on.changed { fill: #d97706; stroke: #d97706; }
-.diagram .sq.on.bad { fill: var(--danger); stroke: var(--danger); }
+.diagram .sq.on.added rect { fill: #16a34a; stroke: #16a34a; } .diagram .sq.on.changed rect { fill: #d97706; stroke: #d97706; }
+.diagram .sq.on.bad rect { fill: var(--danger); stroke: var(--danger); }
 dialog.pinout { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 0; border: 1px solid var(--border); border-radius: 6px;
   background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
 dialog.pinout::backdrop { background: rgba(0, 0, 0, .35); }

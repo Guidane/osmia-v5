@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Copy connectors to {{ device.number }} · Osmia{% endblock %}
+{% block content_class %}narrow{% endblock %}
+{% block content %}
+<p class="small"><a href="{{ device.get_absolute_url }}">← {{ device }}</a></p>
+<div class="page-head"><h1>Copy connectors to {{ device.number }}</h1></div>
+<form method="post" class="card" id="copy">{% csrf_token %}
+  <ul class="copy-tree">
+    {% for d in others %}<li><details{% if forloop.first %} open{% endif %}><summary><label><input type="checkbox" data-all> <b>{{ d.number }}</b> <span class="muted">{{ d.name }}</span></label></summary>
+      <ul>{% for c in d.connectors.all %}<li><label><input type="checkbox" name="connector" value="{{ c.pk }}"> <b>{{ c.designator }}</b> {{ c.name }}
+        <span class="muted small">{{ c.pins.all|length }} pin{{ c.pins.all|length|pluralize }}{% if c.used %} · {{ c.used }}{% endif %}</span></label></li>{% endfor %}</ul>
+    </details></li>{% empty %}<li class="empty small">No other device has connectors.</li>{% endfor %}
+  </ul>
+  <div class="actions"><button class="btn primary">Copy them</button> <a href="{{ device.get_absolute_url }}">Cancel</a></div>
+</form>
+{% endblock %}
+{% block scripts %}<script>
+  /* A device's box ticks all its connectors. */
+  document.querySelectorAll('#copy [data-all]').forEach(function (all) {
+    all.addEventListener('change', function () {
+      all.closest('details').querySelectorAll('input[name=connector]').forEach(function (c) { c.checked = all.checked; });
+      all.closest('details').open = true;
+    });
+  });
+</script>{% endblock %}

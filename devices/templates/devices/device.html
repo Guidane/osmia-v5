@@ -33,7 +33,7 @@
 {% include "web/_notes.html" with notes=device.notes %}
 </div>
 
-<div class="page-head"><h2>Connectors</h2><span class="spacer"></span><a class="btn" href="{% url 'devices:connector_new' device.pk %}">＋ Connector</a></div>
+<div class="page-head"><h2>Connectors</h2><span class="spacer"></span><a class="btn" href="{% url 'devices:connectors_copy' device.pk %}">Copy connectors</a><a class="btn" href="{% url 'devices:connector_new' device.pk %}">＋ Connector</a></div>
 <div class="connectors">
 {% for c, pins, ends in connectors %}
   <section class="card flush" id="c{{ c.pk }}">

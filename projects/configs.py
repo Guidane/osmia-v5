@@ -9,7 +9,7 @@ from django.db import transaction
 
 from .models import Configuration, Placement
 
-FIELDS = ('kind', 'device_id', 'label', 'x', 'y', 'harness_id', 'ends')
+FIELDS = ('kind', 'device_id', 'label', 'x', 'y', 'harness_id', 'ends', 'handles')
 
 
 def _row(placement):
@@ -65,6 +65,8 @@ def changes(config):
                 what.append('plugged in differently')
             if (before['x'], before['y']) != (p.x, p.y):
                 what.append('moved')
+            if before['handles'] != p.handles:
+                what.append('routed differently')
             out.append((p, 'changed' if what else 'same', f'{thing}: {", ".join(what) or "as in its parent"}'))
     return out
 
@@ -84,6 +86,7 @@ def place(config, key=None, **fields):
     values = {f: v for f, v in (current or {}).items() if f in FIELDS}
     values.update(fields)
     values.setdefault('ends', {})
+    values.setdefault('handles', {})
     key = key or uuid.uuid4().hex[:12]
     Placement.objects.update_or_create(configuration=config, key=key, defaults={**values, 'removed': False})
     return key

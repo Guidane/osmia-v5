@@ -37,6 +37,33 @@ class DeviceTests(DeviceBase):
         page = self.client.get(reverse('devices:device', args=[self.controller.pk]))
         self.assertContains(page, 'CAN H')
 
+    def test_a_set_has_one_type(self):
+        pins = {p.number: p for p in self.j1.pins.all()}
+        self.j1.pins.filter(number__in=['6', '7']).update(wire_set='CAN', set_type='Twisted')
+        post = {f'number_{p.pk}': p.number for p in pins.values()}
+        post.update({f'set_{pins["6"].pk}': 'CAN', f'set_type_{pins["6"].pk}': 'Twisted',
+                     f'set_{pins["7"].pk}': 'CAN', f'set_type_{pins["7"].pk}': 'Shielded twisted',      # changed on one
+                     f'set_{pins["1"].pk}': 'CAN', f'set_type_{pins["1"].pk}': 'Straight',              # put into it
+                     'new': '1', 'number_new0': '8', 'set_new0': '+'})
+        self.client.post(reverse('devices:pins', args=[self.controller.pk, self.j1.pk]), post)
+        self.assertEqual({p.number: (p.wire_set, p.set_type) for p in self.j1.pins.all()},
+                         {'1': ('CAN', 'Shielded twisted'), '2': ('', 'Straight'), '6': ('CAN', 'Shielded twisted'),
+                          '7': ('CAN', 'Shielded twisted'), '8': ('', 'Straight')})
+
+    def test_connectors_copied_from_another_device(self):
+        other = Device.objects.create(number='CTRL-2', name='Other controller')
+        Connector.objects.create(device=other, designator='J1', name='Mine')
+        self.j1.pins.filter(number='6').update(wire_set='CAN', set_type='Twisted')
+        page = self.client.get(reverse('devices:connectors_copy', args=[other.pk]))
+        self.assertContains(page, 'CTRL-1')
+        self.assertContains(page, '4 pins')
+        self.client.post(reverse('devices:connectors_copy', args=[other.pk]), {'connector': [self.j1.pk]})
+        copied = other.connectors.get(designator='J2')                          # J1 was taken
+        self.assertEqual((copied.name, copied.part), ('Bus', self.plug))
+        self.assertEqual(sorted((p.number, p.signal, p.wire_set) for p in copied.pins.all()),
+                         [('1', '+24 V', ''), ('2', '0 V', ''), ('6', 'CAN H', 'CAN'), ('7', 'CAN L', '')])
+        self.assertEqual(self.j1.pins.count(), 4)                                 # the original stays
+
     def test_versions_saved_and_restored(self):
         v1 = versions.save(self.controller, self.ada, 'first')
         self.assertEqual((v1.number, self.controller.version), (1, 1))

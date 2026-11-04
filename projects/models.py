@@ -62,6 +62,7 @@ class Placement(models.Model):
     y = models.IntegerField(default=0)
     harness = models.ForeignKey('harnesses.Harness', null=True, blank=True, on_delete=models.CASCADE, related_name='placements')
     ends = models.JSONField(default=dict, blank=True)              # a harness's {end id: key of the device it plugs into}
+    handles = models.JSONField(default=dict, blank=True)           # a harness's {end id: [x, y] its line is pinned at}
 
     class Meta:
         ordering = ['pk']

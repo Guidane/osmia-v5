@@ -82,6 +82,8 @@ class Connector(PartOrFamily):
     name = models.CharField(max_length=200, blank=True)
     part = models.ForeignKey(Part, null=True, blank=True, on_delete=models.SET_NULL, related_name='device_connectors')
     position = models.PositiveIntegerField(default=0)
+    side = models.CharField(max_length=6, blank=True, choices=[(s, s) for s in ('top', 'right', 'bottom', 'left')])
+    along = models.FloatField(default=0.5)   # where on that side, 0 to 1 (side empty: placed by itself)
 
     class Meta:
         ordering = ['position', 'designator']

@@ -65,3 +65,51 @@ class DiagramTests(BrowserTestCase):
         page.click('#connect button.primary')
         expect(page.locator('#diagram .pill')).to_have_count(before + 1)
         self.assertEqual(base.project.harnesses.count(), 3)
+
+    def test_a_connector_slides_along_its_box_and_a_line_is_pinned_by_its_handle(self):
+        from devices.models import Connector
+        call_command('demo', stdout=open('nul', 'w'))
+        base = Configuration.objects.get(name='Base')
+        page = self.go(base.get_absolute_url())
+        free = page.locator('#diagram .sq:not(.on)').first
+        connector = Connector.objects.get(pk=free.get_attribute('data-connector'))
+        box = page.locator(f'#diagram .device[data-key="{free.get_attribute("data-device")}"] .box').bounding_box()
+        at = free.bounding_box()
+        page.mouse.move(at['x'] + at['width'] / 2, at['y'] + at['height'] / 2)
+        page.mouse.down()
+        page.mouse.move(box['x'] + box['width'] / 2, box['y'] + 4, steps=8)          # along the outline, to the top
+        with page.expect_response(lambda r: r.request.method == 'POST'):
+            page.mouse.up()
+        connector.refresh_from_db()
+        self.assertEqual(connector.side, 'top')
+        dot = page.locator('#diagram .handle').first
+        expect(dot).not_to_have_class('handle pinned')
+        with page.expect_response(lambda r: r.request.method == 'POST'):
+            dot.click()                                                           # pinned where it is
+        expect(page.locator('#diagram .handle.pinned')).to_have_count(1)
+        row = next(r for r in configs.resolve(base).values() if r['kind'] == 'harness')
+        self.assertEqual(len(row['handles']), 1)
+        with page.expect_response(lambda r: r.request.method == 'POST'):
+            page.locator('#diagram .handle.pinned').click()                      # let go
+        expect(page.locator('#diagram .handle.pinned')).to_have_count(0)
+        self.assertEqual(next(r for r in configs.resolve(base).values() if r['kind'] == 'harness')['handles'], {})
+        handle = page.locator('#diagram .handle').first.bounding_box()
+        page.mouse.move(handle['x'] + 5, handle['y'] + 5)
+        page.mouse.down()
+        page.mouse.move(handle['x'] + 5, handle['y'] + 120, steps=6)              # dragged: pinned there
+        with page.expect_response(lambda r: r.request.method == 'POST'):
+            page.mouse.up()
+        expect(page.locator('#diagram .handle.pinned')).to_have_count(1)
+
+    def test_pin_sets_from_a_list(self):
+        from devices.models import Connector
+        call_command('demo', stdout=open('nul', 'w'))
+        bus = Connector.objects.get(device__number='CTRL-100', designator='J1')
+        page = self.go(f'/devices/{bus.device_id}/connectors/{bus.pk}/pins/')
+        rows = page.locator('#pins tr')
+        enable = rows.nth(3)                                                         # pin 3, Enable: no set
+        enable.locator('[data-set]').select_option('+')
+        expect(enable.locator('[data-set]')).to_have_value('1')                      # the next free number
+        expect(rows.nth(1).locator('[data-set] option', has_text='1')).to_have_count(1)   # in every list
+        rows.nth(1).locator('[data-type]').select_option('Shielded')                # +24 V, set PWR
+        expect(rows.nth(2).locator('[data-type]')).to_have_value('Shielded')         # 0 V too
