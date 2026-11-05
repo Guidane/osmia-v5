@@ -234,7 +234,12 @@ ul.tight { margin: 4px 0 0; padding-left: 18px; }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 .dot.big { width: 14px; height: 14px; }
 .pinout-draw { padding: 8px 10px; border-bottom: 1px solid var(--border); overflow-x: auto; }
-.set-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.set-chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }
+.set-chips .spacer { flex: 1; }
+.set-chips .segmented { display: inline-flex; gap: 0; }
+.set-chips .segmented .btn { border-radius: 0; }
+.set-chips .segmented .btn:first-child { border-radius: 6px 0 0 6px; }
+.set-chips .segmented .btn:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
 .set-chips .btn.on { background: var(--brand); color: #fff; border-color: var(--brand); }
 .pinout-drawing { display: block; width: 100%; }
 .pinout-drawing .pd-title { font: 600 13px system-ui, sans-serif; fill: var(--text); }
@@ -251,7 +256,18 @@ ul.tight { margin: 4px 0 0; padding-left: 18px; }
 .pinout-drawing .pd-shield.lit { stroke: #b45309; stroke-width: 2.5; }
 .pinout-drawing .dashed { stroke-dasharray: 6 5; }
 .pinout-drawing .pd-num { font: 600 10px system-ui, sans-serif; fill: var(--text); text-anchor: middle; pointer-events: none; }
-.pinout-drawing .pd-wire { cursor: pointer; }
+.pinout-drawing .pd-wire { pointer-events: none; }
+.pinout-drawing .pd-area { fill: transparent; cursor: pointer; }
+.pinout-drawing .pd-area:hover { fill: rgba(59, 130, 246, .07); }
+.pinout-drawing .pd-area.lit { fill: rgba(250, 204, 21, .12); }
+.pinout-drawing.editing .pd-pin { cursor: pointer; }
+.pinout-drawing.editing .pd-pin:hover circle { stroke: var(--brand); stroke-width: 2; }
+.pinout-drawing .pd-pin.chosen circle { fill: var(--brand); stroke: var(--brand); }
+.pinout-drawing .pd-pin.chosen .pd-num { fill: #fff; }
+.pinout-drawing .pd-setname { font: 600 11px system-ui, sans-serif; fill: var(--text); paint-order: stroke; stroke: var(--panel); stroke-width: 5px; }
+.pinout-drawing .pd-tools { display: flex; gap: 4px; align-items: center; }
+.pinout-drawing .pd-tools select { font-size: 11px; padding: 1px 4px; height: 22px; min-width: 0; width: auto; }
+.pinout-drawing .pd-tools .btn { padding: 0 6px; height: 22px; line-height: 20px; }
 .pinout-drawing .pd-wire-edge { fill: none; stroke: var(--text); stroke-width: 4.5; opacity: .35; stroke-linejoin: round; }
 .pinout-drawing .pd-wire-core { fill: none; stroke-width: 2.5; stroke-linejoin: round; }
 .pinout-drawing.picking .pd-wire:not(.lit) { opacity: .15; }

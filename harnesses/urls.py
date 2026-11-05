@@ -11,6 +11,7 @@ urlpatterns = [
     path('<int:pk>/edit/', views.harness_form, name='edit'),
     path('<int:pk>/ends/', views.ends, name='ends'),
     path('<int:pk>/pinout/', views.pinout, name='pinout'),
+    path('<int:pk>/pinout/draw/', views.pinout_draw, name='pinout_draw'),
     path('<int:pk>/items/', views.items, name='items'),
     path('<int:pk>/versions/', views.save_version, name='save_version'),
     path('<int:pk>/versions/<int:number>/', views.version, name='version'),

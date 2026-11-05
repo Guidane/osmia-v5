@@ -8,10 +8,11 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from devices.models import Connector
+from devices.models import SET_TYPES as PIN_SET_TYPES, Connector
 from inventory import stock
 from inventory.models import Location, PartGroup, choices_of_parts, layout_of, part_or_family
 from projects.models import Project
@@ -98,8 +99,59 @@ def _drawing(harness, wires):
                     pins.setdefault(pin, '')
         out.append({'id': end.pk, 'designator': end.designator, 'what': end.used_name, 'plugs': str(end.connector or ''),
                     'layout': layout or 'row', 'columns': columns or 0, 'positions': positions or 0, 'pins': [[n, pins[n]] for n in sorted(pins, key=pin_order)]})
-    return {'ends': out, 'wires': [{'from': w.from_end_id, 'from_pin': w.from_pin, 'to': w.to_end_id, 'to_pin': w.to_pin, 'signal': w.signal,
+    return {'colours': COLOURS, 'set_types': PIN_SET_TYPES, 'ends': out, 'wires': [{'id': w.pk, 'from': w.from_end_id, 'from_pin': w.from_pin, 'to': w.to_end_id, 'to_pin': w.to_pin, 'signal': w.signal,
                                     'set': w.wire_set, 'type': w.set_type, 'colour': w.colour} for w in wires]}
+
+
+@login_required
+@require_POST
+def pinout_draw(request, pk):
+    """The pinout edited in its drawing: a wire added between two pins (its signal and set from the device's pin), a
+    wire put in a set (an existing one, a new one of a type, or as a shielded set's shield), coloured, or taken away.
+    Answers with the drawing as it is now."""
+    item = get_object_or_404(Harness, pk=pk)
+    post, action = request.POST, request.POST.get('action')
+    if action == 'add':
+        a = item.ends.select_related('connector').filter(pk=post.get('from_end') or 0).first()
+        b = item.ends.select_related('connector').filter(pk=post.get('to_end') or 0).first()
+        from_pin, to_pin = post.get('from_pin', '').strip()[:20], post.get('to_pin', '').strip()[:20]
+        if not (a and b and from_pin and to_pin):
+            return JsonResponse({'error': "A wire goes from an end's pin to an end's pin."}, status=400)
+        signal, wire_set, set_type = '', '', 'Straight'
+        for end, number in ((a, from_pin), (b, to_pin)):
+            pin = end.connector.pins.filter(number__iexact=number).first() if end.connector_id else None
+            if pin:
+                signal = signal or pin.signal
+                if not wire_set and pin.wire_set:
+                    wire_set, set_type = pin.wire_set, pin.set_type
+        Wire.objects.create(harness=item, from_end=a, from_pin=from_pin, to_end=b, to_pin=to_pin, signal=signal[:100],
+                            wire_set=wire_set, set_type=set_type)
+    else:
+        wire = get_object_or_404(Wire, pk=post.get('wire') or 0, harness=item)
+        if action == 'delete':
+            wire.delete()
+        elif action == 'colour':
+            wire.colour = post.get('colour') if post.get('colour') in COLOURS else ''
+            wire.save()
+        elif action == 'set':
+            value = post.get('set', '').strip()
+            if value.startswith('new:'):
+                taken, n = set(item.wires.values_list('wire_set', flat=True)), 1
+                while str(n) in taken:
+                    n += 1
+                kind = value[4:]
+                wire.wire_set, wire.set_type = str(n), kind if kind in PIN_SET_TYPES else 'Straight'
+            elif value.startswith('shield:'):
+                wire.wire_set, wire.set_type = value[7:][:20], 'Shield'
+            elif value:
+                mate = item.wires.filter(wire_set=value).exclude(pk=wire.pk).exclude(set_type='Shield').first()
+                wire.wire_set, wire.set_type = value[:20], mate.set_type if mate else 'Straight'
+            else:
+                wire.wire_set, wire.set_type = '', 'Straight'
+            wire.save()
+        else:
+            return JsonResponse({'error': 'Nothing to do.'}, status=400)
+    return JsonResponse(_drawing(item, item.ordered_wires()))
 
 
 # -- Editing as tables -------------------------------------------------------------------------------

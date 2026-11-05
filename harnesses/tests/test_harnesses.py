@@ -74,8 +74,31 @@ class PinoutTests(HarnessBase):
         self.p2.used = None
         self.p2.save()
         self.assertEqual(self.client.get(reverse('harnesses:harness', args=[self.harness.pk])).context['drawing']['ends'][1]['layout'], 'row')
-        self.assertIn({'from': self.p1.pk, 'from_pin': '6', 'to': self.p2.pk, 'to_pin': '2', 'signal': '', 'set': 'CAN', 'type': 'Twisted',
+        self.assertIn({'id': Wire.objects.get().pk, 'from': self.p1.pk, 'from_pin': '6', 'to': self.p2.pk, 'to_pin': '2', 'signal': '', 'set': 'CAN', 'type': 'Twisted',
                        'colour': ''}, page.context['drawing']['wires'])
+
+    def test_the_pinout_edited_in_its_drawing(self):
+        url = reverse('harnesses:pinout_draw', args=[self.harness.pk])
+        drawing = self.client.post(url, {'action': 'add', 'from_end': self.p1.pk, 'from_pin': '6', 'to_end': self.p2.pk, 'to_pin': '2'}).json()
+        wire = Wire.objects.get()
+        self.assertEqual((wire.from_pin, wire.to_pin, wire.signal), ('6', '2', 'CAN H'))   # the device pin's signal
+        self.assertEqual(drawing['wires'][0]['id'], wire.pk)
+        self.client.post(url, {'action': 'set', 'wire': wire.pk, 'set': 'new:Shielded twisted'})
+        wire.refresh_from_db()
+        self.assertEqual((wire.wire_set, wire.set_type), ('1', 'Shielded twisted'))      # the next free number
+        other = self.connect('7', '7')
+        self.client.post(url, {'action': 'set', 'wire': other.pk, 'set': '1'})
+        other.refresh_from_db()
+        self.assertEqual((other.wire_set, other.set_type), ('1', 'Shielded twisted'))    # the set's type
+        drain = self.connect('9', '8')
+        self.client.post(url, {'action': 'set', 'wire': drain.pk, 'set': 'shield:1'})
+        drain.refresh_from_db()
+        self.assertEqual((drain.wire_set, drain.set_type), ('1', 'Shield'))
+        self.client.post(url, {'action': 'colour', 'wire': drain.pk, 'colour': 'grey'})
+        self.assertEqual(Wire.objects.get(pk=drain.pk).colour, 'grey')
+        self.client.post(url, {'action': 'delete', 'wire': drain.pk})
+        self.assertFalse(Wire.objects.filter(pk=drain.pk).exists())
+        self.assertEqual(self.client.post(url, {'action': 'add', 'from_end': self.p1.pk}).status_code, 400)
 
     def test_one_pin_two_wires(self):
         self.connect('1', '1')

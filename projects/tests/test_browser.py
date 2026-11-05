@@ -124,3 +124,25 @@ class DiagramTests(BrowserTestCase):
         expect(page.locator('#pinout-drawing .pd-pin.lit')).to_have_count(6)
         page.locator('#set-chips button', has_text='CAN').click()                        # again: none
         expect(page.locator('#pinout-drawing .lit')).to_have_count(0)
+        page.locator('#pinout-drawing .pd-area[data-set="PWR"]').click()                 # where the set's wires run
+        expect(page.locator('#pinout-drawing .pd-contact.lit')).to_have_count(4)
+
+    def test_a_harness_pinout_drawn_in_edit_mode(self):
+        from harnesses.models import Harness
+        call_command('demo', stdout=open('nul', 'w'))
+        harness = Harness.objects.get(name='Controller to load board')
+        page = self.go(harness.get_absolute_url())
+        before = harness.wires.count()
+        page.click('#set-chips [data-mode=edit]')
+        page.locator('#pinout-drawing .pd-pin[data-pin="4"]').first.click()              # P1:4 …
+        with page.expect_response(lambda r: r.request.method == 'POST'):
+            page.locator('#pinout-drawing .pd-pin[data-pin="4"]').nth(1).click()          # … to P2:4: a new row
+        expect(page.locator('#pinout-drawing .pd-contact')).to_have_count(2 * (before + 1))
+        made = harness.wires.order_by('-pk').first()
+        self.assertEqual((made.from_pin, made.to_pin), ('4', '4'))
+        with page.expect_response(lambda r: r.request.method == 'POST'):
+            page.locator(f'#pinout-drawing select[data-wire="{made.pk}"]').select_option('new:Twisted')
+        made.refresh_from_db()
+        self.assertEqual(made.set_type, 'Twisted')
+        page.click('#set-chips [data-mode=view]')                                         # back: the page again, its table too
+        expect(page.locator('table.list', has_text='Signal')).to_contain_text(made.wire_set)

@@ -39,7 +39,7 @@
 
 <section class="card flush">
   <div class="card-head"><h3>Pinout <span class="muted small">{{ wire_count }} wire{{ wire_count|pluralize }}</span></h3><a class="btn small" href="{% url 'harnesses:pinout' harness.pk %}">Change</a></div>
-  {% if wire_count %}<div class="pinout-draw"><div class="set-chips" id="set-chips"></div><svg id="pinout-drawing" class="pinout-drawing" role="img" aria-label="The pinout drawn"></svg></div>
+  {% if ends %}<div class="pinout-draw" id="pinout-draw" data-url="{% url 'harnesses:pinout_draw' harness.pk %}" data-csrf="{{ csrf_token }}"><div class="set-chips" id="set-chips"></div><svg id="pinout-drawing" class="pinout-drawing" role="img" aria-label="The pinout drawn"></svg></div>
   {{ drawing|json_script:"pinout-data" }}{% endif %}
   <div style="overflow-x:auto"><table class="list">
     <tr><th>From</th><th>Pin</th><th>To</th><th>Pin</th><th>Signal</th><th>Set</th><th>Set type</th><th>Colour</th><th>Gauge</th><th class="num">Length</th><th>Wire</th></tr>
@@ -89,5 +89,5 @@
                  violet: '#8b5cf6', grey: '#9ca3af', white: '#f3f4f6', 'green/yellow': 'linear-gradient(90deg,#22c55e 50%,#facc15 50%)'};
   document.querySelectorAll('.wire-colour').forEach(function (s) { s.style.background = COLOURS[s.dataset.colour] || 'transparent'; });
   var drawn = document.getElementById('pinout-data');
-  if (drawn) Pinout.draw(document.getElementById('pinout-drawing'), document.getElementById('set-chips'), JSON.parse(drawn.textContent), COLOURS);
+  if (drawn) Pinout.mount(document.getElementById('pinout-draw'), JSON.parse(drawn.textContent), COLOURS);
 </script>{% endblock %}
