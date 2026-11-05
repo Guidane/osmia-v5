@@ -113,3 +113,14 @@ class DiagramTests(BrowserTestCase):
         expect(rows.nth(1).locator('[data-set] option', has_text='1')).to_have_count(1)   # in every list
         rows.nth(1).locator('[data-type]').select_option('Shielded')                # +24 V, set PWR
         expect(rows.nth(2).locator('[data-type]')).to_have_value('Shielded')         # 0 V too
+
+    def test_a_harness_pinout_drawn_and_a_set_lit_up(self):
+        from harnesses.models import Harness
+        call_command('demo', stdout=open('nul', 'w'))
+        page = self.go(Harness.objects.get(name='Controller to load board').get_absolute_url())
+        expect(page.locator('#pinout-drawing .pd-pin')).to_have_count(18)               # two D-sub 9 faces, every position
+        page.locator('#set-chips button', has_text='CAN').click()
+        expect(page.locator('#pinout-drawing .pd-contact.lit')).to_have_count(6)        # CAN H, CAN L and the shield, both ends
+        expect(page.locator('#pinout-drawing .pd-pin.lit')).to_have_count(6)
+        page.locator('#set-chips button', has_text='CAN').click()                        # again: none
+        expect(page.locator('#pinout-drawing .lit')).to_have_count(0)

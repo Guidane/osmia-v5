@@ -16,6 +16,10 @@ from django.urls import reverse
 from web.models import Tree
 
 
+PIN_LAYOUTS = [('row', 'Single row'), ('rows', 'Two rows'), ('staggered', 'Two rows, staggered (D-sub)'), ('circle', 'Circular'),
+               ('grid', 'Grid')]
+
+
 class Vendor(models.Model):
     name = models.CharField(max_length=200, unique=True)
     code = models.CharField(max_length=30, blank=True)
@@ -206,6 +210,9 @@ class Part(models.Model):
     vendor_number = models.CharField("vendor's part number", max_length=200, blank=True)
     family = models.ForeignKey('Family', null=True, blank=True, on_delete=models.SET_NULL, related_name='parts')
     branch = models.ForeignKey('Branch', null=True, blank=True, on_delete=models.SET_NULL, related_name='parts')
+    pin_layout = models.CharField(max_length=12, blank=True, choices=PIN_LAYOUTS)
+    pin_columns = models.PositiveSmallIntegerField('columns', null=True, blank=True)
+    pin_positions = models.PositiveSmallIntegerField('positions', null=True, blank=True)
     price = models.DecimalField('last price', max_digits=12, decimal_places=4, null=True, blank=True)
     minimum = models.DecimalField('minimum stock', max_digits=12, decimal_places=3, default=0)
     reorder_quantity = models.DecimalField(max_digits=12, decimal_places=3, default=0)
@@ -257,8 +264,11 @@ class PartGroup:
 
 
 class Family(PartGroup, models.Model):
-    """Parts that can take each other's place, by a name (D-sub 9), maybe split into branches (male, female, …)."""
+    """Parts that can take each other's place, by a name (D-sub 9), maybe split into branches (pin, socket, …)."""
     name = models.CharField(max_length=100)
+    pin_layout = models.CharField(max_length=12, blank=True, choices=PIN_LAYOUTS)
+    pin_columns = models.PositiveSmallIntegerField('columns', null=True, blank=True)
+    pin_positions = models.PositiveSmallIntegerField('positions', null=True, blank=True)
 
     class Meta:
         ordering = ['name']
@@ -325,6 +335,15 @@ class PartOrFamily(models.Model):
     @property
     def used_name(self):
         return self.used.number if self.used else ''
+
+
+def layout_of(found):
+    """How the pins of a part (else its family's), a family or a branch (its family's) sit on its face:
+    (layout, columns, positions); ('', None, None) when that isn't known."""
+    for thing in (found, getattr(found, 'family', None)):
+        if thing is not None and getattr(thing, 'pin_layout', ''):
+            return thing.pin_layout, thing.pin_columns, thing.pin_positions
+    return '', None, None
 
 
 def part_or_family(text):

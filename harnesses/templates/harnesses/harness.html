@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% load osmia %}
+{% extends "base.html" %}{% load osmia static %}
 {% block title %}{{ harness.number }} · Osmia{% endblock %}
 {% block content %}
 <p class="small"><a href="{{ harness.project.get_absolute_url }}">← {{ harness.project }}</a></p>
@@ -39,6 +39,8 @@
 
 <section class="card flush">
   <div class="card-head"><h3>Pinout <span class="muted small">{{ wire_count }} wire{{ wire_count|pluralize }}</span></h3><a class="btn small" href="{% url 'harnesses:pinout' harness.pk %}">Change</a></div>
+  {% if wire_count %}<div class="pinout-draw"><div class="set-chips" id="set-chips"></div><svg id="pinout-drawing" class="pinout-drawing" role="img" aria-label="The pinout drawn"></svg></div>
+  {{ drawing|json_script:"pinout-data" }}{% endif %}
   <div style="overflow-x:auto"><table class="list">
     <tr><th>From</th><th>Pin</th><th>To</th><th>Pin</th><th>Signal</th><th>Set</th><th>Set type</th><th>Colour</th><th>Gauge</th><th class="num">Length</th><th>Wire</th></tr>
     {% for between, wires in groups %}<tr class="group-row"><th colspan="11">{{ between }}</th></tr>
@@ -82,8 +84,10 @@
     <button class="btn">＋ Build one</button></form>
 </section>
 {% endblock %}
-{% block scripts %}<script>
+{% block scripts %}<script src="{% static 'harnesses/pinout.js' %}"></script><script>
   var COLOURS = {black: '#1f2937', brown: '#92400e', red: '#ef4444', orange: '#f97316', yellow: '#facc15', green: '#22c55e', blue: '#3b82f6',
                  violet: '#8b5cf6', grey: '#9ca3af', white: '#f3f4f6', 'green/yellow': 'linear-gradient(90deg,#22c55e 50%,#facc15 50%)'};
   document.querySelectorAll('.wire-colour').forEach(function (s) { s.style.background = COLOURS[s.dataset.colour] || 'transparent'; });
+  var drawn = document.getElementById('pinout-data');
+  if (drawn) Pinout.draw(document.getElementById('pinout-drawing'), document.getElementById('set-chips'), JSON.parse(drawn.textContent), COLOURS);
 </script>{% endblock %}

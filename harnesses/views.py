@@ -13,7 +13,7 @@ from django.views.decorators.http import require_POST
 
 from devices.models import Connector
 from inventory import stock
-from inventory.models import Location, PartGroup, choices_of_parts, part_or_family
+from inventory.models import Location, PartGroup, choices_of_parts, layout_of, part_or_family
 from projects.models import Project
 from assets.service import next_tag
 from web import excel, rows, versions
@@ -72,12 +72,34 @@ def harness(request, pk):
             groups.append((between, []))
         groups[-1][1].append(w)
     found = item.problems()
-    return render(request, 'harnesses/harness.html', {
+    return render(request, 'harnesses/harness.html', {'drawing': _drawing(item, wires),
         'harness': item, 'ends': item.ends.select_related('part', 'connector__device'), 'groups': groups, 'wire_count': len(wires),
         'items': item.items.select_related('part'), 'parts': item.parts_list(),
         'problems': [text for _, text in found], 'bad_wires': {thing.pk for thing, _ in found if isinstance(thing, Wire)},
         'versions': item.versions.select_related('created_by'), 'changed': versions.changed(item),
         'units': item.assets.all(), 'locations': Location.ordered(), 'next_serial': next_tag(item.number)})
+
+
+def _drawing(harness, wires):
+    """What the pinout drawing draws: each end (its connector's pins, in the layout of its part, else of the device
+    connector it plugs into) and the wires between their contact numbers."""
+    from devices.models import pin_order
+    ends = harness.ends.select_related('part__family', 'family', 'branch__family', 'connector__device', 'connector__part__family',
+                                       'connector__family', 'connector__branch__family').prefetch_related('connector__pins')
+    out = []
+    for end in ends:
+        layout, columns, positions = layout_of(end.used)
+        if not layout and end.connector:
+            layout, columns, positions = layout_of(end.connector.used)
+        pins = {p.number: p.signal for p in end.connector.pins.all()} if end.connector else {}
+        for w in wires:
+            for at, pin in ((w.from_end_id, w.from_pin), (w.to_end_id, w.to_pin)):
+                if at == end.pk:
+                    pins.setdefault(pin, '')
+        out.append({'id': end.pk, 'designator': end.designator, 'what': end.used_name, 'plugs': str(end.connector or ''),
+                    'layout': layout or 'row', 'columns': columns or 0, 'positions': positions or 0, 'pins': [[n, pins[n]] for n in sorted(pins, key=pin_order)]})
+    return {'ends': out, 'wires': [{'from': w.from_end_id, 'from_pin': w.from_pin, 'to': w.to_end_id, 'to_pin': w.to_pin, 'signal': w.signal,
+                                    'set': w.wire_set, 'type': w.set_type, 'colour': w.colour} for w in wires]}
 
 
 # -- Editing as tables -------------------------------------------------------------------------------

@@ -233,6 +233,29 @@ form.pad { padding: 6px 10px; border-top: 1px solid var(--border); }
 ul.tight { margin: 4px 0 0; padding-left: 18px; }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 .dot.big { width: 14px; height: 14px; }
+.pinout-draw { padding: 8px 10px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.set-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.set-chips .btn.on { background: var(--brand); color: #fff; border-color: var(--brand); }
+.pinout-drawing { display: block; width: 100%; }
+.pinout-drawing .pd-title { font: 600 13px system-ui, sans-serif; fill: var(--text); }
+.pinout-drawing .pd-sub, .pinout-drawing .pd-signal { font: 11px system-ui, sans-serif; fill: var(--muted); }
+.pinout-drawing .end { text-anchor: end; }
+.pinout-drawing .pd-face { fill: var(--panel-2); stroke: var(--border-strong); stroke-width: 1.5; }
+.pinout-drawing .pd-pin circle { fill: var(--panel); stroke: var(--text); stroke-width: 1.2; }
+.pinout-drawing .pd-pin.empty { opacity: .35; }
+.pinout-drawing .pd-contact circle { fill: var(--panel); stroke: var(--text); stroke-width: 1.5; }
+.pinout-drawing .pd-bar { fill: var(--panel-2); stroke: var(--text); stroke-width: 1.5; }
+.pinout-drawing .pd-bar-label { font: 600 11px system-ui, sans-serif; fill: var(--text); text-anchor: middle; }
+.pinout-drawing .pd-stub { stroke: var(--text); stroke-width: 1.5; }
+.pinout-drawing .pd-shield { fill: none; stroke: var(--text); stroke-width: 1.6; }
+.pinout-drawing .pd-shield.lit { stroke: #b45309; stroke-width: 2.5; }
+.pinout-drawing .dashed { stroke-dasharray: 6 5; }
+.pinout-drawing .pd-num { font: 600 10px system-ui, sans-serif; fill: var(--text); text-anchor: middle; pointer-events: none; }
+.pinout-drawing .pd-wire { cursor: pointer; }
+.pinout-drawing .pd-wire-edge { fill: none; stroke: var(--text); stroke-width: 4.5; opacity: .35; stroke-linejoin: round; }
+.pinout-drawing .pd-wire-core { fill: none; stroke-width: 2.5; stroke-linejoin: round; }
+.pinout-drawing.picking .pd-wire:not(.lit) { opacity: .15; }
+.pinout-drawing .pd-pin.lit circle, .pinout-drawing .pd-contact.lit circle { fill: #fde047; stroke: #b45309; stroke-width: 2; }
 .wire-colour { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--border-strong); margin-right: 4px; vertical-align: middle; }
 .connectors { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0 10px; }
 .page-head h2 { margin: 0; }

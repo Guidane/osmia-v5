@@ -92,7 +92,8 @@ def _make(user):
     Part.objects.filter(pk=parts['DSUB-9-PLUG'].pk).update(notes='Use the gold plated contacts with it.\nKeep two spare in the lab.')
     vendors['Cable World'].notes = 'Free delivery above 200. Ask for Jan.'
     vendors['Cable World'].save()
-    dsub9 = Family.objects.create(name='D-sub 9')
+    dsub9 = Family.objects.create(name='D-sub 9', pin_layout='staggered', pin_positions=9)
+    Part.objects.filter(number='M12-5-F').update(pin_layout='circle', pin_positions=5)
     pin, socket = Branch.objects.create(family=dsub9, name='pin'), Branch.objects.create(family=dsub9, name='socket')
     Part.objects.filter(number__in=['DSUB-9-PLUG', 'DSUB-9-PLUG-B']).update(family=dsub9, branch=pin)
     Part.objects.filter(number='DSUB-9-RECEPT').update(family=dsub9, branch=socket)
@@ -161,9 +162,9 @@ def _make(user):
                                      description='The burn-in rack: a controller and its load boards.')
     Budget.objects.create(number='FY26-ENG-BR', name='Burn-in rack', parent=eng_budget, project=project, amount=8000, owner=user)
     bus = _harness(project, 'Controller to load board', [('P1', 'DSUB-9-PLUG', devices['CTRL-100'], 'J1'), ('P2', 'DSUB-9-PLUG', devices['LOAD-200'], 'J1')],
-                       [('1', '1', 'red', 'WIRE-22-RED', '', 'Twisted'), ('2', '3', 'black', 'WIRE-22-BLK', '', 'Twisted'),
-                        ('3', '5', 'blue', '', '', 'Straight'), ('6', '2', 'white', 'WIRE-24-TP', 'P2', 'Shielded twisted'),
-                        ('7', '7', 'green', 'WIRE-24-TP', 'P2', 'Shielded twisted')], parts, user)
+                       [('1', '1', 'red', 'WIRE-22-RED', 'PWR', 'Twisted'), ('2', '3', 'black', 'WIRE-22-BLK', 'PWR', 'Twisted'),
+                        ('3', '5', 'blue', '', '', 'Straight'), ('6', '2', 'white', 'WIRE-24-TP', 'CAN', 'Shielded twisted'),
+                        ('7', '7', 'green', 'WIRE-24-TP', 'CAN', 'Shielded twisted'), ('9', '8', 'grey', '', 'CAN', 'Shield')], parts, user)
     link = _harness(project, 'Load board link', [('P1', pin.number, devices['LOAD-200'], 'J2'), ('P2', pin.number, devices['LOAD-200'], 'J1')],
                         [('1', '1', 'red', 'WIRE-22-RED', '', 'Straight'), ('3', '3', 'black', 'WIRE-22-BLK', '', 'Straight'),
                          ('2', '2', 'white', 'WIRE-24-TP', 'P1', 'Shielded twisted'), ('7', '7', 'green', 'WIRE-24-TP', 'P1', 'Shielded twisted')], parts, user)

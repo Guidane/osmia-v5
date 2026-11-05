@@ -131,8 +131,8 @@ class PartForm(AttributesForm):
 
     class Meta:
         model = Part
-        fields = ['number', 'description', 'category', 'kin', 'manufacturer', 'mpn', 'unit', 'datasheet', 'vendor', 'vendor_number',
-                  'price', 'minimum', 'reorder_quantity', 'notes', 'active']
+        fields = ['number', 'description', 'category', 'kin', 'pin_layout', 'pin_positions', 'pin_columns', 'manufacturer', 'mpn', 'unit', 'datasheet',
+                  'vendor', 'vendor_number', 'price', 'minimum', 'reorder_quantity', 'notes', 'active']
         widgets = {'notes': forms.Textarea(attrs={'rows': 3})}
 
     kin = forms.ChoiceField(label='Family', required=False)
@@ -263,10 +263,10 @@ class LocationForm(TreeForm):
 
 
 class FamilyForm(forms.ModelForm):
-    """A family of parts: its name."""
+    """A family of parts: its name, and how the pins of its parts sit."""
     class Meta:
         model = Family
-        fields = ['name']
+        fields = ['name', 'pin_layout', 'pin_positions', 'pin_columns']
 
     def clean_name(self):
         name = self.cleaned_data['name'].strip()
