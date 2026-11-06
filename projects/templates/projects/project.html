@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% load static osmia %}
 {% block title %}{{ project }} · Osmia{% endblock %}
-{% block head %}<link rel="stylesheet" href="{% static 'projects/diagram.css' %}">{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% fresh 'projects/diagram.css' %}">{% endblock %}
 {% block content_class %}wide{% endblock %}
 {% block content %}
 <p class="small"><a href="{% url 'projects:list' %}">← Wire diagrams</a></p>
@@ -146,7 +146,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script src="{% static 'projects/diagram.js' %}"></script>
+<script src="{% fresh 'projects/diagram.js' %}"></script>
 <script>
   Diagram.draw(document.getElementById('diagram'), JSON.parse(document.getElementById('diagram-data').textContent), {
     url: "{% url 'projects:change' project.pk %}", config: "{{ config.pk }}", csrf: window.OSMIA_CSRF,

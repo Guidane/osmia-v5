@@ -1,11 +1,11 @@
-{% load static %}<!DOCTYPE html>
+{% load static osmia %}<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Osmia{% endblock %}</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><rect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%232e7d5b%22/><path d=%22M7 8h8v8H7zM17 8h8v8h-8zM7 18h8v8H7zM17 18h8v8h-8z%22 fill=%22white%22 opacity=%22.9%22/></svg>">
-  <link rel="stylesheet" href="{% static 'web/osmia.css' %}">
+  <link rel="stylesheet" href="{% fresh 'web/osmia.css' %}">
   {% block head %}{% endblock %}
   <meta name="osmia-leave-to" content="{% block leave_to %}{% endblock %}">
   <script>

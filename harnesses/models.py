@@ -59,15 +59,15 @@ class Harness(models.Model):
 
     def problems(self):
         """What is wrong with its pinout: [(wire or end or None, message)]."""
-        found, used = [], {}
+        found, joined = [], {}
         ends = list(self.ends.select_related('connector__device').prefetch_related('connector__pins'))
         for end in ends:
             if end.connector is None:
                 found.append((end, f'{end.designator} is not plugged into a device connector.'))
-        for wire in self.ordered_wires():
+        for wire in self.ordered_wires():   # a pin with several wires is a splice; the same two pins joined twice isn't
+            pair = frozenset(((wire.from_end_id, wire.from_pin.lower()), (wire.to_end_id, wire.to_pin.lower())))
+            joined.setdefault(pair, []).append(wire)
             for end, pin in ((wire.from_end, wire.from_pin), (wire.to_end, wire.to_pin)):
-                if wire.set_type != 'Shield':   # a shield's drain may share a pin
-                    used.setdefault((end.pk, pin.lower()), (f'{end.designator}:{pin}', []))[1].append(wire)
                 if end.connector_id is None:
                     continue
                 device_pin = end.connector.pins.filter(number__iexact=pin).first()
@@ -75,9 +75,9 @@ class Harness(models.Model):
                     found.append((wire, f'{end.connector} has no pin {pin} ({wire}).'))
                 elif wire.signal and device_pin.signal and wire.signal.strip().lower() != device_pin.signal.strip().lower():
                     found.append((wire, f'{wire}: the wire carries "{wire.signal}", {end.connector}:{pin} is "{device_pin.signal}".'))
-        for where, wires in used.values():
+        for wires in joined.values():
             if len(wires) > 1:
-                found.append((wires[1], f'{where} has {len(wires)} wires.'))
+                found.append((wires[1], f'{wires[0]} is there {len(wires)} times.'))
         return found
 
     def snapshot(self):

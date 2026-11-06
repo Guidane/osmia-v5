@@ -100,10 +100,12 @@ class PinoutTests(HarnessBase):
         self.assertFalse(Wire.objects.filter(pk=drain.pk).exists())
         self.assertEqual(self.client.post(url, {'action': 'add', 'from_end': self.p1.pk}).status_code, 400)
 
-    def test_one_pin_two_wires(self):
+    def test_a_splice_but_not_the_same_wire_twice(self):
         self.connect('1', '1')
-        self.connect('1', '3')
-        self.assertIn('P1:1 has 2 wires.', [t for _, t in self.harness.problems()])
+        self.connect('1', '3')                                                     # a splice: fine
+        self.assertFalse([t for _, t in self.harness.problems() if 'times' in t])
+        self.connect('1', '1')
+        self.assertIn('P1:1 → P2:1 is there 2 times.', [t for _, t in self.harness.problems()])
 
 
 class BuildTests(HarnessBase):

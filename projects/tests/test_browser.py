@@ -1,6 +1,8 @@
 """The project diagram in a real browser: dragging a device moves it in that configuration only (its lines going
 with it while it moves), clicking a harness picks it in the list below, a connector's square shows its pinout, and the
 zoom."""
+import re
+
 from django.core.management import call_command
 
 from projects import configs
@@ -59,12 +61,14 @@ class DiagramTests(BrowserTestCase):
         page = self.go(base.get_absolute_url())
         before = page.locator('#diagram .pill').count()
         free = page.locator('#diagram .sq:not(.on)')
-        self.drag(free.nth(0), free.nth(1))
+        start = free.nth(0)
+        other = page.locator(f'#diagram .sq:not(.on):not([data-device="{start.get_attribute("data-device")}"])').first
+        self.drag(start, other)                                                 # to a connector of another device
         expect(page.locator('#connect')).to_be_visible()
         expect(page.locator('#connect [name=name]')).not_to_have_value('')
         page.click('#connect button.primary')
         expect(page.locator('#diagram .pill')).to_have_count(before + 1)
-        self.assertEqual(base.project.harnesses.count(), 3)
+        self.assertEqual(base.project.harnesses.count(), 4)
 
     def test_a_connector_slides_along_its_box_and_a_line_is_pinned_by_its_handle(self):
         from devices.models import Connector
@@ -144,5 +148,10 @@ class DiagramTests(BrowserTestCase):
             page.locator(f'#pinout-drawing select[data-wire="{made.pk}"]').select_option('new:Twisted')
         made.refresh_from_db()
         self.assertEqual(made.set_type, 'Twisted')
+        page.locator('#pinout-drawing .pd-contact').filter(has=page.locator('text.pd-num', has_text=re.compile('^4$'))).first.click()           # P1:4 again, now to P2:6: a splice
+        with page.expect_response(lambda r: r.request.method == 'POST'):
+            page.locator('#pinout-drawing .pd-pin[data-pin="6"]').nth(1).click()
+        expect(page.locator('#pinout-drawing .pd-splice')).to_have_count(2)              # where each of its wires leaves
+        self.assertEqual(harness.wires.filter(from_pin='4').count(), 2)
         page.click('#set-chips [data-mode=view]')                                         # back: the page again, its table too
         expect(page.locator('table.list', has_text='Signal')).to_contain_text(made.wire_set)

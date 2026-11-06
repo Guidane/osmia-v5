@@ -78,6 +78,11 @@ class TreeTests(ProjectBase):
 
 
 class PageTests(ProjectBase):
+    def test_wire_diagrams_live_at_wire_diagrams_and_old_links_still_work(self):
+        self.assertEqual(self.project.get_absolute_url(), f'/wire-diagrams/{self.project.pk}/')
+        response = self.client.get(f'/projects/{self.project.pk}/?configuration=1')
+        self.assertRedirects(response, f'/wire-diagrams/{self.project.pk}/?configuration=1', fetch_redirect_response=False)
+
     def test_the_project_page_and_its_changes(self):
         url = reverse('projects:change', args=[self.project.pk])
         self.client.post(url, {'config': self.child.pk, 'action': 'add_device', 'device': self.board.pk})

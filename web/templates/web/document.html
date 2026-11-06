@@ -57,4 +57,4 @@
   </aside>
 </div>
 {% endblock %}
-{% block scripts %}{% load static %}{% if editing %}<script src="{% static 'web/editor.js' %}"></script>{% endif %}{% endblock %}
+{% block scripts %}{% load static %}{% if editing %}<script src="{% fresh 'web/editor.js' %}"></script>{% endif %}{% endblock %}

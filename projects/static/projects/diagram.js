@@ -93,7 +93,8 @@
           var s = size(x.d), cx = x.d.x + s.w / 2, cy = x.d.y + s.h / 2;
           var dx = others.reduce(function (t, o) { return t + o.d.x + size(o.d).w / 2; }, 0) / others.length - cx;
           var dy = others.reduce(function (t, o) { return t + o.d.y + size(o.d).h / 2; }, 0) / others.length - cy;
-          c.auto = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'bottom' : 'top');
+          // left or right unless what it goes to is well above or below (boxes are wide, harnesses mostly run across)
+          c.auto = Math.abs(dx) >= Math.abs(dy) / 2 ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'bottom' : 'top');
         });
       });
     }

@@ -5,6 +5,17 @@ from django import template
 register = template.Library()
 
 
+@register.simple_tag
+def fresh(path):
+    """The URL of a static file with when it last changed, so browsers fetch it again after a change or an update."""
+    import os
+
+    from django.contrib.staticfiles import finders
+    from django.templatetags.static import static
+    found = finders.find(path)
+    return f'{static(path)}?v={int(os.path.getmtime(found))}' if found else static(path)
+
+
 @register.filter
 def qty(value):
     """A quantity without trailing zeros: 10, 2.5, 0.125 (never 1E+1)."""

@@ -160,9 +160,12 @@
       var x = {};
       x.leftFace = 10; x.leftBar = 10 + widest.left + 30; x.leftNum = x.leftBar + 34;
       x.left = x.leftNum + C;
-      x.right = x.left + (editing ? 620 : 420);
+      // the middle takes all the width there is (and no less than it needs)
+      var fixed = x.left + C + 20 + 46 + widest.right + 10, room = (svg.parentNode.clientWidth || 0) - 20;
+      state.width = svg.parentNode.clientWidth;
+      x.right = x.left + Math.max(editing ? 620 : 420, room - fixed);
       x.rightNum = x.right + C; x.rightBar = x.rightNum + 20; x.rightFace = x.rightBar + 46;
-      var width = x.rightFace + widest.right + 10, mid = (x.left + x.right) / 2;
+      var width = x.rightFace + widest.right + 10, mid = (x.left + x.right) / 2, TWIST = 50;   // half the twist's width
 
       var under = el('g', {}, svg), wiresG = el('g', {}, svg), over = el('g', {}, svg), areas = el('g', {}, svg), tools = el('g', {}, svg);
       var lit = {};
@@ -210,31 +213,74 @@
         text(g, cx, y + 4, at.pin, 'pd-num');
         if (named) text(g, cx + C + 4, y + 4, byId[at.end].designator, 'pd-sub');
         remember(at.end + ':' + at.pin, g);
+        if (state.from && state.from.end === at.end && state.from.pin === at.pin) g.classList.add('chosen');
+        if (editing) g.addEventListener('click', function () { pick(at.end, at.pin, g); });
         return left ? x.left : x.right;
       }
+      // a contact with several wires (a splice): drawn once, at its first row; its other rows branch off beside it
+      var splices = {}, lanes = { left: 0, right: 0 };   // each splice on a side its own lane
+      function place(r, at, left, named) {
+        var key = (left ? 'L' : 'R') + at.end + ':' + at.pin, s = splices[key];
+        if (!s) {
+          splices[key] = { left: left, rows: [r] };
+          return contact(at, left, r.y, named);
+        }
+        if (s.x === undefined) {   // viewing: just past the twists in the middle; editing: by the contacts
+          var lane = lanes[left ? 'left' : 'right']++, off = editing ? x.right - mid - 12 : -(TWIST + 24);
+          s.x = left ? mid - off + lane * 10 : mid + off - lane * 10;
+        }
+        s.rows.push(r);
+        return s.x;
+      }
 
-      var y = 70, faced = {};
-      function drawn(id, y0) { if (faced[id]) return 0; faced[id] = true; return drawFace(byId[id], y0); }
+      // a face runs alongside the groups of its connector; a group beside another connector starts below it
+      var y = 70, GAP = 90, faced = {}, beside = { left: { id: null, until: 0 }, right: { id: null, until: 0 } };
       list.forEach(function (g) {
         var y0 = y, n = g.rows.length, bottom = n ? (n - 1) * ROW + C : 0;
-        if (g.left !== undefined) bottom = Math.max(bottom, drawn(g.left, y0));
-        if (g.right !== undefined && !g.same) bottom = Math.max(bottom, drawn(g.right, y0));
-        if (n) {
-          [[g.left, x.leftBar]].concat(g.same ? [] : [[g.right, x.rightBar]]).forEach(function (b) {
-            el('rect', { x: b[1], y: y0 - C - 6, width: 12, height: (n - 1) * ROW + 2 * C + 12, rx: 3, class: 'pd-bar' }, under);
-            text(over, b[1] + 6, y0 - C - 12, byId[b[0]].designator, 'pd-bar-label');
-          });
-        }
+        var here = [['left', g.left]].concat(g.same ? [] : [['right', g.right]]).filter(function (s) { return s[1] !== undefined; });
+        here.forEach(function (s) { if (beside[s[0]].id !== s[1]) y0 = Math.max(y0, beside[s[0]].until + GAP); });
+        here.forEach(function (s) {
+          if (faced[s[1]]) return;
+          faced[s[1]] = true;
+          beside[s[0]] = { id: s[1], until: y0 + drawFace(byId[s[1]], y0) };
+        });
+        here.forEach(function (s) { if (beside[s[0]].id !== s[1]) beside[s[0]] = { id: s[1], until: y0 + bottom }; });
+        var own = { left: false, right: false };   // a contact of its own on that side (not only splices from above)
         g.rows.forEach(function (r, i) {
           r.y = y0 + i * ROW;
-          r.ax = contact(r.a, true, r.y);
-          r.bx = contact(r.b, false, r.y, g.same);
+          r.ax = place(r, r.a, true);
+          r.bx = place(r, r.b, false, g.same);
+          if (r.ax === x.left) own.left = true;
+          if (r.bx === x.right) own.right = true;
         });
-        y = y0 + bottom + 90;
+        [[g.left, x.leftBar, own.left]].concat(g.same ? [] : [[g.right, x.rightBar, own.right]]).forEach(function (b) {
+          if (!b[2]) return;
+          el('rect', { x: b[1], y: y0 - C - 6, width: 12, height: (n - 1) * ROW + 2 * C + 12, rx: 3, class: 'pd-bar' }, under);
+          text(over, b[1] + 6, y0 - C - 12, byId[b[0]].designator, 'pd-bar-label');
+        });
+        y = y0 + bottom + GAP;
       });
+      y = Math.max(y, beside.left.until + GAP, beside.right.until + GAP);
 
       // the wires
-      var x1 = x.left + 110, x4 = x.right - 110, lines = [];
+      var lines = [];
+      function smooth(pts) {   // a line through the points, its corners slightly rounded
+        var d = 'M' + pts[0];
+        for (var i = 1; i < pts.length - 1; i++) {
+          var a = pts[i - 1], p = pts[i], b = pts[i + 1];
+          var la = Math.hypot(p[0] - a[0], p[1] - a[1]), lb = Math.hypot(b[0] - p[0], b[1] - p[1]), k = Math.min(8, la / 2, lb / 2);
+          if (!k) { d += ' L' + p; continue; }
+          d += ' L' + [p[0] + (a[0] - p[0]) * k / la, p[1] + (a[1] - p[1]) * k / la] + ' Q' + p + ' ' +
+               [p[0] + (b[0] - p[0]) * k / lb, p[1] + (b[1] - p[1]) * k / lb];
+        }
+        return d + ' L' + pts[pts.length - 1];
+      }
+      function twistOf(pair) {   // where a set's twist sits: the middle of the stretch its wires run side by side
+        var from = Math.max.apply(null, pair.map(function (r) { return r.ax === x.left ? x.left + 90 : r.ax + 14; }));
+        var to = Math.min.apply(null, pair.map(function (r) { return r.bx === x.right ? x.right - 90 : r.bx - 14; }));
+        var half = Math.max(Math.min(TWIST, (to - from) / 2), 16);
+        return { mid: (from + to) / 2, half: half };
+      }
       function colourOf(w) { var c = colours[w.colour] || ''; return c && c.indexOf('gradient') === -1 ? c : (c ? '#22c55e' : '#64748b'); }
       function wire(r, d, dashed) {
         var w = r.w, g = el('g', { class: 'pd-wire' }, wiresG);
@@ -251,7 +297,7 @@
         if (!inner.length) return;
         var ys = inner.map(function (r) { return r.y; });
         var top = Math.min.apply(null, ys) - 16, low = shield ? shield.y : Math.max.apply(null, ys) + 16;
-        ellipses[s.name] = [x.left + 45, x.right - 45];
+        ellipses[s.name] = [x.left + 70, x.right - 70];
         ellipses[s.name].forEach(function (cx) {
           var e = el('ellipse', { cx: cx, cy: (top + low) / 2, rx: 18, ry: (low - top) / 2, class: 'pd-shield', 'data-set': s.name }, over);
           el('title', {}, e).textContent = 'Set ' + s.name + ': ' + s.type.toLowerCase();
@@ -270,12 +316,19 @@
         }
         var pair = s.rows.filter(function (o) { return o.w.type !== 'Shield'; }).sort(function (p, q) { return p.y - q.y; });
         if (twisted(s.type) && pair.length > 1) {   // the first wire in a V to the bottom row, the others in a Λ to the top
-          var high = pair[0].y, low = pair[pair.length - 1].y, i = pair.indexOf(r);
-          var peak = i === 0 ? { x: mid, y: low } : { x: mid + (i - pair.length / 2) * 50, y: high };
-          wire(r, 'M' + r.ax + ',' + y + ' H' + x1 + ' L' + peak.x + ',' + peak.y + ' L' + x4 + ',' + y + ' H' + r.bx);
+          var high = pair[0].y, low = pair[pair.length - 1].y, i = pair.indexOf(r), t = twistOf(pair);
+          var peak = i === 0 ? [t.mid, low] : [t.mid + (i - pair.length / 2) * t.half / 2, high];
+          wire(r, smooth([[r.ax, y], [t.mid - t.half, y], peak, [t.mid + t.half, y], [r.bx, y]]));
           return;
         }
         wire(r, 'M' + r.ax + ',' + y + ' H' + r.bx);
+      });
+      Object.keys(splices).forEach(function (key) {   // the splice: down from the contact's row, a dot where each wire leaves
+        var s = splices[key];
+        if (s.rows.length < 2) return;
+        var sx = s.x, ys = s.rows.map(function (r) { return r.y; });
+        wire(s.rows[0], 'M' + sx + ',' + Math.min.apply(null, ys) + ' V' + Math.max.apply(null, ys));
+        ys.forEach(function (sy) { el('circle', { cx: sx, cy: sy, r: 4.5, class: 'pd-splice' }, over); });
       });
 
       if (editing) {   // each row: its set left of the middle; the set to put it in, its colour and ✕ right of it
@@ -312,8 +365,10 @@
         });
       }
 
-      svg.setAttribute('viewBox', '0 0 ' + width + ' ' + Math.max(y - 50, 120));
-      svg.style.maxWidth = width + 'px';
+      var tall = Math.max(y - 50, 120);
+      svg.setAttribute('viewBox', '0 0 ' + width + ' ' + tall);
+      svg.style.width = width + 'px';
+      svg.style.height = tall + 'px';
 
       function show(set) {   // light up one set (or none)
         state.picked = state.picked === set ? null : set;
@@ -355,6 +410,11 @@
       });
     }
     render();
+    var later;
+    window.addEventListener('resize', function () {   // the width there is changed: drawn again to fill it
+      clearTimeout(later);
+      later = setTimeout(function () { if (svg.parentNode.clientWidth !== state.width) render(); }, 150);
+    });
   }
 
   window.Pinout = { mount: mount };

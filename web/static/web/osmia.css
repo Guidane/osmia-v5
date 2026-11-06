@@ -262,8 +262,11 @@ ul.tight { margin: 4px 0 0; padding-left: 18px; }
 .pinout-drawing .pd-area.lit { fill: rgba(250, 204, 21, .12); }
 .pinout-drawing.editing .pd-pin { cursor: pointer; }
 .pinout-drawing.editing .pd-pin:hover circle { stroke: var(--brand); stroke-width: 2; }
-.pinout-drawing .pd-pin.chosen circle { fill: var(--brand); stroke: var(--brand); }
-.pinout-drawing .pd-pin.chosen .pd-num { fill: #fff; }
+.pinout-drawing.editing .pd-contact { cursor: pointer; }
+.pinout-drawing.editing .pd-contact:hover circle { stroke: var(--brand); stroke-width: 2; }
+.pinout-drawing .pd-pin.chosen circle, .pinout-drawing .pd-contact.chosen circle { fill: var(--brand); stroke: var(--brand); }
+.pinout-drawing .pd-pin.chosen .pd-num, .pinout-drawing .pd-contact.chosen .pd-num { fill: #fff; }
+.pinout-drawing .pd-splice { fill: var(--text); stroke: var(--panel); stroke-width: 1.5; }
 .pinout-drawing .pd-setname { font: 600 11px system-ui, sans-serif; fill: var(--text); paint-order: stroke; stroke: var(--panel); stroke-width: 5px; }
 .pinout-drawing .pd-tools { display: flex; gap: 4px; align-items: center; }
 .pinout-drawing .pd-tools select { font-size: 11px; padding: 1px 4px; height: 22px; min-width: 0; width: auto; }

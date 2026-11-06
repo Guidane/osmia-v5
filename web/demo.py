@@ -30,6 +30,8 @@ PARTS = [  # number, description, category, unit, vendor, price, minimum, on han
     ('DSUB-9-PLUG', 'D-sub 9 plug housing, crimp', 'D-sub', 'pcs', 'Acme Connectors', '2.40', 10, 6),
     ('DSUB-9-PLUG-B', 'D-sub 9 plug housing, crimp (other make)', 'D-sub', 'pcs', 'Acme Connectors', '2.95', 0, 4),
     ('DSUB-9-RECEPT', 'D-sub 9 receptacle, panel mount', 'D-sub', 'pcs', 'Acme Connectors', '3.10', 5, 8),
+    ('DSUB-25-PLUG', 'D-sub 25 plug housing, crimp', 'D-sub', 'pcs', 'Acme Connectors', '4.20', 4, 6),
+    ('DSUB-25-RECEPT', 'D-sub 25 receptacle, panel mount', 'D-sub', 'pcs', 'Acme Connectors', '5.10', 2, 4),
     ('DSUB-CONTACT-M', 'D-sub crimp contact, pin, 20-24 AWG', 'Contacts', 'pcs', 'Acme Connectors', '0.18', 100, 240),
     ('M12-5-F', 'M12 5-pin cable socket', 'M12', 'pcs', 'Acme Connectors', '6.80', 4, 2),
     ('WIRE-22-RED', 'Hook-up wire 22 AWG red', 'Wire', 'm', 'Cable World', '0.12', 50, 80),
@@ -45,6 +47,8 @@ ATTRIBUTES = {   # category: [(name, kind, unit, choices)]
 VALUES = {   # part: {attribute: value}
     'DSUB-9-PLUG': {'Positions': '9', 'Contact type': 'pin', 'Mounting': 'cable', 'Shielded': 'No'},
     'DSUB-9-RECEPT': {'Positions': '9', 'Contact type': 'socket', 'Mounting': 'panel', 'Shielded': 'Yes'},
+    'DSUB-25-PLUG': {'Positions': '25', 'Contact type': 'pin', 'Mounting': 'cable', 'Shielded': 'Yes'},
+    'DSUB-25-RECEPT': {'Positions': '25', 'Contact type': 'socket', 'Mounting': 'panel', 'Shielded': 'Yes'},
     'DSUB-CONTACT-M': {'Contact type': 'pin'},
     'M12-5-F': {'Positions': '5', 'Contact type': 'socket'},
     'WIRE-22-RED': {'Gauge': '22', 'Colour': 'red', 'Max. temperature': '105'},
@@ -54,10 +58,17 @@ VALUES = {   # part: {attribute: value}
 SETS = {'+24 V': ('PWR', 'Twisted'), '0 V': ('PWR', 'Twisted'), 'CAN H': ('CAN', 'Shielded twisted'),
         'CAN L': ('CAN', 'Shielded twisted')}   # signal: the set its pins are in
 PINS = {   # device: [(connector, name, part, [(pin, signal)])]
-    'CTRL-100': [('J1', 'Bus', 'DSUB-9-RECEPT', [('1', '+24 V'), ('2', '0 V'), ('3', 'Enable'), ('6', 'CAN H'), ('7', 'CAN L'), ('9', 'CAN GND')]),
+    'CTRL-100': [('J1', 'Bus', 'DSUB-9-RECEPT', [('1', '+24 V'), ('2', '0 V'), ('3', 'Enable'), ('6', 'CAN H'), ('7', 'CAN L'), ('9', 'Shield')]),
                  ('J2', 'Sensor', 'M12-5-F', [('1', '+24 V'), ('2', 'Signal'), ('3', '0 V')])],
     'LOAD-200': [('J1', 'Bus in', 'D-sub 9 / socket', [('1', '+24 V'), ('3', '0 V'), ('5', 'Enable'), ('2', 'CAN H'), ('7', 'CAN L'), ('8', 'Shield')]),
                  ('J2', 'Bus out', 'D-sub 9 / socket', [('1', '+24 V'), ('3', '0 V'), ('2', 'CAN H'), ('7', 'CAN L')])],
+    'HUB-500': [('J1', 'Outputs 1-3', 'D-sub 25 / socket', [('1', '+24 V'), ('14', '0 V'), ('2', 'Data +'), ('15', 'Data -'), ('3', 'Shield'), ('4', '+24 V'), ('17', '0 V'), ('5', 'Data +'), ('18', 'Data -'), ('6', 'Shield'), ('7', '+24 V'), ('20', '0 V'), ('8', 'Data +'), ('21', 'Data -'), ('9', 'Shield')]),
+                ('J2', 'Outputs 4-5', 'D-sub 25 / socket', [('1', 'Data +'), ('14', 'Data -'), ('2', 'Shield'), ('4', '+24 V'), ('17', '0 V'), ('5', 'Data +'), ('18', 'Data -'), ('6', 'Data GND'), ('7', 'Shield')])],
+    'SENS-10': [('J1', 'Power and data', 'D-sub 9 / socket', [('1', '+24 V'), ('6', '0 V'), ('2', 'Data +'), ('7', 'Data -'), ('3', 'Data GND'), ('5', 'Shield')])],
+    'FAN-20': [('J1', 'Power and data', 'D-sub 9 / socket', [('1', '+24 V'), ('6', '0 V'), ('2', 'Data +'), ('7', 'Data -'), ('3', 'Data GND'), ('5', 'Shield')])],
+    'LED-30': [('J1', 'Power and data', 'D-sub 9 / socket', [('1', '+24 V'), ('6', '0 V'), ('2', 'Data +'), ('7', 'Data -'), ('3', 'Data GND'), ('5', 'Shield')])],
+    'MOT-40': [('J1', 'Power and data', 'D-sub 9 / socket', [('1', '+24 V'), ('6', '0 V'), ('2', 'Data +'), ('7', 'Data -'), ('3', 'Data GND'), ('5', 'Shield')])],
+    'CAM-50': [('J1', 'Power and data', 'D-sub 9 / socket', [('1', '+24 V'), ('6', '0 V'), ('2', 'Data +'), ('7', 'Data -'), ('3', 'Data GND'), ('5', 'Shield')])],
 }
 
 
@@ -95,6 +106,9 @@ def _make(user):
     dsub9 = Family.objects.create(name='D-sub 9', pin_layout='staggered', pin_positions=9)
     Part.objects.filter(number='M12-5-F').update(pin_layout='circle', pin_positions=5)
     pin, socket = Branch.objects.create(family=dsub9, name='pin'), Branch.objects.create(family=dsub9, name='socket')
+    dsub25 = Family.objects.create(name='D-sub 25', pin_layout='staggered', pin_positions=25)
+    Part.objects.filter(number='DSUB-25-PLUG').update(family=dsub25, branch=Branch.objects.create(family=dsub25, name='pin'))
+    Part.objects.filter(number='DSUB-25-RECEPT').update(family=dsub25, branch=Branch.objects.create(family=dsub25, name='socket'))
     Part.objects.filter(number__in=['DSUB-9-PLUG', 'DSUB-9-PLUG-B']).update(family=dsub9, branch=pin)
     Part.objects.filter(number='DSUB-9-RECEPT').update(family=dsub9, branch=socket)
     workshop = Category.objects.create(name='Workshop', kind='assets')
@@ -138,7 +152,13 @@ def _make(user):
     service.place(mine, user, date.today() + timedelta(days=6))
 
     devices = {}
-    for number, name, colour in (('CTRL-100', 'Rack controller', '#3b7dd8'), ('LOAD-200', 'Load board', '#c2410c')):
+    for number, name, colour in (('CTRL-100', 'Rack controller', '#3b7dd8'), ('LOAD-200', 'Load board', '#c2410c'),
+                                 ('HUB-500', 'Rack hub', '#334155'),
+                                 ('SENS-10', 'Temperature sensor', '#0f766e'),
+                                 ('FAN-20', 'Fan controller', '#7c3aed'),
+                                 ('LED-30', 'Light bar', '#ca8a04'),
+                                 ('MOT-40', 'Motor driver', '#be123c'),
+                                 ('CAM-50', 'Camera', '#0369a1')):
         devices[number] = Device.objects.create(number=number, name=name, colour=colour, manufacturer='In house')
         for position, (designator, title, part, pins) in enumerate(PINS[number]):
             c = Connector(device=devices[number], designator=designator, name=title, position=position)
@@ -168,6 +188,28 @@ def _make(user):
     link = _harness(project, 'Load board link', [('P1', pin.number, devices['LOAD-200'], 'J2'), ('P2', pin.number, devices['LOAD-200'], 'J1')],
                         [('1', '1', 'red', 'WIRE-22-RED', '', 'Straight'), ('3', '3', 'black', 'WIRE-22-BLK', '', 'Straight'),
                          ('2', '2', 'white', 'WIRE-24-TP', 'P1', 'Shielded twisted'), ('7', '7', 'green', 'WIRE-24-TP', 'P1', 'Shielded twisted')], parts, user)
+    # the rack hub's two D-sub 25s to five devices' D-sub 9s, each with power and shielded data: every kind of set, a
+    # shielded twist of three, and splices (the motor driver's power taken off the sensor's)
+    hub = devices['HUB-500']
+    ends = [('P1', 'D-sub 25 / pin', hub, 'J1'), ('P2', 'D-sub 25 / pin', hub, 'J2')]
+    ends += [(f'P{i}', pin.number, devices[n], 'J1') for i, n in enumerate(['SENS-10', 'FAN-20', 'LED-30', 'MOT-40', 'CAM-50'], 3)]
+    loom = _harness(project, 'Rack loom', ends, [
+        ('P1:1', 'P3:1', 'red', 'WIRE-22-RED', 'PWR1', 'Twisted'), ('P1:14', 'P3:6', 'black', 'WIRE-22-BLK', 'PWR1', 'Twisted'),
+        ('P1:2', 'P3:2', 'white', 'WIRE-24-TP', 'DATA1', 'Shielded twisted'), ('P1:15', 'P3:7', 'brown', 'WIRE-24-TP', 'DATA1', 'Shielded twisted'),
+        ('P1:3', 'P3:5', 'grey', '', 'DATA1', 'Shield'),
+        ('P1:4', 'P4:1', 'red', 'WIRE-22-RED', 'PWR2', 'Straight'), ('P1:17', 'P4:6', 'black', 'WIRE-22-BLK', 'PWR2', 'Straight'),
+        ('P1:5', 'P4:2', 'white', '', 'DATA2', 'Shielded'), ('P1:18', 'P4:7', 'brown', '', 'DATA2', 'Shielded'),
+        ('P1:6', 'P4:5', 'grey', '', 'DATA2', 'Shield'),
+        ('P1:7', 'P5:1', 'red', 'WIRE-22-RED', '', 'Straight'), ('P1:20', 'P5:6', 'black', 'WIRE-22-BLK', '', 'Straight'),
+        ('P1:8', 'P5:2', 'white', 'WIRE-24-TP', 'DATA3', 'Shielded twisted'), ('P1:21', 'P5:7', 'brown', 'WIRE-24-TP', 'DATA3', 'Shielded twisted'),
+        ('P1:9', 'P5:5', 'grey', '', 'DATA3', 'Shield'),
+        ('P1:1', 'P6:1', 'red', 'WIRE-22-RED', 'PWR4', 'Twisted'), ('P1:14', 'P6:6', 'black', 'WIRE-22-BLK', 'PWR4', 'Twisted'),   # spliced
+        ('P2:1', 'P6:2', 'white', 'WIRE-24-TP', 'DATA4', 'Shielded twisted'), ('P2:14', 'P6:7', 'brown', 'WIRE-24-TP', 'DATA4', 'Shielded twisted'),
+        ('P2:2', 'P6:5', 'grey', '', 'DATA4', 'Shield'),
+        ('P2:4', 'P7:1', 'red', 'WIRE-22-RED', 'PWR5', 'Twisted'), ('P2:17', 'P7:6', 'black', 'WIRE-22-BLK', 'PWR5', 'Twisted'),
+        ('P2:5', 'P7:2', 'white', '', 'DATA5', 'Shielded twisted'), ('P2:18', 'P7:7', 'brown', '', 'DATA5', 'Shielded twisted'),
+        ('P2:6', 'P7:3', 'green', '', 'DATA5', 'Shielded twisted'),                                                        # a twist of three
+        ('P2:7', 'P7:5', 'grey', '', 'DATA5', 'Shield')], parts, user)
     Harness.objects.filter(pk=bus.pk).update(notes='Keep it under 50 cm: the rack is tight behind the controller.')
     base = Configuration.objects.create(project=project, name='Base', description='One load board.')
     ctrl = configs.place(base, kind='device', device_id=devices['CTRL-100'].pk, label='Controller', x=40, y=60)
@@ -177,6 +219,12 @@ def _make(user):
     second = configs.place(two, kind='device', device_id=devices['LOAD-200'].pk, label='Load board 2', x=420, y=260)
     configs.place(two, kind='harness', harness_id=link.pk, ends={str(e.pk): k for e, k in zip(link.ends.all(), (first, second))})
     Configuration.objects.create(project=project, name='Test rig', parent=two, description='Two load boards, on the bench.')
+    rack = Configuration.objects.create(project=project, name='Rack hub', description='The rack hub and the five devices it feeds.')
+    at = {'HUB-500': configs.place(rack, kind='device', device_id=hub.pk, label='Rack hub', x=40, y=250)}
+    for i, n in enumerate(['SENS-10', 'FAN-20', 'LED-30', 'MOT-40', 'CAM-50']):
+        at[n] = configs.place(rack, kind='device', device_id=devices[n].pk, label=devices[n].name, x=840, y=20 + i * 120)
+    configs.place(rack, kind='harness', harness_id=loom.pk,
+                  ends={str(e.pk): at[e.connector.device.number] for e in loom.ends.select_related('connector__device')})
     configs.ask_harness(two, ctrl, second, 'The sensor cable from the controller to load board 2, about 2 m, shielded.', user, sam)
     number_up(asset_id, list(Asset.objects.filter(category__in=workshop.below()).order_by('pk')))
 
@@ -185,12 +233,15 @@ def _harness(project, name, ends, wires, parts, user):
     made = []
     for position, (designator, part, device, connector) in enumerate(ends):   # a part, or a family
         end = HarnessEnd(harness=h, designator=designator, position=position, connector=device.connectors.get(designator=connector))
-        end.used = part_or_family(part)
+        end.used = part_or_family(part) if part else None
         end.save()
         made.append(end)
-    for a, b, colour, part, wire_set, set_type in wires:
-        signal = made[0].connector.pins.get(number=a).signal
-        Wire.objects.create(harness=h, from_end=made[0], from_pin=a, to_end=made[1], to_pin=b, signal=signal, colour=colour,
+    named = {e.designator: e for e in made}
+    for a, b, colour, part, wire_set, set_type in wires:   # from the first end to the second, or 'P2:7' to 'P7:1'
+        start, a = (named[a.split(':')[0]], a.split(':')[1]) if ':' in a else (made[0], a)
+        to, b = (named[b.split(':')[0]], b.split(':')[1]) if ':' in b else (made[1], b)
+        signal = start.connector.pins.get(number=a).signal
+        Wire.objects.create(harness=h, from_end=start, from_pin=a, to_end=to, to_pin=b, signal=signal, colour=colour,
                             gauge='22 AWG', length=Decimal(450), part=parts[part] if part else None, wire_set=wire_set, set_type=set_type)
     HarnessItem.objects.create(harness=h, part=parts['DSUB-CONTACT-M'], quantity=2 * len(wires))
     HarnessItem.objects.create(harness=h, part=parts['TIE-100'], quantity=4)
