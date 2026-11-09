@@ -20,8 +20,8 @@ from web.forms import initial_for
 from . import attributes as attributes_kept
 from . import stock
 from .attributes import PartStore
-from .forms import AttributeForm, BranchForm, CategoryForm, FamilyForm, LocationForm, PartForm, VendorForm
-from .models import Attribute, Branch, Category, Family, Location, Part, PartLink, PartValue, Stock, Vendor
+from .forms import AttributeForm, BranchForm, CategoryForm, FamilyBranchForm, FamilyForm, LocationForm, PartForm, VendorForm
+from .models import Attribute, Branch, Category, Family, FamilyBranch, Location, Part, PartLink, PartValue, Stock, Vendor
 
 PAGE = 200   # parts listed at most
 
@@ -196,14 +196,37 @@ def vendor_form(request, pk=None):
 
 @login_required
 def families(request):
-    """The families of parts that can take each other's place, with a form to make one (or rename one: ?edit=<pk>)."""
+    """The families of parts that can take each other's place, in their branches (a tree: D-sub, Circular / M12, …),
+    with forms to make a family and a branch (or change one: ?edit=<pk>, ?branch=<pk>)."""
     item = Family.objects.filter(pk=request.GET.get('edit') or 0).first()
-    form = FamilyForm(request.POST or None, instance=item)
-    if request.method == 'POST' and form.is_valid():
-        saved = form.save()
-        messages.success(request, f'{saved} is saved.')
-        return redirect('inventory:families')
-    return render(request, 'inventory/families.html', {'families': Family.objects.annotate(n=Count('parts')), 'form': form, 'item': item})
+    branch = FamilyBranch.objects.filter(pk=request.GET.get('branch') or 0).first()
+    making = request.POST.get('form')
+    form = FamilyForm(request.POST if making == 'family' else None, instance=item, prefix='family')
+    branch_form = FamilyBranchForm(request.POST if making == 'branch' else None, instance=branch, prefix='branch')
+    for sent in (form, branch_form):
+        if sent.is_bound and sent.is_valid():
+            saved = sent.save()
+            messages.success(request, f'{saved} is saved.')
+            return redirect('inventory:families')
+    from .faces import natural
+    found = sorted(Family.objects.annotate(n=Count('parts')).select_related('group'), key=lambda f: natural(f.name))
+    by_branch = {}
+    for f in found:
+        by_branch.setdefault(f.group_id, []).append(f)
+    tree = [(b, depth, by_branch.get(b.pk, [])) for b, depth in FamilyBranch.ordered()]
+    return render(request, 'inventory/families.html', {'tree': tree, 'loose': by_branch.get(None, []), 'form': form,
+                                                       'item': item, 'branch_form': branch_form, 'branch': branch})
+
+
+@login_required
+@require_POST
+def standard_families(request):
+    """The connectors made often (D-sub, D-sub HD, Gecko) as families, those not there yet."""
+    from .faces import standard_families as make
+    made = make()
+    messages.success(request, f'{made} standard connector famil{"y" if made == 1 else "ies"} added.' if made else
+                     'The standard connector families are all there.')
+    return redirect('inventory:families')
 
 
 @login_required
@@ -264,13 +287,13 @@ def _face_sent(text):
 def connector(request, pk):
     """The connector editor of a family: its outline and its contacts (where each sits, its number), as seen from the
     pin side; made from a ready-made one, or changed by hand. Its pin and socket branches are made with it."""
-    from .faces import SHAPES, STARTS, start
+    from .faces import SHAPES, STARTS, preset, preset_choices, start
     item = get_object_or_404(Family, pk=pk)
     if request.method == 'POST':
         try:
             if request.POST.get('action') == 'start':
-                face = start(request.POST.get('kind'), min(int(request.POST.get('positions') or 1), 200),
-                             int(request.POST.get('columns') or 0) or None)
+                face = preset(request.POST.get('kind')) or start(request.POST.get('kind'), min(int(request.POST.get('positions') or 1), 200),
+                                                                 int(request.POST.get('columns') or 0) or None)
             else:
                 face = _face_sent(request.POST.get('face'))
         except ValueError:
@@ -286,7 +309,7 @@ def connector(request, pk):
         messages.success(request, f'The {item} connector is saved.')
         return redirect('inventory:connector' if request.POST.get('action') == 'start' else 'inventory:family', pk=item.pk)
     return render(request, 'inventory/connector.html', {'family': item, 'face': item.face or {'shape': 'rect', 'contacts': []},
-                                                        'shapes': SHAPES, 'starts': STARTS})
+                                                        'shapes': SHAPES, 'starts': STARTS, 'presets': preset_choices()})
 
 
 @login_required

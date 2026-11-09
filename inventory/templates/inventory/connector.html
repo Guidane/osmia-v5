@@ -8,9 +8,10 @@
 <section class="card">
   <form method="post" class="inline-form conn-start" data-confirm="{% if face.contacts %}Start again? The contacts as they are now go.{% endif %}">{% csrf_token %}
     <input type="hidden" name="action" value="start">
-    <label>Start from <select name="kind">{% for value, label in starts %}<option value="{{ value }}"{% if value == 'staggered' and face.shape == 'dsub' or value == 'circle' and face.shape == 'circle' %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
-    <label>Positions <input type="number" name="positions" min="1" max="200" value="{{ face.contacts|length|default:9 }}"></label>
-    <label>Columns <input type="number" name="columns" min="1" max="50"></label>
+    <label>Start from <select name="kind"><optgroup label="Any size">{% for value, label in starts %}<option value="{{ value }}"{% if value == 'staggered' and face.shape == 'dsub' or value == 'circle' and face.shape == 'circle' %} selected{% endif %}>{{ label }}</option>{% endfor %}</optgroup>
+      {% for group, options in presets %}<optgroup label="{{ group }}">{% for value, label in options %}<option value="{{ value }}" data-preset>{{ label }}</option>{% endfor %}</optgroup>{% endfor %}</select></label>
+    <label data-sized>Positions <input type="number" name="positions" min="1" max="200" value="{{ face.contacts|length|default:9 }}"></label>
+    <label data-sized>Columns <input type="number" name="columns" min="1" max="50"></label>
     <button class="btn">Make</button>
   </form>
 </section>
@@ -37,4 +38,14 @@
 </section>
 {{ face|json_script:"connector-face" }}
 {% endblock %}
-{% block scripts %}<script src="{% fresh 'inventory/connector.js' %}"></script>{% endblock %}
+{% block scripts %}<script src="{% fresh 'inventory/connector.js' %}"></script><script>
+(function () {   // a connector made often has its own size: no positions or columns to give
+  var kind = document.querySelector('.conn-start select[name=kind]');
+  function sized() {
+    var fixed = kind.selectedOptions[0].hasAttribute('data-preset');
+    document.querySelectorAll('[data-sized]').forEach(function (l) { l.hidden = fixed; });
+  }
+  kind.addEventListener('change', sized);
+  sized();
+})();
+</script>{% endblock %}

@@ -104,12 +104,15 @@ def _make(user):
     vendors['Cable World'].notes = 'Free delivery above 200. Ask for Jan.'
     vendors['Cable World'].save()
     from inventory.faces import start
-    dsub9 = Family.objects.create(name='D-sub 9', face=start('staggered', 9))
+    from inventory.models import FamilyBranch
+    dsubs = FamilyBranch.objects.create(name='D-sub')
+    m12s = FamilyBranch.objects.create(name='M12', parent=FamilyBranch.objects.create(name='Circular'))
+    dsub9 = Family.objects.create(name='D-sub 9', face=start('staggered', 9), group=dsubs)
     pin, socket = Branch.objects.create(family=dsub9, name='pin', contacts='pin'), Branch.objects.create(family=dsub9, name='socket', contacts='socket')
-    m12 = Family.objects.create(name='M12 5-pin', face=start('circle', 5))
+    m12 = Family.objects.create(name='M12 5-pin', face=start('circle', 5), group=m12s)
     Branch.objects.create(family=m12, name='pin', contacts='pin')
     Part.objects.filter(number='M12-5-F').update(family=m12, branch=Branch.objects.create(family=m12, name='socket', contacts='socket'))
-    dsub25 = Family.objects.create(name='D-sub 25', face=start('staggered', 25))
+    dsub25 = Family.objects.create(name='D-sub 25', face=start('staggered', 25), group=dsubs)
     Part.objects.filter(number='DSUB-25-PLUG').update(family=dsub25, branch=Branch.objects.create(family=dsub25, name='pin', contacts='pin'))
     Part.objects.filter(number='DSUB-25-RECEPT').update(family=dsub25, branch=Branch.objects.create(family=dsub25, name='socket', contacts='socket'))
     Part.objects.filter(number__in=['DSUB-9-PLUG', 'DSUB-9-PLUG-B']).update(family=dsub9, branch=pin)

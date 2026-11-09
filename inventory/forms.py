@@ -3,7 +3,7 @@ from django.utils.html import format_html, format_html_join
 
 from web.forms import TreeForm, tree_choices
 
-from .models import Attribute, Branch, Category, Family, Location, Part, Vendor, choices_of_parts, part_or_family
+from .models import Attribute, Branch, Category, Family, FamilyBranch, Location, Part, Vendor, choices_of_parts, part_or_family
 
 
 class PartOrFamilyInput(forms.TextInput):
@@ -262,17 +262,39 @@ class LocationForm(TreeForm):
         return self._not_inside_itself('parent', "A location can't be inside itself.")
 
 
-class FamilyForm(forms.ModelForm):
-    """A family of parts: its name (its connector face is made in the connector editor)."""
+class FamilyForm(TreeForm):
+    """A family of parts: its name and the branch it sits in (its connector face is made in the connector editor)."""
+    tree_fields = {'group': FamilyBranch}
+
     class Meta:
         model = Family
-        fields = ['name']
+        fields = ['name', 'group']
 
     def clean_name(self):
         name = self.cleaned_data['name'].strip()
         if Part.objects.filter(number__iexact=name).exists():
             raise forms.ValidationError('That is a part number: give the family a name of its own.')
         return name
+
+
+class FamilyBranchForm(TreeForm):
+    """A branch of the families' tree, under another one."""
+    tree_fields = {'parent': FamilyBranch}
+
+    class Meta:
+        model = FamilyBranch
+        fields = ['name', 'parent']
+        labels = {'parent': 'Under'}
+
+    def clean_parent(self):
+        return self._not_inside_itself('parent', "A branch can't be under itself.")
+
+    def clean(self):
+        data = super().clean()
+        name, parent = (data.get('name') or '').strip(), data.get('parent')
+        if name and FamilyBranch.objects.filter(parent=parent, name__iexact=name).exclude(pk=self.instance.pk).exists():
+            self.add_error('name', f'There is a branch {name} there already.')
+        return data
 
 
 class BranchForm(forms.ModelForm):

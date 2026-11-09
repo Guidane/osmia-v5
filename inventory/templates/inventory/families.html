@@ -3,18 +3,34 @@
 {% block content_class %}narrow{% endblock %}
 {% block content %}
 <p class="small"><a href="{% url 'inventory:parts' %}">← Parts</a></p>
-<div class="page-head"><h1>Families</h1></div>
+<div class="page-head"><h1>Families</h1><span class="spacer"></span>
+  <form method="post" action="{% url 'inventory:families_standard' %}">{% csrf_token %}<button class="btn">＋ Standard connectors</button></form></div>
 <div class="card flush">
-  <table class="list">
+  <table class="list family-tree">
     <tr><th>Family</th><th class="num">Parts</th><th></th></tr>
-    {% for f in families %}<tr><td><a href="{{ f.get_absolute_url }}">{{ f.name }}</a></td><td class="num">{{ f.n }}</td>
-      <td class="small"><a href="?edit={{ f.pk }}">Change</a></td></tr>
-    {% empty %}<tr><td colspan="3" class="empty small">No families yet.</td></tr>{% endfor %}
+    {% for b, depth, here in tree %}
+      <tr class="branch-row"><td style="--depth: {{ depth }}"><b>{{ b.name }}</b></td><td></td>
+        <td class="small"><a href="?branch={{ b.pk }}">Change</a></td></tr>
+      {% for f in here %}<tr><td style="--depth: {{ depth|add:1 }}"><a href="{{ f.get_absolute_url }}">{{ f.name }}</a></td><td class="num">{{ f.n }}</td>
+        <td class="small"><a href="?edit={{ f.pk }}">Change</a></td></tr>{% endfor %}
+    {% endfor %}
+    {% for f in loose %}<tr><td><a href="{{ f.get_absolute_url }}">{{ f.name }}</a></td><td class="num">{{ f.n }}</td>
+      <td class="small"><a href="?edit={{ f.pk }}">Change</a></td></tr>{% endfor %}
+    {% if not tree and not loose %}<tr><td colspan="3" class="empty small">No families yet.</td></tr>{% endif %}
   </table>
 </div>
-<form method="post" class="form card">{% csrf_token %}
-  <h3>{% if item %}Change {{ item.name }}{% else %}New family{% endif %}</h3>
-  <div class="fields">{% include "web/_form_fields.html" %}</div>
-  <div class="actions"><button class="btn primary">Save</button>{% if item %} <a href="{% url 'inventory:families' %}">Cancel</a>{% endif %}</div>
-</form>
+<div class="columns">
+  <form method="post" class="form card" action="{% url 'inventory:families' %}{% if item %}?edit={{ item.pk }}{% endif %}">{% csrf_token %}
+    <input type="hidden" name="form" value="family">
+    <h3>{% if item %}Change {{ item.name }}{% else %}New family{% endif %}</h3>
+    <div class="fields">{% include "web/_form_fields.html" with form=form %}</div>
+    <div class="actions"><button class="btn primary">Save</button>{% if item %} <a href="{% url 'inventory:families' %}">Cancel</a>{% endif %}</div>
+  </form>
+  <form method="post" class="form card" action="{% url 'inventory:families' %}{% if branch %}?branch={{ branch.pk }}{% endif %}">{% csrf_token %}
+    <input type="hidden" name="form" value="branch">
+    <h3>{% if branch %}Change {{ branch.name }}{% else %}New branch{% endif %}</h3>
+    <div class="fields">{% include "web/_form_fields.html" with form=branch_form %}</div>
+    <div class="actions"><button class="btn primary">Save</button>{% if branch %} <a href="{% url 'inventory:families' %}">Cancel</a>{% endif %}</div>
+  </form>
+</div>
 {% endblock %}

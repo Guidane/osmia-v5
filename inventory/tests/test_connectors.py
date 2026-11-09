@@ -23,6 +23,32 @@ class ConnectorTests(Base):
         self.assertContains(page, 'Socket side')
         self.assertContains(page, 'family-faces')
 
+    def test_made_from_a_connector_made_often(self):
+        family = Family.objects.create(name='HD 44')
+        url = reverse('inventory:connector', args=[family.pk])
+        self.assertContains(self.client.get(url), 'D-sub HD 44 (DB-44)')
+        self.client.post(url, {'action': 'start', 'kind': 'hd-44', 'positions': '3'})        # its own size, not 3
+        family.refresh_from_db()
+        self.assertEqual((family.face['shape'], len(family.face['contacts'])), ('dsub', 44))
+        self.assertEqual(len({c[2] for c in family.face['contacts']}), 3)                   # in three rows
+        self.client.post(url, {'action': 'start', 'kind': 'gecko-10'})
+        family.refresh_from_db()
+        first, second = family.face['contacts'][:2]
+        self.assertEqual((first[1], first[0], second[0]), (second[1], '1', '2'))            # 2 below 1
+
+    def test_standard_connectors_as_families(self):
+        from inventory.faces import PRESETS
+        mine = Family.objects.create(name='gecko 6')                                         # there already: filled in
+        self.client.post(reverse('inventory:families_standard'))
+        self.assertEqual(Family.objects.count(), len(PRESETS))
+        mine.refresh_from_db()
+        self.assertEqual((mine.group.name, len(mine.face['contacts']), mine.branches.count()), ('Gecko', 6, 2))
+        hd = Family.objects.get(name='D-sub HD 44')
+        self.assertEqual((hd.group.name, len(hd.face['contacts'])), ('D-sub HD', 44))
+        self.assertEqual(sorted(hd.branches.values_list('contacts', flat=True)), ['pin', 'socket'])
+        self.client.post(reverse('inventory:families_standard'))                             # again: nothing more
+        self.assertEqual(Family.objects.count(), len(PRESETS))
+
     def test_changed_by_hand(self):
         family = Family.objects.create(name='Header 3', face=start('row', 3))
         url = reverse('inventory:connector', args=[family.pk])
@@ -56,6 +82,22 @@ class ConnectorTests(Base):
         self.client.post(url, {'action': 'save', 'face': json.dumps({'shape': 'custom', 'contacts': [], 'outline': [[0, 0], [1, 1]]})})
         family.refresh_from_db()
         self.assertEqual(len(family.face['outline']), 5)                                     # 2 corners: refused
+
+    def test_families_in_branches(self):
+        from inventory.models import FamilyBranch
+        url = reverse('inventory:families')
+        self.client.post(url, {'form': 'branch', 'branch-name': 'Circular'})
+        circular = FamilyBranch.objects.get()
+        self.client.post(url, {'form': 'branch', 'branch-name': 'M12', 'branch-parent': circular.pk})
+        m12 = FamilyBranch.objects.get(name='M12')
+        self.assertEqual(m12.path, 'Circular / M12')
+        self.assertContains(self.client.post(f'{url}?branch={circular.pk}', {'form': 'branch', 'branch-name': 'Circular',
+                                                                           'branch-parent': m12.pk}), "under itself")
+        self.client.post(url, {'form': 'family', 'family-name': 'M12 5-pin', 'family-group': m12.pk})
+        family = Family.objects.get(name='M12 5-pin')
+        self.assertEqual(family.group, m12)
+        self.assertContains(self.client.get(url), 'M12 5-pin')
+        self.assertEqual(sorted(circular.below()), sorted([circular.pk, m12.pk]))         # picking Circular shows it
 
     def test_what_is_drawn_comes_from_the_family(self):
         family = Family.objects.create(name='D-sub 9', face=start('staggered', 9))

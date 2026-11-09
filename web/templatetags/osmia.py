@@ -12,8 +12,11 @@ def fresh(path):
 
     from django.contrib.staticfiles import finders
     from django.templatetags.static import static
+    url = static(path)
+    if 'v=' in url:   # the static storage gave it its version already
+        return url
     found = finders.find(path)
-    return f'{static(path)}?v={int(os.path.getmtime(found))}' if found else static(path)
+    return f'{url}?v={int(os.path.getmtime(found))}' if found else url
 
 
 @register.filter

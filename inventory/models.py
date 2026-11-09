@@ -258,11 +258,20 @@ class PartGroup:
         return Stock.objects.filter(part__in=self.members()).aggregate(n=Sum('quantity'))['n'] or Decimal(0)
 
 
+class FamilyBranch(Tree):
+    """Where families sit, as a tree: "D-sub" holds D-sub 9 and D-sub 25, "Circular / M12" the M12 ones."""
+    class Meta(Tree.Meta):
+        verbose_name_plural = 'family branches'
+        constraints = [models.UniqueConstraint(fields=['parent', 'name'], name='unique_family_branch_name')]
+
+
 class Family(PartGroup, models.Model):
     """Parts that can take each other's place, by a name (D-sub 9), maybe split into branches (pin, socket, …). A
     connector family has its face (``inventory.faces``): its outline and where its contacts sit, as seen from the pin
     side."""
     name = models.CharField(max_length=100)
+    group = models.ForeignKey(FamilyBranch, null=True, blank=True, on_delete=models.SET_NULL, related_name='families',
+                              verbose_name='branch')
     face = models.JSONField(default=dict, blank=True)
 
     class Meta:

@@ -50,6 +50,23 @@ class DeviceTests(DeviceBase):
                          {'1': ('CAN', 'Shielded twisted'), '2': ('', 'Straight'), '6': ('CAN', 'Shielded twisted'),
                           '7': ('CAN', 'Shielded twisted'), '8': ('', 'Straight')})
 
+    def test_a_connector_s_family_picked_in_a_popup(self):
+        from inventory.faces import start
+        from inventory.models import Branch, Family
+        dsub = Family.objects.create(name='D-sub 9', face=start('staggered', 9))
+        Branch.objects.create(family=dsub, name='socket', contacts='socket')
+        url = reverse('devices:connector_edit', args=[self.controller.pk, self.j1.pk])
+        form = self.client.get(url)
+        self.assertContains(form, 'family-finder')
+        self.assertContains(form, '"D-sub 9 / socket"')                                     # its genders, to pick
+        self.client.post(url, {'designator': 'J1', 'name': 'Bus', 'used': 'D-sub 9 / socket'})
+        self.j1.refresh_from_db()
+        self.assertEqual(str(self.j1.used), 'D-sub 9 / socket')
+        self.assertContains(form, '"D-sub 9 / pin"')                                       # a side it has none of yet
+        self.client.post(reverse('devices:connector_new', args=[self.controller.pk]), {'designator': 'J5', 'used': 'D-sub 9 / pin'})
+        made = self.controller.connectors.get(designator='J5').used
+        self.assertEqual((str(made), made.contacts), ('D-sub 9 / pin', 'pin'))              # made when picked
+
     def test_connectors_copied_from_another_device(self):
         other = Device.objects.create(number='CTRL-2', name='Other controller')
         Connector.objects.create(device=other, designator='J1', name='Mine')

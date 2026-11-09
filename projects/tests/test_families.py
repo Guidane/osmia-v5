@@ -22,11 +22,11 @@ class FamilyTests(ProjectBase):
         Part.objects.filter(pk__in=[self.plug.pk, self.alt.pk]).update(family=self.family)
 
     def test_its_pages(self):
-        self.client.post(reverse('inventory:families'), {'name': 'M12 socket'})
+        self.client.post(reverse('inventory:families'), {'form': 'family', 'family-name': 'M12 socket'})
         socket = Family.objects.get(name='M12 socket')
-        self.client.post(reverse('inventory:families') + f'?edit={socket.pk}', {'name': 'M12 socket, 5 pin'})   # renamed
+        self.client.post(reverse('inventory:families') + f'?edit={socket.pk}', {'form': 'family', 'family-name': 'M12 socket, 5 pin'})   # renamed
         self.assertEqual(Family.objects.get(pk=socket.pk).name, 'M12 socket, 5 pin')
-        self.assertContains(self.client.post(reverse('inventory:families'), {'name': 'dsub-9-plug'}), 'That is a part number')
+        self.assertContains(self.client.post(reverse('inventory:families'), {'form': 'family', 'family-name': 'dsub-9-plug'}), 'That is a part number')
         stock.add(self.plug, 2, self.shelf, self.ada)
         stock.add(self.alt, 3, self.shelf, self.ada)
         page = self.client.get(self.family.get_absolute_url())
@@ -68,7 +68,7 @@ class FamilyTests(ProjectBase):
         self.assertEqual(self.harness.items.get().family, self.family)
         page = self.client.get(reverse('devices:connector_edit', args=[self.controller.pk, self.j1.pk]))
         self.assertContains(page, 'value="DSUB-9-PLUG"')                         # its part, in the box
-        self.assertContains(page, '<option value="D-sub 9 plug">family: 2 parts</option>', html=True)
+        self.assertContains(page, '"name": "D-sub 9 plug"')                       # the family, in the popup
         self.client.post(reverse('devices:connector_edit', args=[self.controller.pk, self.j1.pk]),
                          {'designator': 'J1', 'name': 'Bus', 'used': 'd-sub 9 plug'})
         self.j1.refresh_from_db()

@@ -213,6 +213,18 @@ tr.pick:hover, tr.pick:focus { background: var(--hover); outline: none; }
 tr.pick.on { background: var(--select); }
 .finder-foot { padding: 8px 12px; border-top: 1px solid var(--border); }
 .finder-foot #picked { font-weight: 600; }
+.family-pick { display: flex; gap: 6px; }
+dialog.finder.family-finder { height: min(640px, calc(100vh - 32px)); }
+.family-finder .finder-tree[hidden] { display: none; }
+.family-tree td:first-child { padding-left: calc(10px + var(--depth, 0) * 1.4em); }
+.family-tree .branch-row td { background: var(--panel-2); }
+.family-pick [hidden] { display: none; }
+.family-cards { flex: 1; overflow: auto; padding: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; align-content: start; }
+.family-card { border: 1px solid var(--border); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.family-card.on { border-color: var(--brand); background: var(--brand-soft); }
+.family-card h4 { margin: 0; }
+.family-card svg { width: auto; max-width: 100%; height: auto; max-height: 110px; align-self: center; }
+.family-genders { display: flex; gap: 6px; flex-wrap: wrap; }
 .finder-foot #picked.muted { font-weight: normal; }
 .finder-foot input[name=price] { width: 170px; }
 @media (max-width: 640px) {
@@ -290,6 +302,7 @@ ul.tight { margin: 4px 0 0; padding-left: 18px; }
 .conn-canvas svg { display: block; }
 .conn-start label, .conn-tools label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
 .conn-start input[type=number] { width: 70px; }
+.conn-start label[hidden] { display: none; }
 .conn-tools { gap: 12px; flex-wrap: wrap; }
 .conn-picked { display: inline-flex; align-items: center; gap: 6px; }
 .conn-picked[hidden] { display: none; }

@@ -69,6 +69,88 @@ def start(kind, positions, columns=None):
     return fitted('rect', [[p, i * PITCH, 0] for i, p in enumerate(numbers)])
 
 
+def rows(shape, counts, offsets, numbering='rows'):
+    """Contacts in rows (``counts`` of each, top first), each row moved by its ``offsets`` (in pitches); numbered row
+    by row from the top left, or ``zigzag``: 1 top, 2 below it, 3 top, … (two rows)."""
+    if numbering == 'zigzag':
+        n = sum(counts)
+        return fitted(shape, [[str(i + 1), (i // 2) * PITCH, (i % 2) * PITCH] for i in range(n)])
+    out, number = [], 1
+    for r, (count, offset) in enumerate(zip(counts, offsets)):
+        for i in range(count):
+            out.append([str(number), (i + offset) * PITCH, r * PITCH])
+            number += 1
+    return fitted(shape, out)
+
+
+# Connectors made often: (group, label, rows top first, each row moved by, numbering)
+PRESETS = {
+    'dsub-9': ('D-sub', 'D-sub 9 (DE-9)', [5, 4], [0, 0.5]),
+    'dsub-15': ('D-sub', 'D-sub 15 (DA-15)', [8, 7], [0, 0.5]),
+    'dsub-25': ('D-sub', 'D-sub 25 (DB-25)', [13, 12], [0, 0.5]),
+    'dsub-37': ('D-sub', 'D-sub 37 (DC-37)', [19, 18], [0, 0.5]),
+    'dsub-50': ('D-sub', 'D-sub 50 (DD-50)', [17, 16, 17], [0, 0.5, 0]),
+    'hd-15': ('D-sub HD', 'D-sub HD 15 (DE-15)', [5, 5, 5], [0.5, 0, 0.5]),
+    'hd-26': ('D-sub HD', 'D-sub HD 26 (DA-26)', [9, 9, 8], [0, 0.5, 1]),
+    'hd-44': ('D-sub HD', 'D-sub HD 44 (DB-44)', [15, 15, 14], [0, 0.5, 1]),
+    'hd-62': ('D-sub HD', 'D-sub HD 62 (DC-62)', [21, 21, 20], [0, 0.5, 1]),
+    'hd-78': ('D-sub HD', 'D-sub HD 78 (DD-78)', [20, 19, 20, 19], [0, 0.5, 0, 0.5]),
+    **{f'gecko-{n}': ('Gecko', f'Gecko {n}', [n // 2, n // 2], [0, 0], 'zigzag') for n in (4, 6, 8, 10, 12, 16, 20, 26, 34, 50)},
+}
+
+
+def preset(key):
+    """The face of a connector made often (``PRESETS``); None for a key it doesn't know."""
+    if key not in PRESETS:
+        return None
+    group, _, counts, offsets, *numbering = PRESETS[key]
+    return rows('rect' if group == 'Gecko' else 'dsub', counts, offsets, *numbering)
+
+
+def natural(name):
+    """A sort key that puts numbers in their order: Gecko 4 before Gecko 10."""
+    import re
+    return [int(part) if part.isdigit() else part.lower() for part in re.split(r'(\d+)', str(name))]
+
+
+def family_name(key):
+    """The family a connector made often becomes: "D-sub 25", "D-sub HD 44", "Gecko 10"."""
+    return PRESETS[key][1].split(' (')[0]
+
+
+def standard_families():
+    """Every connector made often as a family, in its branch (D-sub, D-sub HD, Gecko), with its face and its pin and
+    socket genders. One there already (by name, any case) is kept: only what it lacks (a branch, a face, a gender)
+    is filled in. Returns how many families were made."""
+    from django.db import transaction
+
+    from .models import Branch, Family, FamilyBranch
+    made = 0
+    with transaction.atomic():
+        for key, (group, *_rest) in PRESETS.items():
+            branch = FamilyBranch.objects.filter(parent=None, name__iexact=group).first() or FamilyBranch.objects.create(name=group)
+            family = Family.objects.filter(name__iexact=family_name(key)).first()
+            if family is None:
+                family = Family.objects.create(name=family_name(key), group=branch, face=preset(key))
+                made += 1
+            else:
+                family.group = family.group or branch
+                family.face = family.face if (family.face or {}).get('contacts') else preset(key)
+                family.save(update_fields=['group', 'face'])
+            for side in ('pin', 'socket'):
+                if not family.branches.filter(contacts=side).exists() and not family.branches.filter(name__iexact=side).exists():
+                    Branch.objects.create(family=family, name=side, contacts=side)
+    return made
+
+
+def preset_choices():
+    """For the editor's list: [(group, [(key, label)])]."""
+    groups = {}
+    for key, (group, label, *_) in PRESETS.items():
+        groups.setdefault(group, []).append((key, label))
+    return list(groups.items())
+
+
 def mirrored(face):
     out = dict(face, contacts=[[n, round(face['w'] - x, 1), y] for n, x, y in face['contacts']])
     if face.get('outline'):
