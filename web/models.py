@@ -46,6 +46,9 @@ class TreeWalk:
             node = node.parent
         return list(reversed(nodes))
 
+    def chain_pks(self):
+        return [node.pk for node in self.chain()]
+
     def below(self):
         """The pks of this one and every one under it."""
         found, todo = set(), [self.pk]

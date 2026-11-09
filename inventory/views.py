@@ -62,10 +62,35 @@ def parts(request):
         return excel.download('parts', _part_sheets(found))
     if q and found.count() == 1:
         return redirect(found.get())
+    tree = Category.of(Category.Kind.PARTS)
+    own = dict(Part.objects.filter(active=True).values('category').annotate(n=Count('pk')).values_list('category', 'n'))
+    children = {}
+    for c, _ in tree:
+        children.setdefault(c.parent_id, []).append(c.pk)
+
+    def counted(pk):   # its parts and those of the categories under it
+        return own.get(pk, 0) + sum(counted(child) for child in children.get(pk, []))
+    picked = Part.objects.filter(pk=request.GET.get('part') or 0).first()
     return render(request, 'inventory/parts.html', {
         'rows': attributes_kept.columns(list(found[:PAGE]), attributes, PartStore()), 'count': found.count(), 'q': q,
-        'category': category, 'categories': Category.of(Category.Kind.PARTS), 'page': PAGE, 'attributes': attributes,
-        'filters': attributes_kept.filters(attributes, request.GET)})
+        'category': category, 'categories': [(c, depth, counted(c.pk)) for c, depth in tree], 'page': PAGE,
+        'attributes': attributes, 'filters': attributes_kept.filters(attributes, request.GET),
+        'every': Part.objects.filter(active=True).count(), 'open': set(category.chain_pks()) if category else set(),
+        'picked': picked, 'brief': _brief(picked) if picked else None})
+
+
+def _brief(part):
+    """What the details beside the parts list show of ``part``."""
+    return {'part': part, 'attributes': attributes_kept.shown(part, part.category),
+            'stock': part.stock.select_related('location').filter(quantity__gt=0), 'on_hand': part.on_hand,
+            'on_order': orders.on_order(part)}
+
+
+@login_required
+def part_brief(request, pk):
+    """The details of a part beside the parts list (fetched when one is picked)."""
+    part = get_object_or_404(Part.objects.select_related('category', 'vendor', 'family', 'branch'), pk=pk)
+    return render(request, 'inventory/_part_brief.html', _brief(part))
 
 
 def _part_sheets(parts):

@@ -64,6 +64,17 @@ class StockTests(Base):
 
 
 class FindingTests(Base):
+    def test_the_category_tree_the_list_and_the_part_picked(self):
+        stock.add(self.plug, 3, self.shelf, self.ada)
+        page = self.client.get(reverse('inventory:parts'), {'category': self.dsub.pk, 'part': self.plug.pk})
+        tree = page.context['categories']
+        self.assertEqual([(c.name, depth, n) for c, depth, n in tree], [('Connectors', 0, 1), ('D-sub', 1, 1)])   # counted below
+        self.assertEqual(page.context['open'], {self.connectors.pk, self.dsub.pk})
+        self.assertContains(page, 'data-brief="%d"' % self.plug.pk)                       # its details, already open
+        brief = self.client.get(reverse('inventory:part_brief', args=[self.plug.pk]))
+        self.assertContains(brief, 'Shelf 1')
+        self.assertContains(brief, 'D-sub 9 plug')
+
     def test_search_category_and_one_match_goes_straight_to_it(self):
         page = self.client.get(reverse('inventory:parts'), {'q': 'plug'})
         self.assertRedirects(page, reverse('inventory:part', args=[self.plug.pk]))

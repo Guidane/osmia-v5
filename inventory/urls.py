@@ -9,6 +9,7 @@ urlpatterns = [
     path('parts/new/', views.part_form, name='part_new'),
     path('parts/find/', views.find, name='find'),
     path('parts/<int:pk>/', views.part, name='part'),
+    path('parts/<int:pk>/brief/', views.part_brief, name='part_brief'),
     path('parts/<int:pk>/edit/', views.part_form, name='part_edit'),
     path('parts/<int:pk>/stock/', views.part_stock, name='part_stock'),
     path('parts/<int:pk>/reorder/', views.part_reorder, name='part_reorder'),

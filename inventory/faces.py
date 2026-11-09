@@ -83,6 +83,18 @@ def rows(shape, counts, offsets, numbering='rows'):
     return fitted(shape, out)
 
 
+def gecko(n):
+    """A Gecko of ``n`` contacts (as drawn for gecko 6): two rows, numbered along the top row and then the bottom one;
+    a box with a notch at each top corner and a key in the middle of the bottom."""
+    cols, step = n // 2, PITCH / 2
+    w, top, low = PITCH * (cols + 1), step, 7 * step
+    contacts = [[str(i + 1), PITCH * (i % cols + 1), 3 * step + (i // cols) * PITCH] for i in range(n)]
+    mid = w / 2
+    outline = [[0, top], [0, 0], [step, 0], [step, top], [w - step, top], [w - step, 0], [w, 0], [w, low],
+               [mid + step, low], [mid + step, low + 2 * step], [mid - step, low + 2 * step], [mid - step, low], [0, low]]
+    return _custom(contacts, outline)
+
+
 # Connectors made often: (group, label, rows top first, each row moved by, numbering)
 PRESETS = {
     'dsub-9': ('D-sub', 'D-sub 9 (DE-9)', [5, 4], [0, 0.5]),
@@ -95,7 +107,7 @@ PRESETS = {
     'hd-44': ('D-sub HD', 'D-sub HD 44 (DB-44)', [15, 15, 14], [0, 0.5, 1]),
     'hd-62': ('D-sub HD', 'D-sub HD 62 (DC-62)', [21, 21, 20], [0, 0.5, 1]),
     'hd-78': ('D-sub HD', 'D-sub HD 78 (DD-78)', [20, 19, 20, 19], [0, 0.5, 0, 0.5]),
-    **{f'gecko-{n}': ('Gecko', f'Gecko {n}', [n // 2, n // 2], [0, 0], 'zigzag') for n in (4, 6, 8, 10, 12, 16, 20, 26, 34, 50)},
+    **{f'gecko-{n}': ('Gecko', f'Gecko {n}', [n // 2, n // 2], [0, 0]) for n in (4, 6, 8, 10, 12, 16, 20, 26, 34, 50)},
 }
 
 
@@ -104,7 +116,9 @@ def preset(key):
     if key not in PRESETS:
         return None
     group, _, counts, offsets, *numbering = PRESETS[key]
-    return rows('rect' if group == 'Gecko' else 'dsub', counts, offsets, *numbering)
+    if group == 'Gecko':
+        return gecko(sum(counts))
+    return rows('dsub', counts, offsets, *numbering)
 
 
 def natural(name):

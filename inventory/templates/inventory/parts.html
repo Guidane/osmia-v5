@@ -1,33 +1,48 @@
 {% extends "base.html" %}{% load osmia %}
 {% block title %}Parts · Osmia{% endblock %}
+{% block content_class %}wide{% endblock %}
 {% block content %}
 <div class="page-head"><h1>Parts</h1><span class="spacer"></span>
   <a class="btn" href="?{{ request.GET.urlencode }}{% if request.GET %}&amp;{% endif %}export=1">⬇ Excel</a>
   <button type="button" class="btn" data-labels="{% url 'web:labels' 'part' %}" title="Labels of the ticked parts (none ticked: of all listed)">🏷 Labels</button>
   <a class="btn" href="{% url 'inventory:categories' %}">Categories</a><a class="btn" href="{% url 'inventory:families' %}">Families</a><a class="btn" href="{% url 'inventory:vendors' %}">Vendors</a>
-  <a class="btn primary" href="{% url 'inventory:part_new' %}">＋ New part</a></div>
-<form method="get" class="filters">
-  <input type="search" name="q" value="{{ q }}" placeholder="Part number, description, manufacturer…" aria-label="Search parts">
-  <select name="category" aria-label="Category"><option value="">Every category</option>
-    {% for c, depth in categories %}<option value="{{ c.pk }}"{% if category.pk == c.pk %} selected{% endif %}>{% for _ in ""|ljust:depth %}&nbsp;&nbsp;&nbsp;{% endfor %}{{ c.name }}</option>{% endfor %}</select>
-  <label class="small"><input type="checkbox" name="all" value="1"{% if request.GET.all %} checked{% endif %}> also inactive</label>
-  <button class="btn">Find</button>
-  {% include "inventory/_attribute_filters.html" %}
-</form>
-<div class="card flush">
-  <table class="list">
-    <tr><th><input type="checkbox" data-pick-all aria-label="Tick them all"></th><th></th><th>Part number</th><th>Description</th><th>Category</th>{% for a in attributes %}<th>{{ a.name }}</th>{% empty %}<th>Manufacturer</th>{% endfor %}<th class="num">On hand</th><th></th></tr>
-    {% for p, values in rows %}<tr>
-      <td><input type="checkbox" name="pick" value="{{ p.pk }}" aria-label="{{ p.number }}"></td>
-      <td class="thumb-cell">{% thumb p %}</td><td><a href="{{ p.get_absolute_url }}">{{ p.number }}</a></td><td>{{ p.description }}</td>
-      <td class="small">{{ p.category.name|default:"" }}</td>
-      {% for v in values %}<td class="small">{{ v }}</td>{% empty %}<td class="small">{{ p.manufacturer }}</td>{% endfor %}
-      <td class="num{% if p.minimum and p.have|default:0 < p.minimum %} low{% endif %}">{{ p.have|qty|default:"0" }} <span class="muted small">{{ p.unit }}</span></td>
-      <td>{% if not p.active %}<span class="badge">Inactive</span>{% endif %}</td>
-    </tr>{% empty %}<tr><td colspan="{{ attributes|length|add:8 }}" class="empty small">{% if q or category %}No parts match.{% else %}No parts yet.{% endif %}</td></tr>{% endfor %}
-  </table>
+  <a class="btn primary" href="{% url 'inventory:part_new' %}{% if category %}?category={{ category.pk }}{% endif %}">＋ New part</a></div>
+
+<div class="parts-browser">
+  <nav class="card parts-tree" aria-label="Categories">
+    <a href="?{% if q %}q={{ q|urlencode }}{% endif %}"{% if not category %} class="on"{% endif %}><span>All parts</span><span class="muted small">{{ every }}</span></a>
+    {% for c, depth, n in categories %}<a href="?category={{ c.pk }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}" style="--depth: {{ depth }}"
+      class="{% if category.pk == c.pk %}on{% elif c.pk in open %}open{% endif %}"><span>{{ c.name }}</span><span class="muted small">{{ n }}</span></a>{% endfor %}
+  </nav>
+
+  <div class="parts-middle">
+    <form method="get" class="filters">
+      {% if category %}<input type="hidden" name="category" value="{{ category.pk }}">{% endif %}
+      <input type="search" name="q" value="{{ q }}" placeholder="Part number, description, manufacturer…" aria-label="Search parts">
+      <label class="small"><input type="checkbox" name="all" value="1"{% if request.GET.all %} checked{% endif %}> also inactive</label>
+      <button class="btn">Find</button>
+      {% include "inventory/_attribute_filters.html" %}
+    </form>
+    <div class="card flush">
+      <table class="list parts-list">
+        <tr><th><input type="checkbox" data-pick-all aria-label="Tick them all"></th><th></th><th>Part number</th><th>Description</th>{% if not category %}<th>Category</th>{% endif %}{% for a in attributes %}<th>{{ a.name }}</th>{% empty %}<th>Manufacturer</th>{% endfor %}<th class="num">On hand</th></tr>
+        {% for p, values in rows %}<tr data-part="{{ p.pk }}" data-brief-url="{% url 'inventory:part_brief' p.pk %}" class="{% if picked.pk == p.pk %}on{% endif %}" tabindex="0">
+          <td><input type="checkbox" name="pick" value="{{ p.pk }}" aria-label="{{ p.number }}"></td>
+          <td class="thumb-cell">{% thumb p %}</td><td><a href="{{ p.get_absolute_url }}">{{ p.number }}</a>{% if not p.active %} <span class="badge">Inactive</span>{% endif %}</td><td>{{ p.description }}</td>
+          {% if not category %}<td class="small">{{ p.category.name|default:"" }}</td>{% endif %}
+          {% for v in values %}<td class="small">{{ v }}</td>{% empty %}<td class="small">{{ p.manufacturer }}</td>{% endfor %}
+          <td class="num{% if p.minimum and p.have|default:0 < p.minimum %} low{% endif %}">{{ p.have|qty|default:"0" }} <span class="muted small">{{ p.unit }}</span></td>
+        </tr>{% empty %}<tr><td colspan="{{ attributes|length|add:7 }}" class="empty small">{% if q or category %}No parts match.{% else %}No parts yet.{% endif %}</td></tr>{% endfor %}
+      </table>
+    </div>
+    {% if count > page %}<p class="muted small">The first {{ page }} of {{ count }}: search to narrow it down.</p>{% endif %}
+  </div>
+
+  <aside class="card parts-detail" data-detail>
+    {% if brief %}{% include "inventory/_part_brief.html" with part=brief.part attributes=brief.attributes stock=brief.stock on_hand=brief.on_hand on_order=brief.on_order %}
+    {% else %}<p class="muted small pad">Pick a part to see it here.</p>{% endif %}
+  </aside>
 </div>
-{% if count > page %}<p class="muted small">The first {{ page }} of {{ count }}: search to narrow it down.</p>{% endif %}
 {% endblock %}
 {% block scripts %}<script>
   /* Labels of the ticked ones (none ticked: of all those listed). */
@@ -40,4 +55,33 @@
   });
   var all = document.querySelector('input[data-pick-all]');
   if (all) all.addEventListener('change', function () { document.querySelectorAll('input[name=pick]').forEach(function (x) { x.checked = all.checked; }); });
+
+  /* A row picked (clicked, or Enter, or the arrow keys): its details on the right, kept in the address as ?part=. */
+  (function () {
+    var detail = document.querySelector('[data-detail]'), rows = Array.prototype.slice.call(document.querySelectorAll('tr[data-part]'));
+    var asked = 0;
+    function pick(row) {
+      rows.forEach(function (r) { r.classList.toggle('on', r === row); });
+      var url = new URL(location.href);
+      url.searchParams.set('part', row.dataset.part);
+      history.replaceState(null, '', url);
+      var mine = ++asked;
+      fetch(row.dataset.briefUrl, { headers: { 'X-Requested-With': 'fetch' } }).then(function (r) { return r.text(); }).then(function (html) {
+        if (mine === asked) detail.innerHTML = html;
+      });
+    }
+    rows.forEach(function (row, i) {
+      row.addEventListener('click', function (e) {
+        if (e.target.closest('a, input, button')) return;   // the part number still opens its page; ticking stays ticking
+        pick(row);
+      });
+      row.addEventListener('keydown', function (e) {
+        var to = e.key === 'ArrowDown' ? rows[i + 1] : e.key === 'ArrowUp' ? rows[i - 1] : e.key === 'Enter' ? row : null;
+        if (!to) return;
+        e.preventDefault();
+        to.focus();
+        pick(to);
+      });
+    });
+  })();
 </script>{% endblock %}

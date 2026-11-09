@@ -33,8 +33,10 @@ class ConnectorTests(Base):
         self.assertEqual(len({c[2] for c in family.face['contacts']}), 3)                   # in three rows
         self.client.post(url, {'action': 'start', 'kind': 'gecko-10'})
         family.refresh_from_db()
-        first, second = family.face['contacts'][:2]
-        self.assertEqual((first[1], first[0], second[0]), (second[1], '1', '2'))            # 2 below 1
+        contacts = {c[0]: c[1:] for c in family.face['contacts']}
+        self.assertEqual(contacts['1'][0], contacts['6'][0])                                # the top row, then the bottom one
+        self.assertLess(contacts['1'][1], contacts['6'][1])
+        self.assertEqual((family.face['shape'], len(family.face['outline'])), ('custom', 13))   # its notches and key
 
     def test_standard_connectors_as_families(self):
         from inventory.faces import PRESETS

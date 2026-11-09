@@ -1,0 +1,26 @@
+{% load osmia %}<div class="brief" data-brief="{{ part.pk }}">
+  <div class="brief-head"><h3><a href="{{ part.get_absolute_url }}">{{ part.number }}</a></h3>
+    {% if not part.active %}<span class="badge">Inactive</span>{% endif %}<span class="spacer"></span>
+    <a class="btn small" href="{{ part.get_absolute_url }}">Open</a><a class="btn small ghost" href="{% url 'inventory:part_edit' part.pk %}">Change</a></div>
+  {% if part.description %}<p class="brief-what">{{ part.description }}</p>{% endif %}
+  {% preview part %}
+  <div class="tiles brief-tiles">
+    <div class="tile"><b class="{% if part.minimum and on_hand < part.minimum %}low{% endif %}">{{ on_hand|qty }}</b> {{ part.unit }} on hand</div>
+    <div class="tile"><b>{{ on_order|qty }}</b> on order</div>
+  </div>
+  <dl class="details">
+    <dt>Category</dt><dd>{{ part.category|default:"—" }}</dd>
+    {% include "inventory/_attribute_values.html" %}
+    <dt>Family</dt><dd>{% if part.family %}<a href="{{ part.family.get_absolute_url }}">{% if part.branch %}{{ part.branch }}{% else %}{{ part.family }}{% endif %}</a>{% else %}—{% endif %}</dd>
+    <dt>Manufacturer</dt><dd>{{ part.manufacturer|default:"—" }}{% if part.mpn %} · {{ part.mpn }}{% endif %}</dd>
+    <dt>Vendor</dt><dd>{% if part.vendor %}<a href="{{ part.vendor.get_absolute_url }}">{{ part.vendor }}</a>{% if part.vendor_number %} · {{ part.vendor_number }}{% endif %}{% else %}—{% endif %}</dd>
+    <dt>Last price</dt><dd>{{ part.price|qty|default:"—" }}</dd>
+    <dt>Minimum</dt><dd>{{ part.minimum|qty }} {{ part.unit }}</dd>
+    {% if part.datasheet %}<dt>Datasheet</dt><dd><a href="{{ part.datasheet }}" target="_blank" rel="noopener noreferrer">Open ↗</a></dd>{% endif %}
+  </dl>
+  <h4>Where it is</h4>
+  <table class="list compact">
+    {% for s in stock %}<tr><td>{{ s.location }}</td><td class="num">{{ s.quantity|qty }} {{ part.unit }}</td></tr>
+    {% empty %}<tr><td class="empty small">None in stock.</td></tr>{% endfor %}
+  </table>
+</div>

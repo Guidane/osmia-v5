@@ -431,3 +431,30 @@ form.inline { display: inline; }
 .history { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 10px; align-items: start; }
 .history tr.picked td { background: var(--hover); }
 @media (max-width: 800px) { .doc-page, .history { grid-template-columns: 1fr; } .doc-nav { position: static; } }
+
+/* Parts: the categories as a tree, the parts of the one picked, the details of the part picked */
+.parts-browser { display: grid; grid-template-columns: 230px minmax(0, 1fr) 360px; gap: 10px; align-items: start; }
+.parts-tree { padding: 6px 0; position: sticky; top: 8px; max-height: calc(100vh - 70px); overflow: auto; }
+.parts-tree a { display: flex; justify-content: space-between; gap: 8px; padding: 5px 12px 5px calc(12px + var(--depth, 0) * 1.1em);
+  color: var(--text); text-decoration: none; border-left: 3px solid transparent; }
+.parts-tree a:hover { background: var(--hover); }
+.parts-tree a.open { font-weight: 600; }
+.parts-tree a.on { background: var(--brand-soft); border-left-color: var(--brand); font-weight: 600; }
+.parts-middle .filters { margin-top: 0; }
+.parts-list tr[data-part] { cursor: pointer; }
+.parts-list tr[data-part]:hover { background: var(--hover); }
+.parts-list tr[data-part].on { background: var(--select); }
+.parts-list tr[data-part]:focus { outline: 2px solid var(--brand); outline-offset: -2px; }
+.parts-detail { position: sticky; top: 8px; max-height: calc(100vh - 70px); overflow: auto; }
+.brief-head { display: flex; align-items: center; gap: 6px; }
+.brief-head h3 { margin: 0; }
+.brief-what { margin: 4px 0 8px; }
+.brief .main-image { margin: 6px 0; display: flex; justify-content: center; }
+.brief .main-image img, .brief .main-image a { float: none; margin: 0; max-width: 100%; max-height: 160px; }
+.brief-tiles { grid-template-columns: 1fr 1fr; }
+.brief .details { clear: both; }
+.brief-tiles { margin: 8px 0; }
+.brief h4 { margin: 12px 0 4px; }
+@media (max-width: 1100px) { .parts-browser { grid-template-columns: 200px minmax(0, 1fr); } .parts-detail { grid-column: 1 / -1; position: static; } }
+@media (max-width: 700px) { .parts-browser { grid-template-columns: 1fr; } .parts-tree { position: static; max-height: 240px; } }
+
