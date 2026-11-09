@@ -1,0 +1,10 @@
+{% load osmia %}<section class="card flush files-card" data-files="{% url 'web:files' kind thing.pk %}">
+  <div class="card-head"><h3>Files{% if files %} <span class="muted small">{{ files|length }}</span>{% endif %}</h3>
+    <label class="btn small">＋ Add<input type="file" multiple hidden data-pick aria-label="Add files"></label></div>
+  {% if files %}<div class="file-grid">{% for f in files %}
+    <div class="file-tile{% if f.preview %} is-preview{% endif %}">
+      <a class="tile" href="{% url 'web:file' f.pk %}" target="_blank" title="{{ f.name }} · {{ f.size|filesizeformat }}">{% if f.is_image %}<img src="{% url 'web:file' f.pk %}" alt="{{ f.name }}" loading="lazy">{% else %}<span class="ext">{{ f.name|ext }}</span>{% endif %}</a>
+      <div class="file-name" title="{{ f.name }}">{{ f.name }}</div>
+      <div class="file-actions">{% if f.is_image and kind != 'page' %}<button type="button" class="star{% if f.preview %} on{% endif %}" data-post="{% url 'web:file_preview' f.pk %}" data-reload title="Preview" aria-label="Preview {{ f.name }}">{% if f.preview %}★{% else %}☆{% endif %}</button>{% endif %}<button type="button" data-post="{% url 'web:file_remove' f.pk %}" data-ask="Delete {{ f.name }}?" title="Delete" aria-label="Delete {{ f.name }}">✕</button></div>
+    </div>{% endfor %}</div>{% endif %}
+</section>

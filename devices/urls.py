@@ -9,6 +9,7 @@ urlpatterns = [
     path('new/', views.device_form, name='new'),
     path('<int:pk>/', views.device, name='device'),
     path('<int:pk>/edit/', views.device_form, name='edit'),
+    path('<int:pk>/delete/', views.device_delete, name='delete'),
     path('<int:pk>/connectors/new/', views.connector_form, name='connector_new'),
     path('<int:pk>/connectors/copy/', views.connectors_copy, name='connectors_copy'),
     path('<int:pk>/connectors/<int:connector>/', views.connector_form, name='connector_edit'),

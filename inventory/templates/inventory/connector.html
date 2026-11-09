@@ -1,0 +1,40 @@
+{% extends "base.html" %}{% load osmia %}
+{% block title %}{{ family.name }} connector · Osmia{% endblock %}
+{% block content_class %}wide{% endblock %}
+{% block content %}
+<p class="small"><a href="{{ family.get_absolute_url }}">← {{ family.name }}</a></p>
+<div class="page-head"><h1>{{ family.name }} connector</h1></div>
+
+<section class="card">
+  <form method="post" class="inline-form conn-start" data-confirm="{% if face.contacts %}Start again? The contacts as they are now go.{% endif %}">{% csrf_token %}
+    <input type="hidden" name="action" value="start">
+    <label>Start from <select name="kind">{% for value, label in starts %}<option value="{{ value }}"{% if value == 'staggered' and face.shape == 'dsub' or value == 'circle' and face.shape == 'circle' %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>Positions <input type="number" name="positions" min="1" max="200" value="{{ face.contacts|length|default:9 }}"></label>
+    <label>Columns <input type="number" name="columns" min="1" max="50"></label>
+    <button class="btn">Make</button>
+  </form>
+</section>
+
+<section class="card flush">
+  <div class="card-head conn-tools">
+    <h3>Pin side</h3>
+    <label>Shape <select data-shape>{% for value, label in shapes %}<option value="{{ value }}"{% if face.shape == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label class="inline"><input type="checkbox" data-snap checked> Snap to grid</label>
+    <button type="button" class="btn small" data-add>＋ Contact</button>
+    <span class="conn-picked" data-picked hidden>
+      <label>Contact <input type="text" data-number maxlength="10" size="5"></label>
+      <button type="button" class="btn small ghost" data-remove title="Take it away">✕</button>
+    </span>
+    <span class="segmented conn-zoom"><button type="button" class="btn small" data-zoom-out title="Zoom out">−</button><button type="button" class="btn small" data-zoom-fit title="Fit" data-zoom-level>100%</button><button type="button" class="btn small" data-zoom-in title="Zoom in">＋</button></span>
+    <span class="conn-picked" data-corner hidden>Corner <button type="button" class="btn small ghost" data-remove-corner title="Take it away">✕</button></span>
+    <span class="spacer"></span>
+    <form method="post" class="conn-save">{% csrf_token %}
+      <input type="hidden" name="action" value="save"><input type="hidden" name="face" data-face>
+      <a href="{{ family.get_absolute_url }}">Cancel</a> <button class="btn small primary">Save</button>
+    </form>
+  </div>
+  <div class="conn-canvas"><svg class="pinout-drawing conn-edit" data-canvas></svg></div>
+</section>
+{{ face|json_script:"connector-face" }}
+{% endblock %}
+{% block scripts %}<script src="{% fresh 'inventory/connector.js' %}"></script>{% endblock %}

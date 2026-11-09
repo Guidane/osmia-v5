@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% load osmia %}
+{% block title %}{{ page.title }} · Documentation · Osmia{% endblock %}
+{% block content_class %}wide{% endblock %}
+{% block content %}
+<div class="doc-page">
+  <aside class="card doc-nav">
+    <div class="small doc-nav-head">{% if owner %}<a href="{{ owner.get_absolute_url }}"><b>{{ owner }}</b></a>{% else %}<a href="{% url 'web:docs' %}"><b>General</b></a>{% endif %}</div>
+    <ul class="page-tree">{% for p, depth in tree %}<li style="--depth:{{ depth }}"{% if p.pk == page.pk %} class="on"{% endif %}><a href="{{ p.get_absolute_url }}">{{ p.title }}</a></li>{% endfor %}</ul>
+  </aside>
+  <div class="doc-main">
+    <nav class="crumbs small">{% for url, text in crumbs %}<a href="{{ url }}">{{ text }}</a> › {% endfor %}{% for a in ancestors %}<a href="{{ a.get_absolute_url }}">{{ a.title }}</a> › {% endfor %}</nav>
+    <div class="page-head"><h1>{{ page.title }}</h1><span class="spacer"></span>
+      <a class="btn primary" href="{% url 'web:page_edit' page.pk %}">✎ Edit</a>
+      <a class="btn" href="{% url 'web:page_new' %}?parent={{ page.pk }}">＋ Page under it</a>
+      <a class="btn" href="{% url 'web:page_history' page.pk %}">History</a>
+      <form method="post" action="{% url 'web:page_delete' page.pk %}" class="inline" data-confirm="Delete {{ page.title }}{% if children %} and the pages under it{% endif %}?">{% csrf_token %}<button class="btn ghost">Delete</button></form></div>
+    <p class="muted small doc-meta">{% if page.updated_by %}{{ page.updated_by }} · {% endif %}{{ page.updated_at|date:"j M Y H:i" }}{% if version %} · v{{ version }}{% endif %}</p>
+    <article class="card doc">{% if page.body %}{{ page.body|markup }}{% else %}<p class="muted">—</p>{% endif %}</article>
+    {% if children %}<section class="card">
+      <h3>Pages under it</h3>
+      <ul class="page-list">{% for c in children %}<li><a href="{{ c.get_absolute_url }}">📄 {{ c.title }}</a></li>{% endfor %}</ul>
+    </section>{% endif %}
+    {% include "web/_files.html" with thing=page kind="page" %}
+  </div>
+</div>
+{% endblock %}

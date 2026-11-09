@@ -58,22 +58,28 @@ class PinoutTests(HarnessBase):
         self.assertEqual(self.harness.wires.count(), 3)                         # nothing of it was kept
 
     def test_the_pinout_drawn_in_each_connector_s_layout(self):
-        from inventory.models import Family
+        from inventory.faces import start
+        from inventory.models import Branch, Family
         self.connect('6', '2', wire_set='CAN', set_type='Twisted')
         page = self.client.get(reverse('harnesses:harness', args=[self.harness.pk]))
         p1, p2 = page.context['drawing']['ends']
-        self.assertEqual((p1['layout'], p1['positions']), ('row', 0))                     # nothing known: a single row
+        self.assertEqual(p1['face']['shape'], 'rect')                                    # nothing known: a row of its pins
+        self.assertEqual([c[0] for c in p1['face']['contacts']], ['1', '2', '3', '4', '5', '6', '7'])
         self.assertEqual([n for n, _ in p1['pins']], ['1', '2', '6', '7'])                  # the device connector's pins
-        dsub = Family.objects.create(name='D-sub 9', pin_layout='staggered', pin_positions=9)
+        dsub = Family.objects.create(name='D-sub 9', face=start('staggered', 9))
         self.plug.family = dsub
         self.plug.save()
         p1, p2 = self.client.get(reverse('harnesses:harness', args=[self.harness.pk])).context['drawing']['ends']
-        self.assertEqual((p1['layout'], p1['positions']), ('staggered', 9))                 # its part's family
+        self.assertEqual((p1['face']['shape'], len(p1['face']['contacts'])), ('dsub', 9))   # its part's family
+        self.plug.branch = Branch.objects.create(family=dsub, name='socket', contacts='socket')
+        self.plug.save()
+        p1 = self.client.get(reverse('harnesses:harness', args=[self.harness.pk])).context['drawing']['ends'][0]
+        self.assertEqual(p1['face']['contacts'][0][1], dsub.face['w'] - dsub.face['contacts'][0][1])   # a socket: mirrored
         self.board_j1.part = None
         self.board_j1.save()
         self.p2.used = None
         self.p2.save()
-        self.assertEqual(self.client.get(reverse('harnesses:harness', args=[self.harness.pk])).context['drawing']['ends'][1]['layout'], 'row')
+        self.assertEqual(self.client.get(reverse('harnesses:harness', args=[self.harness.pk])).context['drawing']['ends'][1]['face']['shape'], 'rect')
         self.assertIn({'id': Wire.objects.get().pk, 'from': self.p1.pk, 'from_pin': '6', 'to': self.p2.pk, 'to_pin': '2', 'signal': '', 'set': 'CAN', 'type': 'Twisted',
                        'colour': ''}, page.context['drawing']['wires'])
 

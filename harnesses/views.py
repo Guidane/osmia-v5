@@ -14,7 +14,8 @@ from django.views.decorators.http import require_POST
 
 from devices.models import SET_TYPES as PIN_SET_TYPES, Connector
 from inventory import stock
-from inventory.models import Location, PartGroup, choices_of_parts, layout_of, part_or_family
+from inventory.faces import drawn, face_of
+from inventory.models import Location, PartGroup, choices_of_parts, part_or_family
 from projects.models import Project
 from assets.service import next_tag
 from web import excel, rows, versions
@@ -89,16 +90,15 @@ def _drawing(harness, wires):
                                        'connector__family', 'connector__branch__family').prefetch_related('connector__pins')
     out = []
     for end in ends:
-        layout, columns, positions = layout_of(end.used)
-        if not layout and end.connector:
-            layout, columns, positions = layout_of(end.connector.used)
         pins = {p.number: p.signal for p in end.connector.pins.all()} if end.connector else {}
         for w in wires:
             for at, pin in ((w.from_end_id, w.from_pin), (w.to_end_id, w.to_pin)):
                 if at == end.pk:
                     pins.setdefault(pin, '')
+        numbers = sorted(pins, key=pin_order)
+        used = end.used if face_of(end.used) or not end.connector else end.connector.used
         out.append({'id': end.pk, 'designator': end.designator, 'what': end.used_name, 'plugs': str(end.connector or ''),
-                    'layout': layout or 'row', 'columns': columns or 0, 'positions': positions or 0, 'pins': [[n, pins[n]] for n in sorted(pins, key=pin_order)]})
+                    'face': drawn(used, numbers), 'pins': [[n, pins[n]] for n in numbers]})
     return {'colours': COLOURS, 'set_types': PIN_SET_TYPES, 'ends': out, 'wires': [{'id': w.pk, 'from': w.from_end_id, 'from_pin': w.from_pin, 'to': w.to_end_id, 'to_pin': w.to_pin, 'signal': w.signal,
                                     'set': w.wire_set, 'type': w.set_type, 'colour': w.colour} for w in wires]}
 

@@ -1,0 +1,1 @@
+<form method="post" action="{% url 'work:link' project.pk %}" class="inline">{% csrf_token %}<input type="hidden" name="what" value="{{ what }}"><input type="hidden" name="id" value="{{ id }}"><button class="btn small ghost" name="remove" value="1" title="Take it out of the project" aria-label="Take {{ name }} out of the project">✕</button></form>

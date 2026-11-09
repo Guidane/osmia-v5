@@ -6,7 +6,7 @@
   <h1>{{ part.number }}</h1>{% if not part.active %}<span class="badge">Inactive</span>{% endif %}
   <span class="muted">{{ part.description }}</span><span class="spacer"></span>
   {% if part.vendor %}<form method="post" action="{% url 'inventory:part_reorder' part.pk %}">{% csrf_token %}<button class="btn primary" title="Add it to the draft order for {{ part.vendor }}">🛒 Reorder</button></form>{% endif %}
-  <a class="btn" href="{% url 'web:labels' 'part' %}?ids={{ part.pk }}">🏷 Label</a>{% document_button part %}<a class="btn" href="{% url 'inventory:part_edit' part.pk %}">Change</a>
+  <a class="btn" href="{% url 'web:labels' 'part' %}?ids={{ part.pk }}">🏷 Label</a><a class="btn" href="{% url 'inventory:part_edit' part.pk %}">Change</a>
 </div>
 
 <div class="tiles">
@@ -18,7 +18,7 @@
 <div class="with-notes">
 <div class="columns">
   <section class="card">
-    {% document_image part %}
+    {% preview part %}
     <h3>Details</h3>
     <dl class="details">
       <dt>Category</dt><dd>{% if part.category %}<a href="{{ part.category.get_absolute_url }}">{{ part.category }}</a>{% else %}—{% endif %}</dd>
@@ -52,7 +52,7 @@
     {% if not locations %}<p class="small muted">Make a <a href="{% url 'inventory:location_new' %}">location</a> first.</p>{% endif %}
   </section>
 </div>
-{% include "web/_notes.html" with notes=part.notes %}
+<div class="side">{% include "web/_notes.html" with notes=part.notes %}{% side part %}</div>
 </div>
 
 <div class="columns">

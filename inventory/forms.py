@@ -131,7 +131,7 @@ class PartForm(AttributesForm):
 
     class Meta:
         model = Part
-        fields = ['number', 'description', 'category', 'kin', 'pin_layout', 'pin_positions', 'pin_columns', 'manufacturer', 'mpn', 'unit', 'datasheet',
+        fields = ['number', 'description', 'category', 'kin', 'manufacturer', 'mpn', 'unit', 'datasheet',
                   'vendor', 'vendor_number', 'price', 'minimum', 'reorder_quantity', 'notes', 'active']
         widgets = {'notes': forms.Textarea(attrs={'rows': 3})}
 
@@ -263,10 +263,10 @@ class LocationForm(TreeForm):
 
 
 class FamilyForm(forms.ModelForm):
-    """A family of parts: its name, and how the pins of its parts sit."""
+    """A family of parts: its name (its connector face is made in the connector editor)."""
     class Meta:
         model = Family
-        fields = ['name', 'pin_layout', 'pin_positions', 'pin_columns']
+        fields = ['name']
 
     def clean_name(self):
         name = self.cleaned_data['name'].strip()
@@ -276,19 +276,21 @@ class FamilyForm(forms.ModelForm):
 
 
 class BranchForm(forms.ModelForm):
-    """A branch of a family: its name."""
+    """A gender of a family (a branch of it): its name, and which side of the connector its parts are drawn as."""
     class Meta:
         model = Branch
-        fields = ['name']
+        fields = ['name', 'contacts']
+        labels = {'contacts': 'Drawn as'}
 
     def __init__(self, *args, family, **kwargs):
         super().__init__(*args, **kwargs)
         self.instance.family = family
+        self.fields['contacts'].choices = [('', '—'), ('pin', 'Pin side'), ('socket', 'Socket side')]
 
     def clean_name(self):
         name = self.cleaned_data['name'].strip()
         if Branch.objects.filter(family=self.instance.family, name__iexact=name).exclude(pk=self.instance.pk).exists():
-            raise forms.ValidationError(f'{self.instance.family} has a branch {name} already.')
+            raise forms.ValidationError(f'{self.instance.family} has a gender {name} already.')
         return name
 
 

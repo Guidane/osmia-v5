@@ -1,0 +1,3 @@
+{% if choices %}<form method="post" action="{% url 'work:link' project.pk %}" class="inline-form pad">{% csrf_token %}<input type="hidden" name="what" value="{{ what }}">
+  <select name="id" aria-label="{{ label }}" required><option value="">{{ label }}…</option>{% for c in choices %}<option value="{{ c.pk }}">{{ c }}</option>{% endfor %}</select>
+  <button class="btn small">Add</button></form>{% endif %}

@@ -16,15 +16,15 @@
 </form>
 <div class="card flush">
   <table class="list">
-    <tr><th><input type="checkbox" data-pick-all aria-label="Tick them all"></th><th>Part number</th><th>Description</th><th>Category</th>{% for a in attributes %}<th>{{ a.name }}</th>{% empty %}<th>Manufacturer</th>{% endfor %}<th class="num">On hand</th><th></th></tr>
+    <tr><th><input type="checkbox" data-pick-all aria-label="Tick them all"></th><th></th><th>Part number</th><th>Description</th><th>Category</th>{% for a in attributes %}<th>{{ a.name }}</th>{% empty %}<th>Manufacturer</th>{% endfor %}<th class="num">On hand</th><th></th></tr>
     {% for p, values in rows %}<tr>
       <td><input type="checkbox" name="pick" value="{{ p.pk }}" aria-label="{{ p.number }}"></td>
-      <td><a href="{{ p.get_absolute_url }}">{{ p.number }}</a></td><td>{{ p.description }}</td>
+      <td class="thumb-cell">{% thumb p %}</td><td><a href="{{ p.get_absolute_url }}">{{ p.number }}</a></td><td>{{ p.description }}</td>
       <td class="small">{{ p.category.name|default:"" }}</td>
       {% for v in values %}<td class="small">{{ v }}</td>{% empty %}<td class="small">{{ p.manufacturer }}</td>{% endfor %}
       <td class="num{% if p.minimum and p.have|default:0 < p.minimum %} low{% endif %}">{{ p.have|qty|default:"0" }} <span class="muted small">{{ p.unit }}</span></td>
       <td>{% if not p.active %}<span class="badge">Inactive</span>{% endif %}</td>
-    </tr>{% empty %}<tr><td colspan="{{ attributes|length|add:7 }}" class="empty small">{% if q or category %}No parts match.{% else %}No parts yet.{% endif %}</td></tr>{% endfor %}
+    </tr>{% empty %}<tr><td colspan="{{ attributes|length|add:8 }}" class="empty small">{% if q or category %}No parts match.{% else %}No parts yet.{% endif %}</td></tr>{% endfor %}
   </table>
 </div>
 {% if count > page %}<p class="muted small">The first {{ page }} of {{ count }}: search to narrow it down.</p>{% endif %}

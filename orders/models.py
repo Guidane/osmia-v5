@@ -31,6 +31,8 @@ class Order(models.Model):
     ask = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='order_requests',
                             verbose_name='who should order it')
     budget = models.ForeignKey('budgets.Budget', null=True, blank=True, on_delete=models.PROTECT, related_name='orders')
+    in_project = models.ForeignKey('work.Project', null=True, blank=True, on_delete=models.SET_NULL, related_name='orders',
+                                   verbose_name='project')
     status = models.CharField(max_length=10, choices=Status, default=Status.DRAFT)
     vendor_reference = models.CharField("vendor's order number", max_length=100, blank=True)
     ordered_on = models.DateField(null=True, blank=True)

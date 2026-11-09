@@ -7,23 +7,30 @@
   <div class="tile"><b>{{ family.on_hand|qty }}</b> {{ family.unit }} on hand, together</div>
   <div class="tile"><b>{{ parts|length }}</b> part{{ parts|length|pluralize }}</div>
 </div>
+<section class="card flush family-connector">
+  <div class="card-head"><h3>Connector</h3><a class="btn small" href="{% url 'inventory:connector' family.pk %}">{% if faces %}Edit connector{% else %}＋ Connector{% endif %}</a></div>
+  {% if faces %}<div class="family-faces">
+    <figure><svg class="pinout-drawing" data-face="pin"></svg><figcaption>Pin side</figcaption></figure>
+    <figure><svg class="pinout-drawing" data-face="socket"></svg><figcaption>Socket side</figcaption></figure>
+  </div>{{ faces|json_script:"family-faces" }}{% endif %}
+</section>
 <div class="columns">
   <section class="card flush">
-    <div class="card-head"><h3>Branches</h3></div>
+    <div class="card-head"><h3>Genders</h3></div>
     <table class="list">
-      {% for b in branches %}<tr><td>{{ b.name }}</td><td class="num">{{ b.n }} part{{ b.n|pluralize }}</td><td class="num">{{ b.on_hand|qty }} {{ b.unit }}</td>
+      {% for b in branches %}<tr><td>{{ b.name }}{% if b.contacts and b.name|lower != b.contacts %} <span class="badge">{% if b.contacts == "socket" %}socket side{% else %}pin side{% endif %}</span>{% endif %}</td><td class="num">{{ b.n }} part{{ b.n|pluralize }}</td><td class="num">{{ b.on_hand|qty }} {{ b.unit }}</td>
         <td class="small"><a href="?branch={{ b.pk }}">Change</a></td></tr>
-      {% empty %}<tr><td class="empty small">No branches.</td></tr>{% endfor %}
+      {% empty %}<tr><td class="empty small">No genders.</td></tr>{% endfor %}
     </table>
     <form method="post" class="form pad">{% csrf_token %}
       <div class="fields">{% include "web/_form_fields.html" %}</div>
-      <div class="actions"><button class="btn primary">{% if branch %}Save{% else %}＋ Add branch{% endif %}</button>{% if branch %} <a href="{{ family.get_absolute_url }}">Cancel</a>{% endif %}</div>
+      <div class="actions"><button class="btn primary">{% if branch %}Save{% else %}＋ Add gender{% endif %}</button>{% if branch %} <a href="{{ family.get_absolute_url }}">Cancel</a>{% endif %}</div>
     </form>
   </section>
   <section class="card flush">
     <div class="card-head"><h3>Parts</h3></div>
     <table class="list">
-      <tr><th>Part</th><th>Branch</th><th>Vendor</th><th class="num">On hand</th><th></th></tr>
+      <tr><th>Part</th><th>Gender</th><th>Vendor</th><th class="num">On hand</th><th></th></tr>
       {% for p in parts %}<tr><td><a href="{{ p.get_absolute_url }}">{{ p.number }}</a> <span class="muted small">{{ p.manufacturer }}</span></td>
         <td class="small">{{ p.branch.name|default:"" }}</td><td class="small">{{ p.vendor|default:"" }}</td>
         <td class="num">{{ p.have|default:0|qty }} {{ p.unit }}</td><td>{% if p == family.chosen %}<span class="badge ok">ordered</span>{% endif %}</td></tr>
@@ -31,4 +38,11 @@
     </table>
   </section>
 </div>
+<div class="columns side-row">{% side family %}</div>
 {% endblock %}
+{% block scripts %}{% if faces %}<script src="{% fresh 'harnesses/pinout.js' %}"></script><script>
+(function () {
+  var faces = JSON.parse(document.getElementById('family-faces').textContent);
+  document.querySelectorAll('svg[data-face]').forEach(function (svg) { Pinout.face(svg, faces[svg.dataset.face]); });
+})();
+</script>{% endif %}{% endblock %}

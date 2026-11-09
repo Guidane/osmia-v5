@@ -48,7 +48,8 @@ class Device(PartOrFamily):
         return reverse('devices:device', args=[self.pk])
 
     def snapshot(self):
-        return {'number': self.number, 'name': self.name, 'description': self.description, 'manufacturer': self.manufacturer,
+        return {'number': self.number, 'name': self.name, 'origin': self.origin, 'colour': self.colour,
+                'description': self.description, 'manufacturer': self.manufacturer,
                 'model': self.model, 'part': self.used_name, 'notes': self.notes,
                 'connectors': [c.snapshot() for c in self.connectors.prefetch_related('pins').select_related('part', 'family')]}
 
@@ -57,6 +58,8 @@ class Device(PartOrFamily):
         harnesses plug into keeps its connector)."""
         for key in ('number', 'name', 'description', 'manufacturer', 'model', 'notes'):
             setattr(self, key, data.get(key, ''))
+        for key in ('origin', 'colour'):   # not kept by older versions: then as it is
+            setattr(self, key, data.get(key, getattr(self, key)))
         self.used = part_or_family(data.get('part'))
         self.save()
         wanted = {c['designator']: c for c in data.get('connectors', [])}

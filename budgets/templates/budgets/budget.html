@@ -21,7 +21,7 @@
   <p class="small muted">Arrived {{ totals.received|money }} · still to come {{ totals.coming|money }} · other costs {{ totals.costs|money }}{% if children %} · of which under it {{ totals.spent|sub:own.spent|money }}{% endif %}</p>
   {% if split > budget.amount %}<p class="small error">The budgets under it add up to {{ split|money }}: more than this one.</p>{% endif %}
 </div>
-{% include "web/_notes.html" with notes=budget.notes %}
+<div class="side">{% include "web/_notes.html" with notes=budget.notes %}{% side budget %}</div>
 </div>
 
 {% if children %}<section class="card flush">

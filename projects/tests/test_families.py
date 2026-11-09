@@ -98,7 +98,7 @@ class FamilyTests(ProjectBase):
         page = self.family.get_absolute_url()
         self.client.post(page, {'name': 'pin'})
         self.client.post(page, {'name': 'sockets'})
-        self.assertContains(self.client.post(page, {'name': 'PIN'}), 'has a branch PIN already')
+        self.assertContains(self.client.post(page, {'name': 'PIN'}), 'has a gender PIN already')
         sockets = Branch.objects.get(name='sockets')
         self.client.post(page + f'?branch={sockets.pk}', {'name': 'socket'})               # renamed
         pin, socket = Branch.objects.get(name='pin'), Branch.objects.get(name='socket')

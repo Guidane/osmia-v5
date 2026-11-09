@@ -32,7 +32,7 @@ class ProjectForm(TreeForm):
 
     class Meta:
         model = Project
-        fields = ['code', 'name', 'description', 'department', 'owner']
+        fields = ['code', 'name', 'in_project', 'description', 'department', 'owner']
         widgets = {'description': forms.Textarea(attrs={'rows': 3})}
 
 
@@ -63,7 +63,7 @@ def project_form(request, pk=None):
     def first_configuration(project, new):
         if new:
             Configuration.objects.create(project=project, name='Base')
-    return edit_page(request, ProjectForm(request.POST or None, instance=item, initial=initial_for(item, owner=request.user.pk)),
+    return edit_page(request, ProjectForm(request.POST or None, instance=item, initial=initial_for(item, owner=request.user.pk, in_project=request.GET.get('in_project'))),
                      'wire diagram', saved=first_configuration)
 
 

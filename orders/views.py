@@ -37,7 +37,7 @@ class OrderForm(forms.ModelForm):
     it was sent."""
     class Meta:
         model = Order
-        fields = ['request', 'ask', 'vendor', 'budget', 'vendor_reference', 'expected_on', 'notes']
+        fields = ['request', 'ask', 'vendor', 'budget', 'in_project', 'vendor_reference', 'expected_on', 'notes']
         widgets = {'expected_on': forms.DateInput(attrs={'type': 'date'}), 'notes': forms.Textarea(attrs={'rows': 6}),
                    'request': forms.Textarea(attrs={'rows': 4, 'placeholder': 'e.g. 20 M3x8 screws, stainless, for the rack by Friday'})}
 
@@ -58,7 +58,7 @@ class OrderForm(forms.ModelForm):
 class RequestForm(OrderForm):
     """Asking someone else to order: what is needed, and maybe the budget, the vendor, who should order it."""
     class Meta(OrderForm.Meta):
-        fields = ['request', 'budget', 'vendor', 'ask']
+        fields = ['request', 'budget', 'in_project', 'vendor', 'ask']
 
     def __init__(self, *args, **kwargs):
         kwargs.setdefault('instance', Order(kind=Order.Kind.REQUEST))
@@ -92,7 +92,7 @@ def order_list(request):
 @login_required
 def order_new(request):
     """Two ways: an order of one's own (its vendor, then its lines), or a request asking someone else to order."""
-    start = initial_for(None, vendor=request.GET.get('vendor'), budget=request.GET.get('budget'))
+    start = initial_for(None, vendor=request.GET.get('vendor'), budget=request.GET.get('budget'), in_project=request.GET.get('in_project'))
     asking = request.POST.get('kind') == Order.Kind.REQUEST
     own = OrderForm(request.POST if request.method == 'POST' and not asking else None, initial=start, prefix='own')
     wish = RequestForm(request.POST if asking else None, initial=start, prefix='ask')

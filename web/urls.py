@@ -1,16 +1,22 @@
 from django.urls import path
 
-from . import documents, labels, views
+from . import files, labels, pages, views
 
 app_name = 'web'
 
 urlpatterns = [
     path('', views.home, name='home'),
-    path('docs/<slug:kind>/<int:pk>/', documents.document, name='document'),
-    path('docs/<slug:kind>/<int:pk>/upload/', documents.upload, name='document_upload'),
-    path('docs/<slug:kind>/<int:pk>/remove/', documents.remove, name='document_remove'),
-    path('docs/<slug:kind>/<int:pk>/image/', documents.image, name='image'),
-    path('docs/files/<int:pk>/', documents.file, name='document_file'),
+    path('files/<slug:kind>/<int:pk>/', files.upload, name='files'),
+    path('files/<int:pk>/', files.file, name='file'),
+    path('files/<int:pk>/remove/', files.remove, name='file_remove'),
+    path('files/<int:pk>/preview/', files.make_preview, name='file_preview'),
+    path('docs/', pages.docs, name='docs'),
+    path('docs/new/', pages.page_new, name='page_new'),
+    path('docs/<int:pk>/', pages.page, name='page'),
+    path('docs/<int:pk>/edit/', pages.page_edit, name='page_edit'),
+    path('docs/<int:pk>/delete/', pages.page_delete, name='page_delete'),
+    path('docs/<int:pk>/history/', pages.history, name='page_history'),
+    path('docs/<int:pk>/history/<int:number>/restore/', pages.restore, name='page_restore'),
     path('labels/<slug:kind>/', labels.sheet, name='labels'),
     path('demo/', views.demo_data, name='demo'),
     path('transfer/', views.transfer, name='transfer'),

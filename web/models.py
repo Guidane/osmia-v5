@@ -89,40 +89,94 @@ class Tree(TreeWalk, models.Model):
         return out
 
 
-class Document(models.Model):
-    """The documentation of a part, asset, device, harness or project: its text (with simple formatting, see
-    ``web.markup``), its picture, and its files (DocumentFile)."""
+IMAGES = ('png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp')
+
+
+class Attachment(models.Model):
+    """A file or picture with something (a part, an order, a project, a documentation page, …): a photo, a datasheet,
+    a drawing. One of its pictures can be its preview, shown on its page and in lists."""
     content_type = models.ForeignKey('contenttypes.ContentType', on_delete=models.CASCADE)
     object_id = models.PositiveBigIntegerField()
-    body = models.TextField(blank=True)
-    image = models.ImageField(upload_to='images/%Y/%m/', blank=True)
-    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name='+')
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        constraints = [models.UniqueConstraint(fields=['content_type', 'object_id'], name='unique_document')]
-
-    def __str__(self):
-        return f'Document of {self.content_type.model} {self.object_id}'
-
-
-class DocumentFile(models.Model):
-    """A file with a document: a datasheet, a drawing, a manual, a photo."""
-    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name='files')
     file = models.FileField(upload_to='files/%Y/%m/')
     name = models.CharField(max_length=255)
-    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name='+')
+    size = models.PositiveBigIntegerField(default=0)
+    preview = models.BooleanField(default=False)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['name']
+        ordering = ['-preview', 'name']
+        indexes = [models.Index(fields=['content_type', 'object_id'])]
 
     def __str__(self):
         return self.name
 
     @property
     def is_image(self):
-        return self.name.lower().rsplit('.', 1)[-1] in ('png', 'jpg', 'jpeg', 'gif', 'webp')
+        return self.name.lower().rsplit('.', 1)[-1] in IMAGES
+
+
+class Page(models.Model):
+    """A documentation page: a title and its text (the editor's HTML, cleaned: see ``web.markup``), under another page
+    or on its own; it belongs to something (a project, a part, a device, …) or to the general documentation."""
+    title = models.CharField(max_length=200)
+    body = models.TextField(blank=True)
+    parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='children')
+    content_type = models.ForeignKey('contenttypes.ContentType', null=True, blank=True, on_delete=models.CASCADE)
+    object_id = models.PositiveBigIntegerField(null=True, blank=True)
+    position = models.PositiveIntegerField(default=0)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['position', 'title']
+        indexes = [models.Index(fields=['content_type', 'object_id'])]
+
+    def __str__(self):
+        return self.title
+
+    def get_absolute_url(self):
+        from django.urls import reverse
+        return reverse('web:page', args=[self.pk])
+
+    @property
+    def owner(self):
+        """What the page belongs to (None: the general documentation)."""
+        if self.content_type_id is None:
+            return None
+        return self.content_type.get_all_objects_for_this_type(pk=self.object_id).first()
+
+    def ancestors(self):
+        out, at = [], self.parent
+        while at is not None:
+            out.insert(0, at)
+            at = at.parent
+        return out
+
+    def below(self):
+        """Its pages under it, all the way down."""
+        out, todo = [], list(self.children.all())
+        while todo:
+            page = todo.pop(0)
+            out.append(page)
+            todo.extend(page.children.all())
+        return out
+
+
+class PageVersion(models.Model):
+    """A page as it was saved: its history."""
+    page = models.ForeignKey(Page, on_delete=models.CASCADE, related_name='versions')
+    number = models.PositiveIntegerField()
+    title = models.CharField(max_length=200)
+    body = models.TextField(blank=True)
+    saved_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    saved_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-number']
+        constraints = [models.UniqueConstraint(fields=['page', 'number'], name='unique_page_version')]
 
 
 class LabelLayout(models.Model):

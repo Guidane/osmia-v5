@@ -1,0 +1,35 @@
+{% extends "base.html" %}{% load osmia %}
+{% block title %}{% if page.pk %}{{ page.title }}{% else %}New page{% endif %} · Documentation · Osmia{% endblock %}
+{% block content %}
+<nav class="crumbs small">{% for url, text in crumbs %}<a href="{{ url }}">{{ text }}</a> › {% endfor %}{% if page.pk %}<a href="{{ page.get_absolute_url }}">{{ page.title }}</a>{% else %}New page{% endif %}</nav>
+<form method="post" class="card flush page-edit">{% csrf_token %}
+  <div class="pad page-fields">
+    <input type="text" name="title" value="{{ form.title.value|default:'' }}" maxlength="200" required placeholder="Title" aria-label="Title" class="page-title-input" autofocus>
+    {{ form.title.errors }}
+    <label class="small page-parent">Under {{ form.parent }}</label>{{ form.parent.errors }}
+  </div>
+  <div class="doc-edit"{% if page.pk %} data-upload="{% url 'web:files' 'page' page.pk %}"{% endif %}>
+    <div class="doc-toolbar" role="toolbar" aria-label="Formatting">
+      <select data-block aria-label="Paragraph style"><option value="">Style…</option><option value="p">Normal text</option><option value="h2">Heading 1</option><option value="h3">Heading 2</option><option value="h4">Heading 3</option><option value="quote">Quote</option><option value="code">Code block</option></select>
+      <span class="sep"></span>
+      <button type="button" data-do="bold" title="Bold (Ctrl+B)"><b>B</b></button><button type="button" data-do="italic" title="Italic (Ctrl+I)"><i>I</i></button><button type="button" data-do="underline" title="Underline (Ctrl+U)"><u>U</u></button><button type="button" data-do="strike" title="Strike through"><s>S</s></button><button type="button" data-do="clear" title="Clear formatting">⌫</button>
+      <span class="sep"></span>
+      <button type="button" data-do="ul" title="Bullet list">• List</button><button type="button" data-do="ol" title="Numbered list">1. List</button>
+      <span class="sep"></span>
+      <button type="button" data-do="link" title="Link">🔗 Link</button><button type="button" data-do="unlink" title="Take the link away">⛓</button>
+      <button type="button" data-do="table" title="Insert a table">▦ Table</button>
+      <button type="button" data-table="row" title="Add a row under this one">+ Row</button><button type="button" data-table="col" title="Add a column after this one">+ Col</button><button type="button" data-table="delrow" title="Take this row away">− Row</button><button type="button" data-table="delcol" title="Take this column away">− Col</button>
+      {% if page.pk %}<button type="button" data-do="picture" title="Insert a picture or a file">🖼 Image</button>{% endif %}
+      <button type="button" data-do="hr" title="A line across">― Line</button>
+      <span class="sep"></span>
+      <button type="button" data-do="undo" title="Undo (Ctrl+Z)">↶</button><button type="button" data-do="redo" title="Redo (Ctrl+Y)">↷</button>
+      <input type="file" multiple hidden aria-label="Picture or file to insert">
+    </div>
+    <div class="doc doc-area" contenteditable="true" aria-label="The page">{% if body %}{{ body|markup }}{% else %}<p><br></p>{% endif %}</div>
+    <textarea name="body" hidden></textarea>
+  </div>
+  <div class="actions pad"><button class="btn primary">Save</button>
+    <a href="{% if page.pk %}{{ page.get_absolute_url }}{% elif page.parent %}{{ page.parent.get_absolute_url }}{% elif owner %}{{ owner.get_absolute_url }}{% else %}{% url 'web:docs' %}{% endif %}">Cancel</a></div>
+</form>
+{% endblock %}
+{% block scripts %}<script src="{% fresh 'web/editor.js' %}"></script>{% endblock %}

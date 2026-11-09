@@ -4,11 +4,11 @@
 {% block content_class %}wide{% endblock %}
 {% block content %}
 <p class="small"><a href="{% url 'projects:list' %}">← Wire diagrams</a></p>
-<div class="page-head"><h1>{{ project }}</h1><span class="muted">{{ project.description|truncatechars:120 }}</span><span class="spacer"></span>
+<div class="page-head"><h1>{{ project }}</h1>{% if project.in_project %}<a class="badge" href="{{ project.in_project.get_absolute_url }}">📁 {{ project.in_project }}</a>{% endif %}<span class="muted">{{ project.description|truncatechars:120 }}</span><span class="spacer"></span>
   <a class="btn" href="{% url 'harnesses:list' %}?project={{ project.pk }}">Harnesses ({{ project.harnesses.count }})</a>
   {% for b in project.budgets.all %}<a class="btn" href="{{ b.get_absolute_url }}">💰 {{ b }}</a>{% empty %}<a class="btn" href="{% url 'budgets:new' %}?project={{ project.pk }}">＋ Budget</a>{% endfor %}
   <a class="btn" href="{% url 'projects:needs' project.pk %}?config={{ config.pk }}">What it needs</a>
-  {% document_button project %}<a class="btn" href="{% url 'projects:edit' project.pk %}">Change</a></div>
+  <a class="btn" href="{% url 'projects:edit' project.pk %}">Change</a></div>
 
 <div class="project">
   <aside class="card config-tree">
@@ -144,6 +144,7 @@
     {% endif %}
   </div>
 </div>
+<div class="columns side-row">{% side project %}</div>
 {% endblock %}
 {% block scripts %}
 <script src="{% fresh 'projects/diagram.js' %}"></script>

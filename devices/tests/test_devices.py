@@ -1,5 +1,5 @@
 """Devices: connectors made with their pins, pins edited as a table, versions saved and restored (what harnesses
-plug into keeps its connector), its units (assets), Excel."""
+plug into keeps its connector), a unit (an asset) made with it, deleting one, Excel."""
 from django.core.exceptions import ValidationError
 from django.urls import reverse
 
@@ -80,15 +80,53 @@ class DeviceTests(DeviceBase):
         page = self.client.get(reverse('devices:version', args=[self.controller.pk, 1]))
         self.assertContains(page, 'CAN L')
 
-    def test_units_are_assets(self):
+    def test_a_version_keeps_the_device_itself_too(self):
+        from devices.models import DeviceVersion
+        Device.objects.filter(pk=self.controller.pk).update(manufacturer='Acme', colour='#ff0000', origin='external')
+        self.controller.refresh_from_db()
+        versions.save(self.controller, self.ada)
+        Device.objects.filter(pk=self.controller.pk).update(name='Rack controller', colour='#00ff00', origin='in_house')
+        self.controller.refresh_from_db()
+        self.assertTrue(versions.changed(self.controller))
+        self.assertContains(self.client.get(reverse('devices:version', args=[self.controller.pk, 1])), 'Acme')
+        self.client.post(reverse('devices:restore', args=[self.controller.pk, 1]))
+        self.controller.refresh_from_db()
+        self.assertEqual((self.controller.name, self.controller.colour, self.controller.origin), ('Controller', '#ff0000', 'external'))
+        old = DeviceVersion.objects.get(device=self.controller, number=1)       # one saved before colour and origin were kept
+        old.data = {k: v for k, v in old.data.items() if k not in ('colour', 'origin')}
+        old.save()
+        self.assertFalse(versions.changed(self.controller))
+
+    def test_a_unit_made_with_the_device_and_deleting_it_from_the_list(self):
         from assets.models import Asset
         versions.save(self.controller, self.ada)
         page = self.client.get(reverse('devices:device', args=[self.controller.pk]))
-        self.assertContains(page, f'device={self.controller.pk}')                # "Add one" starts an asset for it
-        form = self.client.get(reverse('assets:new'), {'kind': 'device', 'device': self.controller.pk, 'number': 'CTRL-1-001', 'version': 1})
-        self.assertContains(form, 'value="CTRL-1-001"')
-        Asset.objects.create(number='CTRL-1-001', name='Controller', kind='device', device=self.controller, version=1, serial='C-0001')
-        self.assertContains(self.client.get(reverse('devices:device', args=[self.controller.pk])), 'C-0001')
+        self.assertNotContains(page, reverse('assets:new'))                         # no "Add one" any more
+        base = {'number': 'CTRL-1', 'name': 'Controller', 'origin': 'in_house', 'colour': '#3b7dd8'}
+        self.client.post(reverse('devices:edit', args=[self.controller.pk]), dict(base, make_asset='on'))
+        unit = Asset.objects.get(number='CTRL-1-001')
+        self.assertEqual((unit.device, unit.version, unit.kind), (self.controller, 1, 'device'))
+        self.assertContains(self.client.get(reverse('devices:device', args=[self.controller.pk])), 'CTRL-1-001')
+        self.client.post(reverse('devices:edit', args=[self.controller.pk]), dict(base, make_asset='on'))
+        self.client.post(reverse('devices:edit', args=[self.controller.pk]), base)                  # not ticked: none
+        self.assertEqual(list(self.controller.assets.values_list('number', flat=True)), ['CTRL-1-001', 'CTRL-1-002'])
+        self.client.post(reverse('devices:new'), {'number': 'NEW-1', 'name': 'New one', 'origin': 'external', 'colour': '#000000',
+                                                  'make_asset': 'on'})
+        self.assertEqual(Asset.objects.get(number='NEW-1-001').kind, 'lab')
+        self.assertContains(self.client.get(reverse('devices:list')), reverse('devices:delete', args=[self.controller.pk]))
+        self.client.post(reverse('devices:delete', args=[self.controller.pk]))
+        self.assertFalse(Device.objects.filter(pk=self.controller.pk).exists())
+        self.assertFalse(Connector.objects.filter(pk=self.j1.pk).exists())
+        unit.refresh_from_db()
+        self.assertIsNone(unit.device)                                               # the asset stays
+
+    def test_a_device_in_a_wire_diagram_is_not_deleted(self):
+        from projects.models import Configuration, Placement, Project
+        diagram = Project.objects.create(code='WD-1', name='Rack')
+        Placement.objects.create(configuration=Configuration.objects.create(project=diagram, name='Main'), key='d1',
+                                 kind='device', device=self.controller)
+        self.client.post(reverse('devices:delete', args=[self.controller.pk]))
+        self.assertTrue(Device.objects.filter(pk=self.controller.pk).exists())
 
     def test_excel(self):
         from io import BytesIO

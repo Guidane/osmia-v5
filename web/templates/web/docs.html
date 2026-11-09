@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Documentation · Osmia{% endblock %}
+{% block content %}
+<div class="page-head"><h1>📚 Documentation</h1><span class="spacer"></span>
+  <form method="get" class="inline-form"><input type="search" name="q" value="{{ q }}" placeholder="Find…" aria-label="Find in the documentation"></form>
+  <a class="btn primary" href="{% url 'web:page_new' %}">＋ Page</a></div>
+
+{% if found is not None %}<section class="card flush">
+  <div class="card-head"><h3>Found <span class="muted small">{{ found|length }}</span></h3></div>
+  <table class="list">{% for p in found %}<tr><td><a href="{{ p.get_absolute_url }}">📄 {{ p.title }}</a></td>
+    <td class="small muted nowrap">{{ p.updated_by|default:"" }} {{ p.updated_at|date:"j M Y" }}</td></tr>
+    {% empty %}<tr><td class="empty small">Nothing.</td></tr>{% endfor %}</table>
+</section>{% endif %}
+
+<div class="docs-home">
+  <section class="card">
+    <h3>General</h3>
+    {% if general %}<ul class="page-tree">{% for p, depth in general %}<li style="--depth:{{ depth }}"><a href="{{ p.get_absolute_url }}">📄 {{ p.title }}</a></li>{% endfor %}</ul>
+    {% else %}<p class="muted small">No pages yet.</p>{% endif %}
+  </section>
+  {% for name, owners in groups %}<section class="card">
+    <h3>{{ name }}</h3>
+    {% for owner, pages in owners %}<div class="docs-owner"><a class="small" href="{{ owner.get_absolute_url }}"><b>{{ owner }}</b></a>
+      <ul class="page-tree">{% for p, depth in pages %}<li style="--depth:{{ depth }}"><a href="{{ p.get_absolute_url }}">📄 {{ p.title }}</a></li>{% endfor %}</ul></div>{% endfor %}
+  </section>{% endfor %}
+  <section class="card">
+    <h3>Changed lately</h3>
+    <ul class="page-list">{% for p in recent %}<li><a href="{{ p.get_absolute_url }}">📄 {{ p.title }}</a>
+      <span class="muted small">{{ p.updated_by|default:"" }} {{ p.updated_at|date:"j M Y" }}</span></li>
+      {% empty %}<li class="muted small">No pages yet.</li>{% endfor %}</ul>
+  </section>
+</div>
+{% endblock %}

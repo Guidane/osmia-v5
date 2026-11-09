@@ -23,7 +23,7 @@
       <div class="actions"><button class="btn">Save</button></div>
     </div>
   </div>
-  {% include "web/_notes_field.html" %}
+  <div class="side">{% include "web/_notes_field.html" %}{% side order %}</div>
 </form>
 
 {% if order.status == 'draft' %}

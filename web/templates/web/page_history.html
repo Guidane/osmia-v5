@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% load osmia %}
+{% block title %}History of {{ page.title }} · Osmia{% endblock %}
+{% block content %}
+<nav class="crumbs small">{% for url, text in crumbs %}<a href="{{ url }}">{{ text }}</a> › {% endfor %}<a href="{{ page.get_absolute_url }}">{{ page.title }}</a></nav>
+<div class="page-head"><h1>History of {{ page.title }}</h1></div>
+<div class="history">
+  <section class="card flush">
+    <table class="list">
+      <tr><th>Version</th><th>Saved</th><th></th></tr>
+      {% for v in versions %}<tr{% if shown and v.number == shown.number %} class="picked"{% endif %}>
+        <td><a href="?v={{ v.number }}">v{{ v.number }}</a> <span class="small">{{ v.title }}</span></td>
+        <td class="small muted nowrap">{{ v.saved_by|default:"" }} {{ v.saved_at|date:"j M Y H:i" }}</td>
+        <td>{% if not forloop.first %}<form method="post" action="{% url 'web:page_restore' page.pk v.number %}" class="inline" data-confirm="Bring back v{{ v.number }}?">{% csrf_token %}<button class="btn small">Bring back</button></form>{% else %}<span class="badge ok">now</span>{% endif %}</td>
+      </tr>{% endfor %}
+    </table>
+  </section>
+  {% if shown %}<article class="card doc"><h2>{{ shown.title }} <span class="muted small">v{{ shown.number }}</span></h2>{{ shown.body|markup }}</article>{% endif %}
+</div>
+{% endblock %}

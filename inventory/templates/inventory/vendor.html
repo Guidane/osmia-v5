@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load osmia %}
 {% block title %}{{ vendor.name }} · Osmia{% endblock %}
 {% block content %}
 <p class="small"><a href="{% url 'inventory:vendors' %}">← Vendors</a></p>
@@ -24,7 +24,7 @@
       {% empty %}<tr><td class="empty small">No orders yet.</td></tr>{% endfor %}</table>
   </section>
 </div>
-{% include "web/_notes.html" with notes=vendor.notes %}
+<div class="side">{% include "web/_notes.html" with notes=vendor.notes %}{% side vendor %}</div>
 </div>
 <section class="card flush">
   <div class="card-head"><h3>Parts ordered from it</h3></div>

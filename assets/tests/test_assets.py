@@ -110,27 +110,6 @@ class AssetCategoryTests(Base):
 
 
 class DocumentAndLabelTests(Base):
-    def test_documentation_is_cleaned_and_takes_pictures_and_files(self):
-        from django.core.files.uploadedfile import SimpleUploadedFile
-        url = reverse('web:document', args=['part', self.plug.pk])
-        self.client.post(url, {'body': '<h2>Use</h2><p onclick="x()">Crimp <b>first</b></p><script>alert(1)</script>'
-                                       '<table><tr><td>a</td></tr></table><a href="javascript:x()">bad</a><img src="/docs/files/1/">'})
-        page = self.client.get(url)
-        self.assertContains(page, '<h2>Use</h2><p>Crimp <b>first</b></p>', html=False)
-        self.assertNotContains(page, 'alert(1)')
-        self.assertNotContains(page, 'onclick="x()"')
-        self.assertNotContains(page, 'javascript:')
-        self.assertContains(page, '<table><tr><td>a</td></tr></table>', html=False)
-        png = (b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\r'
-               b'IDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82')
-        self.client.post(reverse('web:document_upload', args=['part', self.plug.pk]), {'image': SimpleUploadedFile('p.png', png, 'image/png')})
-        response = self.client.post(reverse('web:document_upload', args=['part', self.plug.pk]),
-                                    {'file': SimpleUploadedFile('sheet.pdf', b'%PDF', 'application/pdf')}, HTTP_X_REQUESTED_WITH='fetch')
-        self.assertEqual(response.json()['files'][0]['name'], 'sheet.pdf')
-        page = self.client.get(reverse('inventory:part', args=[self.plug.pk]))
-        self.assertContains(page, reverse('web:image', args=['part', self.plug.pk]))   # its picture on its page
-        self.assertContains(page, url)
-
     def test_labels_of_several_on_a_sheet_and_a_saved_layout(self):
         tie = Part.objects.create(number='TIE-100', description='Cable tie 100 mm')
         url = reverse('web:labels', args=['part'])

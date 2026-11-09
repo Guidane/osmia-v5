@@ -2,8 +2,8 @@
    connector upright beside each column and the connector's face (its pins as they sit: a single row, two rows, a
    D-sub, a circle, a grid) on the far side.
 
-   View: wires in their colours; a twisted set crosses in the middle (the first wire in a V down to the set's bottom
-   row, the others in a Λ up to its top row), a shielded set has an ellipse at each end whose bottom sits on the
+   View: wires in their colours; a twisted set crosses near each end, just past a shield (a pair: the first wire in a V down to the set's bottom
+   row, the other in a Λ up to its top row; more wires: in turn the bottom one rises to the top as the others drop a row), a shielded set has an ellipse at each end whose bottom sits on the
    shield wire's row, the shield dashed between them. Clicking where a set's wires run (or its chip) lights up the set:
    its contacts and its pins on both faces.
 
@@ -31,42 +31,31 @@
   function twisted(type) { return /twisted/i.test(type || ''); }
   function shielded(type) { return /shielded/i.test(type || ''); }
 
-  function face(end) {   // where each pin sits on the connector's face: {w, h, shape, at: [[number, x, y]]}
-    var pins = end.pins.map(function (p) { return p[0]; });
-    if (pins.length && pins.every(function (p) { return /^\d+$/.test(p); })) {   // numbered: every position, from 1, in its place
-      var last = Math.max.apply(null, [end.positions].concat(pins.map(Number)));
-      pins = [];
-      for (var k = 1; k <= last; k++) pins.push(String(k));
-    }
-    var n = pins.length, at = [], half = Math.ceil(n / 2), m = 18;
-    if (end.layout === 'staggered') {   // upright like a D-sub: the first half down the wide side, the rest between them
-      var apart = 24;
-      pins.forEach(function (p, i) {
-        var inner = i >= half;
-        at.push([p, m + R + (inner ? 0 : apart), m + R + (inner ? i - half + 0.5 : i) * PITCH]);
-      });
-      return { w: 2 * m + apart + 2 * R, h: 2 * m + (half - 1) * PITCH + 2 * R, shape: 'trapezoid', at: at };
-    }
-    if (end.layout === 'rows') {
-      pins.forEach(function (p, i) { var right = i >= half; at.push([p, m + R + (right ? PITCH : 0), m + R + (right ? i - half : i) * PITCH]); });
-      return { w: 2 * m + PITCH + 2 * R, h: 2 * m + (half - 1) * PITCH + 2 * R, shape: 'box', at: at };
-    }
-    if (end.layout === 'circle') {
-      var ring = Math.max(PITCH * n / (2 * Math.PI), 22), c = m + ring + R;
-      pins.forEach(function (p, i) {
-        var a = -Math.PI / 2 + 2 * Math.PI * i / Math.max(n, 1);
-        at.push([p, c + ring * Math.cos(a), c + ring * Math.sin(a)]);
-      });
-      return { w: 2 * c, h: 2 * c, shape: 'circle', at: at };
-    }
-    if (end.layout === 'grid') {
-      var cols = end.columns || Math.ceil(Math.sqrt(n)) || 1, lines = Math.ceil(n / cols);
-      pins.forEach(function (p, i) { at.push([p, m + R + (i % cols) * PITCH, m + R + Math.floor(i / cols) * PITCH]); });
-      return { w: 2 * m + (cols - 1) * PITCH + 2 * R, h: 2 * m + (lines - 1) * PITCH + 2 * R, shape: 'box', at: at };
-    }
-    pins.forEach(function (p, i) { at.push([p, m + R, m + R + i * PITCH]); });
-    return { w: 2 * m + 2 * R, h: 2 * m + Math.max(n - 1, 0) * PITCH + 2 * R, shape: 'box', at: at };
+  // a connector's face (inventory.faces: as you look at it, from its family), stood upright when it is wider than tall:
+  // {w, h, shape, box: [x, y, w, h] its outline, turned, at: [[number, x, y]]}
+  function face(end, flat) {
+    var F = end.face, high = F.below || F.h, turned = !flat && F.w > F.h;
+    var corners = F.outline || [];
+    if (!turned) return { w: F.w, h: F.h, shape: F.shape, box: [0, 0, F.w, high], turned: false, at: F.contacts, outline: corners };
+    return { w: F.h, h: F.w, shape: F.shape, box: [F.h - high, 0, high, F.w], turned: true,
+             at: F.contacts.map(function (c) { return [c[0], F.h - c[2], c[1]]; }),
+             outline: corners.map(function (p) { return [F.h - p[1], p[0]]; }) };
   }
+  function outline(parent, f, fx, fy) {   // its outline: its own corners, round, a D-sub (the wide side up, or right when stood up), a box
+    var x = fx + f.box[0], y = fy + f.box[1], w = f.box[2], h = f.box[3], k = 14;
+    if (f.shape === 'custom' && f.outline.length > 2) {   // corners of its own
+      return el('path', { d: 'M' + f.outline.map(function (p) { return (fx + p[0]) + ',' + (fy + p[1]); }).join(' L') + ' Z',
+                          class: 'pd-face', 'stroke-linejoin': 'round' }, parent);
+    }
+    if (f.shape === 'circle') return el('circle', { cx: x + w / 2, cy: y + h / 2, r: Math.min(w, h) / 2, class: 'pd-face' }, parent);
+    if (f.shape === 'dsub') {
+      var d = f.turned ? 'M' + x + ',' + (y + k) + ' L' + (x + w) + ',' + y + ' V' + (y + h) + ' L' + x + ',' + (y + h - k) + ' Z'
+                       : 'M' + x + ',' + y + ' H' + (x + w) + ' L' + (x + w - k) + ',' + (y + h) + ' H' + (x + k) + ' Z';
+      return el('path', { d: d, class: 'pd-face', 'stroke-linejoin': 'round' }, parent);
+    }
+    return el('rect', { x: x, y: y, width: w, height: h, rx: 6, class: 'pd-face' }, parent);
+  }
+
 
   function sides(data) {   // each end left or right, so that wires go across
     var side = {}, count = { left: 0, right: 0 }, known = {};
@@ -165,7 +154,7 @@
       state.width = svg.parentNode.clientWidth;
       x.right = x.left + Math.max(editing ? 620 : 420, room - fixed);
       x.rightNum = x.right + C; x.rightBar = x.rightNum + 20; x.rightFace = x.rightBar + 46;
-      var width = x.rightFace + widest.right + 10, mid = (x.left + x.right) / 2, TWIST = 50;   // half the twist's width
+      var width = x.rightFace + widest.right + 10, mid = (x.left + x.right) / 2, TWIST = 25;   // half the twist's width
 
       var under = el('g', {}, svg), wiresG = el('g', {}, svg), over = el('g', {}, svg), areas = el('g', {}, svg), tools = el('g', {}, svg);
       var lit = {};
@@ -176,11 +165,7 @@
         var fx = left ? x.leftFace + widest.left - f.w : x.rightFace, fy = y0 - 10;
         text(over, left ? x.leftFace : width - 10, y0 - 34, e.designator + (e.what ? ' · ' + e.what : ''), 'pd-title' + (left ? '' : ' end'));
         if (e.plugs) text(over, left ? x.leftFace : width - 10, y0 - 20, '→ ' + e.plugs, 'pd-sub' + (left ? '' : ' end'));
-        if (f.shape === 'circle') el('circle', { cx: fx + f.w / 2, cy: fy + f.h / 2, r: f.w / 2, class: 'pd-face' }, under);
-        else if (f.shape === 'trapezoid') {
-          var k = 14;   // the narrow side slants in at the top and bottom
-          el('path', { d: 'M' + fx + ',' + (fy + k) + ' L' + (fx + f.w) + ',' + fy + ' V' + (fy + f.h) + ' L' + fx + ',' + (fy + f.h - k) + ' Z', class: 'pd-face' }, under);
-        } else el('rect', { x: fx, y: fy, width: f.w, height: f.h, rx: 6, class: 'pd-face' }, under);
+        outline(under, f, fx, fy);
         var has = {};
         e.pins.forEach(function (p) { has[p[0]] = true; });
         f.at.forEach(function (p) {
@@ -225,8 +210,8 @@
           splices[key] = { left: left, rows: [r] };
           return contact(at, left, r.y, named);
         }
-        if (s.x === undefined) {   // viewing: just past the twists in the middle; editing: by the contacts
-          var lane = lanes[left ? 'left' : 'right']++, off = editing ? x.right - mid - 12 : -(TWIST + 24);
+        if (s.x === undefined) {   // viewing: in the middle, between the twists; editing: by the contacts
+          var lane = lanes[left ? 'left' : 'right']++, off = editing ? x.right - mid - 12 : -12;
           s.x = left ? mid - off + lane * 10 : mid + off - lane * 10;
         }
         s.rows.push(r);
@@ -235,6 +220,7 @@
 
       // a face runs alongside the groups of its connector; a group beside another connector starts below it
       var y = 70, GAP = 90, faced = {}, beside = { left: { id: null, until: 0 }, right: { id: null, until: 0 } };
+      var bars = { left: null, right: null };
       list.forEach(function (g) {
         var y0 = y, n = g.rows.length, bottom = n ? (n - 1) * ROW + C : 0;
         var here = [['left', g.left]].concat(g.same ? [] : [['right', g.right]]).filter(function (s) { return s[1] !== undefined; });
@@ -253,10 +239,13 @@
           if (r.ax === x.left) own.left = true;
           if (r.bx === x.right) own.right = true;
         });
-        [[g.left, x.leftBar, own.left]].concat(g.same ? [] : [[g.right, x.rightBar, own.right]]).forEach(function (b) {
-          if (!b[2]) return;
-          el('rect', { x: b[1], y: y0 - C - 6, width: 12, height: (n - 1) * ROW + 2 * C + 12, rx: 3, class: 'pd-bar' }, under);
-          text(over, b[1] + 6, y0 - C - 12, byId[b[0]].designator, 'pd-bar-label');
+        // the connector's bar; one after another of the same connector on that side make one longer bar
+        [['left', g.left, x.leftBar, own.left]].concat(g.same ? [] : [['right', g.right, x.rightBar, own.right]]).forEach(function (b) {
+          if (!b[3]) return;
+          var top = y0 - C - 6, end = y0 + (n - 1) * ROW + C + 6, last = bars[b[0]];
+          if (last && last.id === b[1]) { last.rect.setAttribute('height', end - last.top); return; }
+          bars[b[0]] = { id: b[1], top: top, rect: el('rect', { x: b[2], y: top, width: 12, height: end - top, rx: 3, class: 'pd-bar' }, under) };
+          text(over, b[2] + 6, top - 6, byId[b[1]].designator, 'pd-bar-label');
         });
         y = y0 + bottom + GAP;
       });
@@ -275,11 +264,29 @@
         }
         return d + ' L' + pts[pts.length - 1];
       }
-      function twistOf(pair) {   // where a set's twist sits: the middle of the stretch its wires run side by side
-        var from = Math.max.apply(null, pair.map(function (r) { return r.ax === x.left ? x.left + 90 : r.ax + 14; }));
-        var to = Math.min.apply(null, pair.map(function (r) { return r.bx === x.right ? x.right - 90 : r.bx - 14; }));
-        var half = Math.max(Math.min(TWIST, (to - from) / 2), 16);
-        return { mid: (from + to) / 2, half: half };
+      function twistOf(pair) {   // where a set's twists sit: near each end of the stretch its wires run side by side
+        // (just past a shield's ellipses); one in the middle when there is no room for two
+        var from = Math.max.apply(null, pair.map(function (r) { return r.ax === x.left ? x.left + 100 : r.ax + 14; }));
+        var to = Math.min.apply(null, pair.map(function (r) { return r.bx === x.right ? x.right - 100 : r.bx - 14; }));
+        // a twist only by a connector, not where the wires come from a splice
+        var atLeft = pair.every(function (r) { return r.ax === x.left; }), atRight = pair.every(function (r) { return r.bx === x.right; });
+        var half = pair.length > 2 ? pair.length * TWIST * 0.8 : TWIST;   // a multi twist: a step per wire
+        if (to - from >= 4 * half + 40) {
+          var ends = (atLeft ? [{ mid: from + half, half: half }] : []).concat(atRight ? [{ mid: to - half, half: half }] : []);
+          if (ends.length) return ends;
+        }
+        return [{ mid: (from + to) / 2, half: Math.max(Math.min(half, (to - from) / 2), 16) }];
+      }
+      function twistPoints(pair, i, t) {   // one wire's way through a twist
+        var n = pair.length, y = pair[i].y, high = pair[0].y, low = pair[n - 1].y;
+        if (n === 2) return [[t.mid - t.half, y], i === 0 ? [t.mid, low] : [t.mid, high], [t.mid + t.half, y]];
+        // more wires: at each step the bottom wire rises to the top and the others drop a row, n steps round
+        var step = 2 * t.half / n, at = i, pts = [[t.mid - t.half, y]];
+        for (var k = 1; k <= n; k++) {
+          at = at === n - 1 ? 0 : at + 1;
+          pts.push([t.mid - t.half + k * step, pair[at].y]);
+        }
+        return pts;
       }
       function colourOf(w) { var c = colours[w.colour] || ''; return c && c.indexOf('gradient') === -1 ? c : (c ? '#22c55e' : '#64748b'); }
       function wire(r, d, dashed) {
@@ -315,10 +322,11 @@
           return;
         }
         var pair = s.rows.filter(function (o) { return o.w.type !== 'Shield'; }).sort(function (p, q) { return p.y - q.y; });
-        if (twisted(s.type) && pair.length > 1) {   // the first wire in a V to the bottom row, the others in a Λ to the top
-          var high = pair[0].y, low = pair[pair.length - 1].y, i = pair.indexOf(r), t = twistOf(pair);
-          var peak = i === 0 ? [t.mid, low] : [t.mid + (i - pair.length / 2) * t.half / 2, high];
-          wire(r, smooth([[r.ax, y], [t.mid - t.half, y], peak, [t.mid + t.half, y], [r.bx, y]]));
+        if (twisted(s.type) && pair.length > 1) {   // see twistPoints
+          var i = pair.indexOf(r), pts = [[r.ax, y]];
+          twistOf(pair).forEach(function (t) { pts = pts.concat(twistPoints(pair, i, t)); });
+          pts.push([r.bx, y]);
+          wire(r, smooth(pts));
           return;
         }
         wire(r, 'M' + r.ax + ',' + y + ' H' + r.bx);
@@ -363,6 +371,14 @@
           el('title', {}, area).textContent = 'Set ' + s.name + ' · ' + s.type.toLowerCase();
           area.addEventListener('click', function () { show(s.name); });
         });
+        rows.forEach(function (r) {   // a wire in no set: picked on its own
+          if (r.w.set || r.y === undefined) return;
+          var key = 'wire:' + r.w.id;
+          var area = el('rect', { x: x.left + 2, y: r.y - ROW / 2, width: x.right - x.left - 4, height: ROW, rx: 8, class: 'pd-area', 'data-set': key }, areas);
+          el('title', {}, area).textContent = byId[r.a.end].designator + ':' + r.a.pin + ' → ' + byId[r.b.end].designator + ':' + r.b.pin +
+            (r.w.signal ? ' · ' + r.w.signal : '');
+          area.addEventListener('click', function () { show(key); });
+        });
       }
 
       var tall = Math.max(y - 50, 120);
@@ -378,7 +394,7 @@
         if (state.picked === null) return;
         svg.querySelectorAll('[data-set]').forEach(function (n) { if (n.dataset.set === state.picked) n.classList.add('lit'); });
         lines.forEach(function (d) {
-          if (d.w.set !== state.picked) return;
+          if ((d.w.set || 'wire:' + d.w.id) !== state.picked) return;
           d.g.classList.add('lit');
           [[d.w.from, d.w.from_pin], [d.w.to, d.w.to_pin]].forEach(function (p) {
             (lit[p[0] + ':' + p[1]] || []).forEach(function (n) { n.classList.add('lit'); });
@@ -417,5 +433,29 @@
     });
   }
 
-  window.Pinout = { mount: mount };
+  // One connector's face on its own (a device's connector, a family's): as you look at it, each pin with its signal on
+  // hover; ``onPin(number, on)`` when the pointer comes onto or leaves one.
+  function drawFace(svg, end, onPin) {
+    var f = face(end, true), pad = 4;
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    svg.setAttribute('viewBox', '0 0 ' + (f.w + 2 * pad) + ' ' + (f.h + 2 * pad));
+    svg.setAttribute('width', f.w + 2 * pad);
+    svg.setAttribute('height', f.h + 2 * pad);
+    function at(x, y) { return [x + pad, y + pad]; }
+    outline(svg, f, pad, pad);
+    var signal = {};
+    end.pins.forEach(function (p) { signal[p[0]] = p[1]; });
+    f.at.forEach(function (p) {
+      var xy = at(p[1], p[2]), g = el('g', { class: 'pd-pin' + (p[0] in signal ? '' : ' empty'), 'data-pin': p[0] }, svg);
+      el('title', {}, g).textContent = p[0] + (signal[p[0]] ? ' ' + signal[p[0]] : '');
+      el('circle', { cx: xy[0], cy: xy[1], r: R }, g);
+      text(g, xy[0], xy[1] + 4, p[0], 'pd-num');
+      if (onPin) {
+        g.addEventListener('mouseenter', function () { onPin(p[0], true); });
+        g.addEventListener('mouseleave', function () { onPin(p[0], false); });
+      }
+    });
+  }
+
+  window.Pinout = { mount: mount, face: drawFace };
 })();

@@ -26,6 +26,9 @@
     <summary title="Menu" aria-label="Menu">☰</summary>
     <nav class="menu-panel">
       <a href="{% url 'web:home' %}">🏠 Home</a>
+      <div class="label">Work</div>
+      <a href="{% url 'work:list' %}">Projects</a>
+      <a href="{% url 'web:docs' %}">Documentation</a>
       <div class="label">Stock</div>
       <a href="{% url 'inventory:parts' %}">Parts</a>
       <a href="{% url 'orders:list' %}">Orders</a>
@@ -70,6 +73,9 @@
 {% endif %}
 <script>
   window.OSMIA_CSRF = "{{ csrf_token }}";
+</script>
+<script src="{% fresh 'web/files.js' %}"></script>
+<script>
   function osmiaTheme() {
     const root = document.documentElement, dark = matchMedia('(prefers-color-scheme: dark)').matches;
     const now = root.dataset.theme || (dark ? 'dark' : 'light');

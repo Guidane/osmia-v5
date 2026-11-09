@@ -103,12 +103,15 @@ def _make(user):
     Part.objects.filter(pk=parts['DSUB-9-PLUG'].pk).update(notes='Use the gold plated contacts with it.\nKeep two spare in the lab.')
     vendors['Cable World'].notes = 'Free delivery above 200. Ask for Jan.'
     vendors['Cable World'].save()
-    dsub9 = Family.objects.create(name='D-sub 9', pin_layout='staggered', pin_positions=9)
-    Part.objects.filter(number='M12-5-F').update(pin_layout='circle', pin_positions=5)
-    pin, socket = Branch.objects.create(family=dsub9, name='pin'), Branch.objects.create(family=dsub9, name='socket')
-    dsub25 = Family.objects.create(name='D-sub 25', pin_layout='staggered', pin_positions=25)
-    Part.objects.filter(number='DSUB-25-PLUG').update(family=dsub25, branch=Branch.objects.create(family=dsub25, name='pin'))
-    Part.objects.filter(number='DSUB-25-RECEPT').update(family=dsub25, branch=Branch.objects.create(family=dsub25, name='socket'))
+    from inventory.faces import start
+    dsub9 = Family.objects.create(name='D-sub 9', face=start('staggered', 9))
+    pin, socket = Branch.objects.create(family=dsub9, name='pin', contacts='pin'), Branch.objects.create(family=dsub9, name='socket', contacts='socket')
+    m12 = Family.objects.create(name='M12 5-pin', face=start('circle', 5))
+    Branch.objects.create(family=m12, name='pin', contacts='pin')
+    Part.objects.filter(number='M12-5-F').update(family=m12, branch=Branch.objects.create(family=m12, name='socket', contacts='socket'))
+    dsub25 = Family.objects.create(name='D-sub 25', face=start('staggered', 25))
+    Part.objects.filter(number='DSUB-25-PLUG').update(family=dsub25, branch=Branch.objects.create(family=dsub25, name='pin', contacts='pin'))
+    Part.objects.filter(number='DSUB-25-RECEPT').update(family=dsub25, branch=Branch.objects.create(family=dsub25, name='socket', contacts='socket'))
     Part.objects.filter(number__in=['DSUB-9-PLUG', 'DSUB-9-PLUG-B']).update(family=dsub9, branch=pin)
     Part.objects.filter(number='DSUB-9-RECEPT').update(family=dsub9, branch=socket)
     workshop = Category.objects.create(name='Workshop', kind='assets')
@@ -227,6 +230,131 @@ def _make(user):
                   ends={str(e.pk): at[e.connector.device.number] for e in loom.ends.select_related('connector__device')})
     configs.ask_harness(two, ctrl, second, 'The sensor cable from the controller to load board 2, about 2 m, shielded.', user, sam)
     number_up(asset_id, list(Asset.objects.filter(category__in=workshop.below()).order_by('pk')))
+    _work(user, engineering, project, devices, psu, parts, [late, coming, asked, mine])
+
+
+def _picture(shape, colour, holes=0):
+    """A small drawing of something (PNG): a D-sub, a round connector, a coil of wire, a box, a tool, a rack."""
+    from io import BytesIO
+
+    from PIL import Image, ImageDraw
+    img = Image.new('RGB', (240, 180), '#f8fafc')
+    d = ImageDraw.Draw(img)
+    if shape == 'dsub':
+        d.polygon([(30, 50), (210, 50), (195, 130), (45, 130)], fill=colour, outline='#334155', width=4)
+        top, low = (holes + 1) // 2, holes // 2
+        for i in range(top):
+            x = 60 + i * (120 / max(top - 1, 1))
+            d.ellipse([x - 7, 68, x + 7, 82], fill='#f8fafc', outline='#334155', width=2)
+        for i in range(low):
+            x = 60 + (i + 0.5) * (120 / max(top - 1, 1))
+            d.ellipse([x - 7, 98, x + 7, 112], fill='#f8fafc', outline='#334155', width=2)
+    elif shape == 'round':
+        d.ellipse([60, 30, 180, 150], fill=colour, outline='#334155', width=5)
+        for x, y in ((120, 60), (150, 90), (120, 120), (90, 90), (120, 90)):
+            d.ellipse([x - 8, y - 8, x + 8, y + 8], fill='#f8fafc', outline='#334155', width=2)
+    elif shape == 'wire':
+        for i in range(7):
+            d.ellipse([40 + i * 14, 40, 120 + i * 14, 140], outline=colour, width=6)
+    elif shape == 'tool':
+        d.rounded_rectangle([30, 75, 150, 105], 12, fill=colour, outline='#334155', width=3)
+        d.polygon([(150, 80), (215, 55), (215, 125), (150, 100)], fill='#94a3b8', outline='#334155')
+    elif shape == 'rack':
+        d.rounded_rectangle([50, 15, 190, 165], 8, fill='#e2e8f0', outline='#334155', width=4)
+        for i in range(4):
+            d.rounded_rectangle([62, 26 + i * 34, 178, 52 + i * 34], 4, fill=colour, outline='#334155', width=2)
+            d.ellipse([160, 34 + i * 34, 170, 44 + i * 34], fill='#22c55e')
+    else:   # a box with lights
+        d.rounded_rectangle([35, 45, 205, 135], 12, fill=colour, outline='#334155', width=4)
+        for i in range(4):
+            d.ellipse([55 + i * 22, 60, 69 + i * 22, 74], fill='#22c55e' if i % 2 == 0 else '#facc15')
+        d.rectangle([150, 95, 190, 120], fill='#1e293b')
+    out = BytesIO()
+    img.save(out, 'PNG')
+    return out.getvalue()
+
+
+PDF = (b'%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj '
+       b'3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 120]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj '
+       b'4 0 obj<</Length 52>>stream\nBT /F1 18 Tf 20 60 Td (Demo datasheet) Tj ET\nendstream endobj '
+       b'5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF')
+
+
+def _attach(thing, name, data, user, preview=False):
+    from django.contrib.contenttypes.models import ContentType
+    from django.core.files.base import ContentFile
+
+    from web.models import Attachment
+    item = Attachment(content_type=ContentType.objects.get_for_model(thing), object_id=thing.pk, name=name, size=len(data),
+                      preview=preview, uploaded_by=user)
+    item.file.save(name, ContentFile(data), save=False)
+    item.save()
+    return item
+
+
+def _page(title, body, user, owner=None, parent=None, position=0):
+    from django.contrib.contenttypes.models import ContentType
+
+    from web.models import Page, PageVersion
+    page = Page.objects.create(title=title, body=body, parent=parent, position=position, created_by=user, updated_by=user,
+                               content_type=ContentType.objects.get_for_model(owner) if owner else (parent.content_type if parent else None),
+                               object_id=owner.pk if owner else (parent.object_id if parent else None))
+    PageVersion.objects.create(page=page, number=1, title=title, body=body, saved_by=user)
+    return page
+
+
+def _work(user, engineering, diagram, devices, psu, parts, orders):
+    """Projects with what is in them, documentation pages, and pictures and files of things."""
+    from work.models import Project as Work
+    tools = list(Asset.objects.filter(kind='tool'))
+    burn = Work.objects.create(code='BR', name='Burn-in rack', owner=user, department=engineering,
+                               description='The burn-in rack: a controller, its load boards, the rack hub and the five devices it feeds.',
+                               notes='Ready for the test lab by the end of the quarter.')
+    burn.devices.set(devices.values())
+    burn.assets.set(list(Asset.objects.filter(device__in=devices.values())) + tools)
+    Project.objects.filter(pk=diagram.pk).update(in_project=burn)
+    Order.objects.filter(pk__in=[o.pk for o in orders[:3]]).update(in_project=burn)
+    lab = Work.objects.create(code='LAB', name='Lab upkeep', owner=user, department=engineering,
+                              description='Keeping the lab going: tools, instruments, the bench supply.')
+    lab.devices.set([psu])
+    lab.assets.set(Asset.objects.filter(kind__in=['tool', 'measuring', 'lab']))
+    Order.objects.filter(pk=orders[3].pk).update(in_project=lab)
+    Work.objects.create(code='TB-0', name='Old test bench', status='done', owner=user, description='The bench before the rack.')
+
+    # pictures (the first of each is its preview) and files
+    for number, shape, colour, holes in (('DSUB-9-PLUG', 'dsub', '#cbd5e1', 9), ('DSUB-9-PLUG-B', 'dsub', '#d6d3d1', 9),
+                                         ('DSUB-9-RECEPT', 'dsub', '#94a3b8', 9), ('DSUB-25-PLUG', 'dsub', '#cbd5e1', 25),
+                                         ('DSUB-25-RECEPT', 'dsub', '#94a3b8', 25), ('M12-5-F', 'round', '#cbd5e1', 0),
+                                         ('WIRE-22-RED', 'wire', '#ef4444', 0), ('WIRE-22-BLK', 'wire', '#1f2937', 0),
+                                         ('WIRE-24-TP', 'wire', '#22c55e', 0)):
+        _attach(parts[number], f'{number}.png', _picture(shape, colour, holes), user, preview=True)
+    _attach(parts['DSUB-9-PLUG'], 'DSUB-9 datasheet.pdf', PDF, user)
+    _attach(parts['DSUB-25-PLUG'], 'DSUB-25 datasheet.pdf', PDF, user)
+    for number, device in devices.items():
+        _attach(device, f'{number}.png', _picture('rack' if number == 'HUB-500' else 'box', device.colour), user, preview=True)
+    _attach(psu, 'PSU-24.png', _picture('box', '#4b5563'), user, preview=True)
+    for tool in tools:
+        _attach(tool, f'{tool.number}.png', _picture('tool', '#f59e0b'), user, preview=True)
+    _attach(burn, 'Burn-in rack.png', _picture('rack', '#3b7dd8'), user, preview=True)
+    _attach(burn, 'Rack layout.pdf', PDF, user)
+    _attach(orders[0], 'Quote from Acme.pdf', PDF, user)
+
+    # documentation
+    start = _page('Getting started', '<p>Osmia keeps the lab\'s <b>parts</b>, <b>orders</b>, <b>devices</b>, <b>wire diagrams</b> '
+                  'and <b>assets</b> together, grouped by <b>project</b>.</p><h2>Where to look</h2><ul><li>Projects: what the work is for</li>'
+                  '<li>Parts and orders: what is in stock and what is coming</li><li>Wire diagrams: how the devices are wired</li></ul>', user)
+    _page('Crimping D-sub contacts', '<h2>Tools</h2><p>Use the <a href="/assets/">D-sub crimp tool</a> (T-001) for 20-24 AWG.</p>'
+          '<h2>Steps</h2><ol><li>Strip 3 mm.</li><li>Crimp the contact in the 22 AWG nest.</li><li>Pull test: it must hold 20 N.</li></ol>',
+          user, parent=start)
+    overview = _page('Overview', '<p>The rack holds the <b>controller</b>, two <b>load boards</b> and the <b>rack hub</b>, which feeds '
+                     'five devices over D-sub 25 to D-sub 9 harnesses.</p><table><thead><tr><th>Part</th><th>What</th></tr></thead>'
+                     '<tbody><tr><td>CTRL-100</td><td>Rack controller</td></tr><tr><td>HUB-500</td><td>Rack hub</td></tr></tbody></table>',
+                     user, owner=burn)
+    _page('Test procedure', '<ol><li>Power the rack with the lab supply (24 V, 5 A).</li><li>Check every load board answers on CAN.</li>'
+          '<li>Run the burn-in for 48 hours.</li></ol>', user, parent=overview)
+    _page('Assembly', '<p>Gold plated contacts only. Tighten the jack screws to 0.3 Nm.</p>', user, owner=parts['DSUB-9-PLUG'])
+    _page('Wiring notes', '<p>Each D-sub 9 gets two power wires and one shielded data set. The motor driver\'s power is spliced '
+          'from the sensor\'s.</p>', user, owner=devices['HUB-500'])
 
 def _harness(project, name, ends, wires, parts, user):
     h = Harness.objects.create(project=project, name=name, status='released')

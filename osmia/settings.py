@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'harnesses',
     'budgets',
     'assets',
+    'work',
 ]
 
 MIDDLEWARE = [
@@ -119,6 +120,12 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 MEDIA_ROOT = Path(os.environ.get('OSMIA_MEDIA_ROOT') or DATA_DIR / 'media')
+if sys.argv[1:2] == ['test']:   # tests keep their files to themselves, gone after
+    import atexit
+    import shutil
+    import tempfile
+    MEDIA_ROOT = Path(tempfile.mkdtemp(prefix='osmia-test-media-'))
+    atexit.register(shutil.rmtree, MEDIA_ROOT, True)
 DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000

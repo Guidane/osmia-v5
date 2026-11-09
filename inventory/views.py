@@ -1,7 +1,10 @@
 """Parts (finding them, their page with stock, history and orders), locations, vendors and categories."""
+import json
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -18,7 +21,7 @@ from . import attributes as attributes_kept
 from . import stock
 from .attributes import PartStore
 from .forms import AttributeForm, BranchForm, CategoryForm, FamilyForm, LocationForm, PartForm, VendorForm
-from .models import Attribute, Category, Family, Location, Part, PartLink, PartValue, Stock, Vendor
+from .models import Attribute, Branch, Category, Family, Location, Part, PartLink, PartValue, Stock, Vendor
 
 PAGE = 200   # parts listed at most
 
@@ -214,9 +217,76 @@ def family(request, pk):
         saved = form.save()
         messages.success(request, f'{saved} is saved.')
         return redirect(item)
+    from .faces import mirrored
+    face = item.face if (item.face or {}).get('contacts') else None
     return render(request, 'inventory/family.html', {
+        'faces': {side: {'face': f, 'pins': [[c[0], ''] for c in f['contacts']]} for side, f in (('pin', face), ('socket', mirrored(face)))}
+                 if face else None,
         'family': item, 'form': form, 'branch': branch, 'branches': item.branches.annotate(n=Count('parts')),
         'parts': item.parts.select_related('vendor', 'branch').annotate(have=Sum('stock__quantity'))})
+
+
+def _with_branches(family):
+    """A connector family has a pin branch and a socket branch (made when missing; a branch named so is marked so)."""
+    for contacts, name in (('pin', 'pin'), ('socket', 'socket')):
+        if family.branches.filter(contacts=contacts).exists():
+            continue
+        named = family.branches.filter(name__iexact=name).first()
+        if named:
+            named.contacts = contacts
+            named.save(update_fields=['contacts'])
+        else:
+            Branch.objects.create(family=family, name=name, contacts=contacts)
+
+
+def _face_sent(text):
+    """The face sent by the connector editor, checked and fitted; ValidationError when it isn't right."""
+    from .faces import SHAPES, fitted
+    try:
+        data = json.loads(text or '')
+        shape = data['shape'] if data['shape'] in dict(SHAPES) else 'rect'
+        contacts = [[str(n).strip(), float(x), float(y)] for n, x, y in data['contacts']]
+        outline = [[float(x), float(y)] for x, y in data.get('outline') or []] if shape == 'custom' else None
+    except (ValueError, TypeError, KeyError):
+        raise ValidationError('The connector could not be read.')
+    if shape == 'custom' and len(outline) < 3:
+        raise ValidationError('An outline of its own needs at least 3 corners.')
+    numbers = [c[0] for c in contacts]
+    if '' in numbers:
+        raise ValidationError('Every contact needs a number.')
+    twice = sorted({n for n in numbers if numbers.count(n) > 1})
+    if twice:
+        raise ValidationError(f'Contact {", ".join(twice)} is there twice.')
+    return fitted(shape, contacts, outline)
+
+
+@login_required
+def connector(request, pk):
+    """The connector editor of a family: its outline and its contacts (where each sits, its number), as seen from the
+    pin side; made from a ready-made one, or changed by hand. Its pin and socket branches are made with it."""
+    from .faces import SHAPES, STARTS, start
+    item = get_object_or_404(Family, pk=pk)
+    if request.method == 'POST':
+        try:
+            if request.POST.get('action') == 'start':
+                face = start(request.POST.get('kind'), min(int(request.POST.get('positions') or 1), 200),
+                             int(request.POST.get('columns') or 0) or None)
+            else:
+                face = _face_sent(request.POST.get('face'))
+        except ValueError:
+            messages.error(request, 'Positions and columns are numbers.')
+            return redirect('inventory:connector', pk=item.pk)
+        except ValidationError as exc:
+            errors(request, exc)
+            return redirect('inventory:connector', pk=item.pk)
+        with transaction.atomic():
+            item.face = face
+            item.save(update_fields=['face'])
+            _with_branches(item)
+        messages.success(request, f'The {item} connector is saved.')
+        return redirect('inventory:connector' if request.POST.get('action') == 'start' else 'inventory:family', pk=item.pk)
+    return render(request, 'inventory/connector.html', {'family': item, 'face': item.face or {'shape': 'rect', 'contacts': []},
+                                                        'shapes': SHAPES, 'starts': STARTS})
 
 
 @login_required

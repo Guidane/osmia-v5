@@ -60,26 +60,50 @@ def money_abs(value):
 
 
 @register.simple_tag
-def document_button(thing):
-    """A button to the documentation page of a part, asset, device, harness or project."""
-    from django.utils.html import format_html
-
-    from web.documents import url_of
-    return format_html('<a class="btn" href="{}">📄 Documentation</a>', url_of(thing))
-
-
-@register.simple_tag
-def document_image(thing):
-    """The picture of a part, asset, device, harness or project (from its documentation), if it has one."""
+def preview(thing):
+    """The preview picture of a thing (one of its files), if it has one."""
     from django.urls import reverse
     from django.utils.html import format_html
 
-    from web.documents import document_of, kind_of, url_of
-    doc = document_of(thing)
-    if doc is None or not doc.image:
+    from web.things import preview_of
+    shown = preview_of(thing)
+    if shown is None:
         return ''
-    return format_html('<a class="main-image" href="{}"><img src="{}" alt="{}"></a>', url_of(thing),
-                       reverse('web:image', args=[kind_of(thing), thing.pk]), str(thing))
+    url = reverse('web:file', args=[shown.pk])
+    return format_html('<a class="main-image" href="{}" target="_blank"><img src="{}" alt="{}"></a>', url, url, str(thing))
+
+
+@register.simple_tag(takes_context=True)
+def thumb(context, thing):
+    """A small preview picture of a thing in a list (an empty square when it has none). The previews of a kind are
+    looked up once per page."""
+    from django.contrib.contenttypes.models import ContentType
+    from django.urls import reverse
+    from django.utils.html import format_html
+
+    from web.models import Attachment
+    ct = ContentType.objects.get_for_model(thing)
+    cache = context.render_context.setdefault('osmia_thumbs', {})
+    if ct.pk not in cache:
+        cache[ct.pk] = dict(Attachment.objects.filter(content_type=ct, preview=True).values_list('object_id', 'pk'))
+    found = cache[ct.pk].get(thing.pk)
+    if found is None:
+        return format_html('<span class="thumb-sm empty"></span>')
+    return format_html('<img class="thumb-sm" src="{}" alt="" loading="lazy">', reverse('web:file', args=[found]))
+
+
+@register.inclusion_tag('web/_side.html', takes_context=True)
+def side(context, thing):
+    """The Files and Documentation cards of a thing."""
+    from web.things import files_of, kind_of, pages_of
+    return {'thing': thing, 'kind': kind_of(thing), 'files': files_of(thing), 'pages': pages_of(thing),
+            'request': context.get('request'), 'csrf_token': context.get('csrf_token')}
+
+
+@register.filter
+def ext(name):
+    """A file's kind, from its name: PDF, DOCX, …"""
+    return name.rsplit('.', 1)[-1].upper()[:5] if '.' in name else 'FILE'
 
 
 @register.filter

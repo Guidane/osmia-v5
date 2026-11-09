@@ -130,6 +130,8 @@ class DiagramTests(BrowserTestCase):
         expect(page.locator('#pinout-drawing .lit')).to_have_count(0)
         page.locator('#pinout-drawing .pd-area[data-set="PWR"]').click()                 # where the set's wires run
         expect(page.locator('#pinout-drawing .pd-contact.lit')).to_have_count(4)
+        page.locator('#pinout-drawing .pd-area[data-set^="wire:"]').click()             # Enable, in no set: on its own
+        expect(page.locator('#pinout-drawing .pd-contact.lit')).to_have_count(2)
 
     def test_a_harness_pinout_drawn_in_edit_mode(self):
         from harnesses.models import Harness

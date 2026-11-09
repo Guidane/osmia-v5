@@ -1,0 +1,5 @@
+{% include "web/_files.html" %}
+<section class="card flush docs-card">
+  <div class="card-head"><h3>Documentation</h3><a class="btn small" href="{% url 'web:page_new' %}?kind={{ kind }}&amp;pk={{ thing.pk }}">＋ Page</a></div>
+  {% if pages %}<ul class="page-tree pad">{% for p, depth in pages %}<li style="--depth:{{ depth }}"><a href="{{ p.get_absolute_url }}">📄 {{ p.title }}</a></li>{% endfor %}</ul>{% endif %}
+</section>

@@ -15,6 +15,8 @@ class Project(models.Model):
     description = models.TextField(blank=True)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
     department = models.ForeignKey('accounts.Department', null=True, blank=True, on_delete=models.SET_NULL, related_name='projects')
+    in_project = models.ForeignKey('work.Project', null=True, blank=True, on_delete=models.SET_NULL, related_name='wire_diagrams',
+                                   verbose_name='project')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

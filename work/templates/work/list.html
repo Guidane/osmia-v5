@@ -1,0 +1,23 @@
+{% extends "base.html" %}{% load osmia %}
+{% block title %}Projects · Osmia{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Projects</h1><span class="spacer"></span>
+  <form method="get" class="inline-form">
+    <input type="search" name="q" value="{{ q }}" placeholder="Find…" aria-label="Find a project">
+    <select name="status" aria-label="Status" onchange="this.form.submit()"><option value="all"{% if shown == 'all' %} selected{% endif %}>All</option>
+      {% for value, label in statuses %}<option value="{{ value }}"{% if shown == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+  </form>
+  <a class="btn primary" href="{% url 'work:new' %}">＋ New project</a></div>
+<div class="card flush">
+  <table class="list">
+    <tr><th></th><th>Project</th><th>Status</th><th>Owner</th><th class="num">Wire diagrams</th><th class="num">Orders</th><th class="num">Devices</th><th class="num">Assets and tools</th></tr>
+    {% for p in projects %}<tr>
+      <td class="thumb-cell">{% thumb p %}</td>
+      <td><a href="{{ p.get_absolute_url }}">{{ p }}</a> <span class="muted small">{{ p.description|truncatechars:80 }}</span></td>
+      <td><span class="badge{% if p.status == 'active' %} ok{% endif %}">{{ p.get_status_display }}</span></td>
+      <td class="small">{{ p.owner|default:"" }}</td>
+      <td class="num">{{ p.n_diagrams }}</td><td class="num">{{ p.n_orders }}</td><td class="num">{{ p.n_devices }}</td><td class="num">{{ p.n_assets }}</td>
+    </tr>{% empty %}<tr><td colspan="8" class="empty small">No projects{% if shown != 'all' %} here{% endif %}.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

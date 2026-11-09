@@ -51,7 +51,7 @@ def _label(kind, thing, layout, attributes):
     """What one label shows: [(class, text)] lines, and the picture's address (or '')."""
     from inventory.attributes import columns, store_for
 
-    from .documents import document_of, kind_of
+    from .things import preview_of
     show = layout['show']
     lines = []
     if 'number' in show:
@@ -73,9 +73,9 @@ def _label(kind, thing, layout, attributes):
         lines += [('small', f'{a.name}: {v}') for a, v in zip(wanted, values) if v]
     picture = ''
     if 'picture' in show:
-        doc = document_of(thing)
-        if doc and doc.image:
-            picture = reverse('web:image', args=[kind_of(thing), thing.pk])
+        shown = preview_of(thing)
+        if shown is not None:
+            picture = reverse('web:file', args=[shown.pk])
     return lines, picture
 
 

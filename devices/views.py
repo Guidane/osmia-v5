@@ -8,7 +8,7 @@ from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from assets.service import next_tag
+from inventory.faces import drawn
 from web import excel, versions
 from web.shortcuts import edit_page, errors
 
@@ -48,7 +48,28 @@ def _pin_rows(devices):
 @login_required
 def device_form(request, pk=None):
     item = get_object_or_404(Device, pk=pk) if pk else None
-    return edit_page(request, DeviceForm(request.POST or None, instance=item), 'device')
+    form = DeviceForm(request.POST or None, instance=item)
+    with transaction.atomic():
+        return edit_page(request, form, 'device', saved=lambda device, new: form.add_unit(device))
+
+
+@login_required
+@require_POST
+def device_delete(request, pk):
+    """The device, with its connectors and versions; its assets stay, no longer of a device. Not while a wire diagram
+    has it."""
+    item = get_object_or_404(Device, pk=pk)
+    diagrams = sorted({str(p.configuration.project) for p in item.placements.filter(removed=False)
+                       .select_related('configuration__project')})
+    if diagrams:
+        messages.error(request, f'{item} is in the wire diagram {", ".join(diagrams)}: take it out there first.')
+        return redirect('devices:list')
+    with transaction.atomic():
+        item.assets.update(device=None)
+        item.placements.all().delete()   # only where a configuration had taken it out
+        item.delete()
+    messages.success(request, f'{item} is deleted.')
+    return redirect('devices:list')
 
 
 @login_required
@@ -61,10 +82,14 @@ def device(request, pk):
     plugged = {}
     for end in HarnessEnd.objects.filter(connector__device=item).select_related('harness__project', 'connector'):
         plugged.setdefault(end.connector_id, []).append(end)
+    faces = {}
+    for c in connectors:
+        pins = c.ordered_pins()
+        faces[c.pk] = {'face': drawn(c.used, [p.number for p in pins]), 'pins': [[p.number, p.signal] for p in pins]}
     return render(request, 'devices/device.html', {
-        'device': item, 'connectors': [(c, c.ordered_pins(), plugged.get(c.pk, [])) for c in connectors],
+        'device': item, 'connectors': [(c, c.ordered_pins(), plugged.get(c.pk, [])) for c in connectors], 'faces': faces,
         'versions': item.versions.select_related('created_by'), 'changed': versions.changed(item),
-        'units': item.assets.select_related('location'), 'next_tag': next_tag(item.number)})
+        'units': item.assets.select_related('location')})
 
 
 @login_required

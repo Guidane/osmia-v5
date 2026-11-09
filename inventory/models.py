@@ -16,8 +16,6 @@ from django.urls import reverse
 from web.models import Tree
 
 
-PIN_LAYOUTS = [('row', 'Single row'), ('rows', 'Two rows'), ('staggered', 'Two rows, staggered (D-sub)'), ('circle', 'Circular'),
-               ('grid', 'Grid')]
 
 
 class Vendor(models.Model):
@@ -210,9 +208,6 @@ class Part(models.Model):
     vendor_number = models.CharField("vendor's part number", max_length=200, blank=True)
     family = models.ForeignKey('Family', null=True, blank=True, on_delete=models.SET_NULL, related_name='parts')
     branch = models.ForeignKey('Branch', null=True, blank=True, on_delete=models.SET_NULL, related_name='parts')
-    pin_layout = models.CharField(max_length=12, blank=True, choices=PIN_LAYOUTS)
-    pin_columns = models.PositiveSmallIntegerField('columns', null=True, blank=True)
-    pin_positions = models.PositiveSmallIntegerField('positions', null=True, blank=True)
     price = models.DecimalField('last price', max_digits=12, decimal_places=4, null=True, blank=True)
     minimum = models.DecimalField('minimum stock', max_digits=12, decimal_places=3, default=0)
     reorder_quantity = models.DecimalField(max_digits=12, decimal_places=3, default=0)
@@ -264,11 +259,11 @@ class PartGroup:
 
 
 class Family(PartGroup, models.Model):
-    """Parts that can take each other's place, by a name (D-sub 9), maybe split into branches (pin, socket, …)."""
+    """Parts that can take each other's place, by a name (D-sub 9), maybe split into branches (pin, socket, …). A
+    connector family has its face (``inventory.faces``): its outline and where its contacts sit, as seen from the pin
+    side."""
     name = models.CharField(max_length=100)
-    pin_layout = models.CharField(max_length=12, blank=True, choices=PIN_LAYOUTS)
-    pin_columns = models.PositiveSmallIntegerField('columns', null=True, blank=True)
-    pin_positions = models.PositiveSmallIntegerField('positions', null=True, blank=True)
+    face = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ['name']
@@ -294,6 +289,7 @@ class Branch(PartGroup, models.Model):
     """A part of a family (its male ones, its female ones): "D-sub 9 / female"."""
     family = models.ForeignKey(Family, on_delete=models.CASCADE, related_name='branches')
     name = models.CharField(max_length=100)
+    contacts = models.CharField(max_length=6, blank=True, choices=[('pin', 'Pins'), ('socket', 'Sockets')])   # sockets: the face mirrored
 
     class Meta:
         ordering = ['family__name', 'name']
@@ -335,15 +331,6 @@ class PartOrFamily(models.Model):
     @property
     def used_name(self):
         return self.used.number if self.used else ''
-
-
-def layout_of(found):
-    """How the pins of a part (else its family's), a family or a branch (its family's) sit on its face:
-    (layout, columns, positions); ('', None, None) when that isn't known."""
-    for thing in (found, getattr(found, 'family', None)):
-        if thing is not None and getattr(thing, 'pin_layout', ''):
-            return thing.pin_layout, thing.pin_columns, thing.pin_positions
-    return '', None, None
 
 
 def part_or_family(text):

@@ -7,13 +7,13 @@
   {% if device.version %}<span class="badge{% if not changed %} ok{% endif %}">v{{ device.version }}{% if changed %} + changes{% endif %}</span>{% endif %}
   <span class="spacer"></span>
   <a class="btn" href="?export=1">⬇ Excel</a>
-  {% document_button device %}<a class="btn" href="{% url 'devices:edit' device.pk %}">Change</a>
+  <a class="btn" href="{% url 'devices:edit' device.pk %}">Change</a>
 </div>
 
 <div class="with-notes">
 <div class="columns">
   <section class="card">
-    {% document_image device %}
+    {% preview device %}
     <dl class="details">
       {% if device.description %}<dt>Description</dt><dd>{{ device.description|linebreaksbr }}</dd>{% endif %}
       <dt>Manufacturer</dt><dd>{{ device.manufacturer|default:"—" }}{% if device.model %} · {{ device.model }}{% endif %}</dd>
@@ -30,31 +30,57 @@
       <td class="small">{{ v.note }}</td><td class="small muted nowrap">{{ v.created_by|default:"" }}, {{ v.created_at|date:"j M Y" }}</td></tr>{% endfor %}</table>
   </section>
 </div>
-{% include "web/_notes.html" with notes=device.notes %}
+<div class="side">{% include "web/_notes.html" with notes=device.notes %}{% side device %}</div>
 </div>
 
-<div class="page-head"><h2>Connectors</h2><span class="spacer"></span><a class="btn" href="{% url 'devices:connectors_copy' device.pk %}">Copy connectors</a><a class="btn" href="{% url 'devices:connector_new' device.pk %}">＋ Connector</a></div>
-<div class="connectors">
-{% for c, pins, ends in connectors %}
-  <section class="card flush" id="c{{ c.pk }}">
+<section class="card flush connectors-card">
+<div class="card-head"><h3>Connectors</h3><a class="btn small" href="{% url 'devices:connectors_copy' device.pk %}">Copy connectors</a><a class="btn small" href="{% url 'devices:connector_new' device.pk %}">＋ Connector</a></div>
+{% if connectors %}<div class="connector-pick">
+  <nav class="connector-list">{% for c, pins, ends in connectors %}
+    <a href="#c{{ c.pk }}" data-connector="c{{ c.pk }}"><b>{{ c.designator }}</b> <span class="muted">{{ c.name }}</span>
+      <span class="small muted">{{ c.used_name|default:"" }} · {{ pins|length }} pin{{ pins|length|pluralize }}</span></a>{% endfor %}
+  </nav>
+  <div>{% for c, pins, ends in connectors %}
+  <section class="connector-pins" id="c{{ c.pk }}"{% if not forloop.first %} hidden{% endif %}>
     <div class="card-head"><h3>{{ c.designator }} <span class="muted small">{{ c.name }}</span></h3>
       {% if c.used %}<a class="small" href="{{ c.used.get_absolute_url }}">{{ c.used }}</a>{% endif %}
       <a class="btn small" href="{% url 'devices:pins' device.pk c.pk %}">Pins</a>
       <a class="btn small ghost" href="{% url 'devices:connector_edit' device.pk c.pk %}">Change</a>
       <form method="post" action="{% url 'devices:connector_delete' device.pk c.pk %}" data-confirm="Take {{ c.designator }} away, with its pins?">{% csrf_token %}<button class="btn small ghost" title="Take it away">✕</button></form></div>
+    {% if pins %}<div class="connector-face"><svg class="pinout-drawing" data-face="{{ c.pk }}"></svg></div>{% endif %}
     <table class="list compact">
       <tr><th>Pin</th><th>Signal</th><th>Set</th><th>Description</th></tr>
-      {% for p in pins %}<tr><td>{{ p.number }}</td><td>{{ p.signal }}</td><td class="small">{% if p.wire_set %}{{ p.wire_set }} · {{ p.set_type|lower }}{% endif %}</td><td class="small muted">{{ p.description }}</td></tr>
+      {% for p in pins %}<tr data-pin="{{ p.number }}"><td>{{ p.number }}</td><td>{{ p.signal }}</td><td class="small">{% if p.wire_set %}{{ p.wire_set }} · {{ p.set_type|lower }}{% endif %}</td><td class="small muted">{{ p.description }}</td></tr>
       {% empty %}<tr><td colspan="4" class="empty small">No pins yet.</td></tr>{% endfor %}
     </table>
     {% if ends %}<p class="small pad">Plugged in: {% for e in ends %}<a href="{{ e.harness.get_absolute_url }}">{{ e.harness.number }} {{ e.designator }}</a> <span class="muted">({{ e.harness.project }})</span>{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
-  </section>
-{% empty %}<p class="muted">No connectors yet.</p>{% endfor %}
+  </section>{% endfor %}</div>
 </div>
+<script>
+(function () {   // a connector picked from the list shows its pins (and stays picked in the address)
+  var list = document.querySelector('.connector-list');
+  function show(id) {
+    var panel = id && document.getElementById(id);
+    if (!panel || !panel.classList.contains('connector-pins')) panel = document.querySelector('.connector-pins');
+    document.querySelectorAll('.connector-pins').forEach(function (p) { p.hidden = p !== panel; });
+    list.querySelectorAll('a').forEach(function (a) { a.classList.toggle('on', a.dataset.connector === panel.id); });
+  }
+  list.addEventListener('click', function (e) {
+    var a = e.target.closest('a[data-connector]');
+    if (!a) return;
+    e.preventDefault();
+    history.replaceState(null, '', '#' + a.dataset.connector);
+    show(a.dataset.connector);
+  });
+  show(location.hash.slice(1));
+})();
+</script>
+{{ faces|json_script:"connector-faces" }}
+{% else %}<p class="muted small pad">No connectors yet.</p>{% endif %}
+</section>
 
 <section class="card flush" id="units">
-  <div class="card-head"><h3>Units</h3>
-    <a class="btn small" href="{% url 'assets:new' %}?kind={% if device.origin == 'external' %}lab{% else %}device{% endif %}&amp;device={{ device.pk }}&amp;number={{ next_tag }}&amp;name={{ device.name|urlencode }}&amp;version={{ device.version }}">＋ Add one</a></div>
+  <div class="card-head"><h3>Assets</h3></div>
   <table class="list">
     <tr><th>Asset tag</th><th>Serial number</th><th>Version</th><th>Status</th><th>Where</th></tr>
     {% for u in units %}<tr><td><a href="{{ u.get_absolute_url }}">{{ u.number }}</a></td><td class="small">{{ u.serial }}</td><td>{% if u.version %}v{{ u.version }}{% else %}—{% endif %}</td>
@@ -64,3 +90,14 @@
   </table>
 </section>
 {% endblock %}
+{% block scripts %}<script src="{% fresh 'harnesses/pinout.js' %}"></script><script>
+(function () {   // each connector's face; a pin pointed at lights up its row in the table
+  var faces = JSON.parse(document.getElementById('connector-faces').textContent);
+  document.querySelectorAll('svg[data-face]').forEach(function (svg) {
+    var table = svg.closest('.connector-pins').querySelector('table');
+    Pinout.face(svg, faces[svg.dataset.face], function (pin, on) {
+      table.querySelectorAll('tr[data-pin]').forEach(function (tr) { if (tr.dataset.pin === pin) tr.classList.toggle('lit', on); });
+    });
+  });
+})();
+</script>{% endblock %}
