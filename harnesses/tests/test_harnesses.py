@@ -93,7 +93,7 @@ class PinoutTests(HarnessBase):
         self.p2.used = None
         self.p2.save()
         self.assertEqual(self.client.get(reverse('harnesses:harness', args=[self.harness.pk])).context['drawing']['ends'][1]['face']['shape'], 'rect')
-        self.assertIn({'id': Wire.objects.get().pk, 'from': self.p1.pk, 'from_pin': '6', 'to': self.p2.pk, 'to_pin': '2', 'signal': '', 'set': 'CAN', 'type': 'Twisted',
+        self.assertIn({'id': Wire.objects.get().pk, 'from': self.p1.pk, 'from_pin': '6', 'to': self.p2.pk, 'to_pin': '2', 'signal': '', 'to_signal': '', 'set': 'CAN', 'type': 'Twisted', 'gauge': '', 'length': '',
                        'colour': ''}, page.context['drawing']['wires'])
 
     def test_a_shield_joined_on_one_side_or_both(self):
@@ -155,9 +155,29 @@ class PinoutTests(HarnessBase):
         self.assertEqual(self.client.post(url, {'action': 'set_type', 'wire': loose.pk, 'type': 'Twisted'}).status_code, 400)
         self.client.post(url, {'action': 'colour', 'wire': drain.pk, 'colour': 'grey'})
         self.assertEqual(Wire.objects.get(pk=drain.pk).colour, 'grey')
+        gauged = self.client.post(url, {'action': 'gauge', 'wire': drain.pk, 'gauge': '24'}).json()   # a bare number: AWG
+        self.assertEqual(Wire.objects.get(pk=drain.pk).gauge, '24 AWG')
+        self.assertIn('24 AWG', [w['gauge'] for w in gauged['wires']])
+        self.client.post(url, {'action': 'signal', 'wire': drain.pk, 'signal': ' TX+ '})          # its purpose
+        self.assertEqual(Wire.objects.get(pk=drain.pk).signal, 'TX+')
+        made = self.client.post(url, {'action': 'add', 'from_end': self.p1.pk, 'from_pin': '4', 'to_end': self.p1.pk, 'to_pin': '5'})
+        loop = Wire.objects.get(from_end=self.p1, to_end=self.p1, from_pin='4')
+        self.client.post(url, {'action': 'signal', 'wire': loop.pk, 'signal': 'TX'})            # a loopback: comes back as RX
+        self.assertEqual((Wire.objects.get(pk=loop.pk).signal, Wire.objects.get(pk=loop.pk).to_signal), ('TX', 'RX'))
+        self.client.post(url, {'action': 'signal', 'wire': loop.pk, 'signal': 'GND', 'end': 'to'})   # its own
+        self.client.post(url, {'action': 'signal', 'wire': loop.pk, 'signal': 'MOSI'})          # kept, as it was set
+        self.assertEqual((Wire.objects.get(pk=loop.pk).signal, Wire.objects.get(pk=loop.pk).to_signal), ('MOSI', 'GND'))
+        self.assertIn('Power', [n['name'] for n in made.json()['purposes']])
+        self.client.post(url, {'action': 'gauge', 'wire': drain.pk, 'gauge': ' 0.5  mm² '})
+        self.assertEqual(Wire.objects.get(pk=drain.pk).gauge, '0.5 mm²')
         self.client.post(url, {'action': 'delete', 'wire': drain.pk})
         self.assertFalse(Wire.objects.filter(pk=drain.pk).exists())
         self.assertEqual(self.client.post(url, {'action': 'add', 'from_end': self.p1.pk}).status_code, 400)
+        loop = self.client.post(url, {'action': 'add', 'from_end': self.p1.pk, 'from_pin': '1', 'to_end': self.p1.pk, 'to_pin': '2'})
+        self.assertEqual(loop.status_code, 200)                                                  # a loopback
+        self.assertTrue(Wire.objects.filter(from_end=self.p1, to_end=self.p1, from_pin='1', to_pin='2').exists())
+        self.assertEqual(self.client.post(url, {'action': 'add', 'from_end': self.p1.pk, 'from_pin': '3',
+                                                'to_end': self.p1.pk, 'to_pin': '3'}).status_code, 400)   # not to itself
 
     def test_a_splice_but_not_the_same_wire_twice(self):
         self.connect('1', '1')

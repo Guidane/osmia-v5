@@ -97,6 +97,56 @@
         .then(function (d) { state.data = d; state.changed = true; state.from = null; state.drain = null; render(); });
     }
 
+    function purposePicker(current, onPick) {
+      var dialog = document.querySelector('dialog.purpose-finder');
+      if (!dialog) {
+        dialog = html('dialog', { class: 'finder purpose-finder', 'aria-label': 'Purpose' }, document.body);
+        dialog.innerHTML = '<div class="finder-head"><h3>Purpose</h3><input type="search" data-purpose-q aria-label="Purpose" autocomplete="off">' +
+          '<button type="button" class="btn small primary" data-purpose-use>Use</button><button type="button" class="btn small" data-purpose-clear>Clear</button>' +
+          '<span class="spacer"></span><button type="button" class="btn small ghost" data-purpose-close title="Close">✕</button></div>' +
+          '<div class="finder-body"><nav class="finder-tree" data-purpose-tree aria-label="Kinds"></nav><div class="purpose-list" data-purpose-list></div></div>';
+        dialog.querySelector('[data-purpose-close]').addEventListener('click', function () { dialog.close(); });
+      }
+      var q = dialog.querySelector('[data-purpose-q]'), nav = dialog.querySelector('[data-purpose-tree]'), list = dialog.querySelector('[data-purpose-list]');
+      var nodes = state.data.purposes || [], node = null;
+      function done(value) { dialog.close(); onPick(value); }
+      function show() {
+        var find = q.value.trim().toLowerCase();
+        list.innerHTML = '';
+        var groups = node ? node.groups : [].concat.apply([], nodes.filter(function (n) { return n.depth === 0; }).map(function (n) { return n.groups; }));
+        groups.forEach(function (g) {
+          var items = g[1].filter(function (v) { return !find || v.toLowerCase().indexOf(find) !== -1; });
+          if (!items.length) return;
+          var h = html('h5', {}, list);
+          h.textContent = g[0];
+          var row = html('div', { class: 'purpose-items' }, list);
+          items.forEach(function (v) {
+            var b = html('button', { type: 'button', class: 'btn small' + (v === current ? ' primary' : ''), 'data-purpose': v }, row);
+            b.textContent = v;
+            b.addEventListener('click', function () { done(v); });
+          });
+        });
+        nav.querySelectorAll('button').forEach(function (b, i) { b.classList.toggle('on', i === 0 ? !node : nodes[i - 1] === node); });
+      }
+      nav.innerHTML = '';
+      [{ name: 'All', depth: -1 }].concat(nodes).forEach(function (n, i) {
+        var b = html('button', { type: 'button' }, nav);
+        b.textContent = n.name;
+        b.style.paddingLeft = (1.5 + n.depth) + 'em';
+        b.addEventListener('click', function () { node = i === 0 ? null : n; show(); });
+      });
+      q.value = current || '';
+      q.oninput = show;
+      q.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); done(q.value.trim()); } };
+      dialog.querySelector('[data-purpose-use]').onclick = function () { done(q.value.trim()); };
+      dialog.querySelector('[data-purpose-clear]').onclick = function () { done(''); };
+      q.value = '';
+      show();
+      q.value = current || '';
+      dialog.showModal();
+      q.select();
+    }
+
     function render() {
       while (svg.firstChild) svg.removeChild(svg.firstChild);
       bar.textContent = '';
@@ -113,9 +163,9 @@
 
       // the rows: each wire with its left end first
       var rows = data.wires.map(function (w) {
-        var flip = side[w.from] === 'right' && side[w.to] === 'left';
+        var flip = side[w.from] === 'right' && side[w.to] === 'left', loop = w.from === w.to;
         var from = { end: w.from, pin: w.from_pin }, to = { end: w.to, pin: w.to_pin };
-        return { w: w, a: flip ? to : from, b: flip ? from : to, same: side[w.from] === side[w.to] };
+        return { w: w, a: flip ? to : from, b: flip ? from : to, same: side[w.from] === side[w.to], loopback: loop };
       });
       var sets = {}, setOrder = [];
       rows.forEach(function (r) {
@@ -134,7 +184,7 @@
       var groups = {}, list = [];
       rows.forEach(function (r) {
         var k = r.a.end + '|' + r.b.end;
-        if (!groups[k]) list.push(groups[k] = { left: r.a.end, right: r.b.end, rows: [], same: r.same });
+        if (!groups[k]) list.push(groups[k] = { left: r.a.end, right: r.b.end, rows: [], same: r.same, loop: r.loopback });
         groups[k].rows.push(r);
       });
       list.sort(function (a, b) { return index[a.left] - index[b.left] || index[a.right] - index[b.right]; });
@@ -210,10 +260,10 @@
       }
       function pick(end, pin, node) {   // edit: a pin on one side, then one on the other side, joined by a new wire
         if (state.drain) {   // a shield's circle picked first: the shield goes to this contact (one on its side)
-          if (side[end] === state.drain.side) shieldTo(state.drain.set, state.drain.side, end, pin);
+          if (side[end] === (state.drain.on || state.drain.side)) shieldTo(state.drain.set, state.drain.side, end, pin);
           return;
         }
-        if (state.from && side[state.from.end] !== side[end]) {
+        if (state.from && (side[state.from.end] !== side[end] || (state.from.end === end && state.from.pin !== pin))) {   // across, or a loopback
           var a = state.from;
           post({ action: 'add', from_end: a.end, from_pin: a.pin, to_end: end, to_pin: pin });
           return;
@@ -238,7 +288,7 @@
       // a contact with several wires (a splice): drawn once, at its first row; its other rows branch off beside it
       var splices = {}, lanes = { left: 0, right: 0 };   // each splice on a side its own lane
       function place(r, at, left, named) {
-        if (at.pin === '') return left ? x.left + 70 : x.right - 70;   // a shield not joined on this side: from its ellipse
+        if (at.pin === '') return left ? x.left + EL : x.right - ER;   // a shield not joined on this side: from its ellipse
         var key = (left ? 'L' : 'R') + at.end + ':' + at.pin, s = splices[key];
         if (!s) {
           splices[key] = { left: left, rows: [r] };
@@ -250,6 +300,72 @@
         }
         s.rows.push(r);
         return s.x;
+      }
+
+      // the shields' ellipses (and past them the twists) stand clear of the tags by the contacts: gauge, purpose
+      function measure(label, cls) {
+        var g = el('g', { class: 'pd-tag ' + cls }, svg), t = text(g, 0, -50, label, 'pd-tag-text'), long = 0;
+        try { long = t.getComputedTextLength(); } catch (err) { /* not drawn yet */ }
+        svg.removeChild(g);
+        return Math.max((long || label.length * 5.6) + 8, 22) + 4;
+      }
+      var reach = { left: 0, right: 0 }, BOX = 76;   // editing: a box's width (and its gap)
+      if (editing) rows.forEach(function (r) { reach[r.loopback && side[r.w.from] === 'right' ? 'right' : 'left'] = 2 * BOX; });
+      else rows.forEach(function (r) {
+        var w = r.w, g = w.gauge ? measure(w.gauge, 'pd-gauge') : 0;
+        if (r.loopback) {
+          var at = side[w.from] === 'right' ? 'right' : 'left';
+          reach[at] = Math.max(reach[at], g + (w.signal ? measure(w.signal, 'pd-label') : 0), g + (w.to_signal ? measure(w.to_signal, 'pd-label') : 0));
+          return;
+        }
+        reach.left = Math.max(reach.left, g + (w.signal ? measure(w.signal, 'pd-label') : 0));
+        reach.right = Math.max(reach.right, g);
+      });
+      var EL = Math.max(70, reach.left + 28), ER = Math.max(70, reach.right + 28);
+      function E(left) { return left ? EL : ER; }
+      var bigHalf = TWIST;
+      setOrder.forEach(function (s) {
+        var n = s.rows.filter(function (r) { return r.w.type !== 'Shield'; }).length;
+        if (twisted(s.type) && n > 2) bigHalf = Math.max(bigHalf, n * TWIST * 0.8);
+      });
+
+      // loopbacks: the wires of a set (or a wire on its own) go out one under another and come back in the opposite
+      // order, the first the outermost: nested, none crossing; a shielded set keeps a row out and back for its shield
+      var LOOP = Math.max(240, Math.max(EL, ER) + (editing ? 380 : 30 + 2 * bigHalf + 40)), loopShield = {};   // past a row's tools
+      function loopUnits(g) {
+        var units = [], bySet = {};
+        g.rows.forEach(function (r) {
+          if (!r.w.set) { units.push([r]); return; }
+          if (!bySet[r.w.set]) units.push(bySet[r.w.set] = []);
+          bySet[r.w.set].push(r);
+        });
+        return units;
+      }
+      function shieldRow(u) {   // a shielded set without its shield wire: a row kept for where it would be
+        var s = u[0].w.set && sets[u[0].w.set];
+        return !!(s && shielded(s.type)) && !u.some(function (r) { return r.w.type === 'Shield'; });
+      }
+      function loopRows(g) { return loopUnits(g).reduce(function (n, u) { return n + 2 * u.length + (shieldRow(u) ? 2 : 0); }, 0); }
+      function loopPlace(g, y0, L) {
+        var i = 0, edge = L ? x.left : x.right, dir = L ? 1 : -1;
+        loopUnits(g).forEach(function (u) {
+          var keep = shieldRow(u), m = u.length + (keep ? 1 : 0);
+          u.forEach(function (r, j) {
+            r.loop = { L: L, edge: edge, dir: dir, unit: u, turn: edge + dir * (LOOP + (m - 1 - j) * 20) };
+            r.y = y0 + i++ * ROW;
+            if (r.a.pin) contact(r.a, L, r.y);
+          });
+          if (keep) loopShield[u[0].w.set] = { out: y0 + i++ * ROW, back: y0 + i++ * ROW, turn: edge + dir * LOOP };
+          u.slice().reverse().forEach(function (r) {
+            r.yBack = y0 + i++ * ROW;
+            if (r.b.pin) contact(r.b, L, r.yBack);
+          });
+          u.forEach(function (r) {
+            var start = r.a.pin ? edge : edge + dir * E(L);
+            r.ax = L ? start : r.loop.turn;
+            r.bx = L ? r.loop.turn : start;
+          });
+        });
       }
 
       // a face runs alongside the groups of its connector; a group beside another connector starts below it
@@ -268,8 +384,9 @@
       var y = editing ? 110 : 70, GAP = 90, faced = {}, beside = { left: { id: null, until: 0 }, right: { id: null, until: 0 } };
       var bars = { left: null, right: null };
       list.forEach(function (g) {
-        var y0 = y, n = g.rows.length, bottom = n ? (n - 1) * ROW + C : 0;
-        var here = [['left', g.left]].concat(g.same ? [] : [['right', g.right]]).filter(function (s) { return s[1] !== undefined; });
+        var y0 = y, n = g.loop ? loopRows(g) : g.rows.length, bottom = n ? (n - 1) * ROW + C : 0;
+        var here = g.loop ? [[side[g.left], g.left]] :
+          [['left', g.left]].concat(g.same ? [] : [['right', g.right]]).filter(function (s) { return s[1] !== undefined; });
         here.forEach(function (s) { if (beside[s[0]].id !== s[1]) y0 = Math.max(y0, beside[s[0]].until + GAP); });
         here.forEach(function (s) {
           if (faced[s[1]]) return;
@@ -278,6 +395,18 @@
         });
         here.forEach(function (s) { if (beside[s[0]].id !== s[1]) beside[s[0]] = { id: s[1], until: y0 + bottom }; });
         var own = { left: false, right: false };   // a contact of its own on that side (not only splices from above)
+        if (g.loop) {   // out from the connector and back into it
+          var L = side[g.left] !== 'right';
+          loopPlace(g, y0, L);
+          [[L ? 'left' : 'right', g.left, L ? x.leftBar : x.rightBar]].forEach(function (b) {
+            var top = y0 - C - 6, end = y0 + (n - 1) * ROW + C + 6, last = bars[b[0]];
+            if (last && last.id === b[1]) { last.rect.setAttribute('height', end - last.top); return; }
+            bars[b[0]] = { id: b[1], top: top, rect: el('rect', { x: b[2], y: top, width: 12, height: end - top, rx: 3, class: 'pd-bar' }, under) };
+            text(over, b[2] + 6, top - 6, byId[b[1]].designator, 'pd-bar-label');
+          });
+          y = y0 + bottom + GAP;
+          return;
+        }
         g.rows.forEach(function (r, i) {
           r.y = y0 + i * ROW;
           r.ax = place(r, r.a, true);
@@ -305,23 +434,74 @@
         });
       });
 
+      // the tags by a wire's ends: its gauge by the connector (before any shield and twist); a spliced wire's gauge
+      // on both sides, and its length by where it joins the splice
+      var spliceOf = {};
+      Object.keys(splices).forEach(function (key) {
+        var s = splices[key];
+        if (s.rows.length > 1) s.rows.forEach(function (r, i) { spliceOf[(s.left ? 'L' : 'R') + r.w.id] = { s: s, first: i === 0 }; });
+      });
+      var outer = { left: -Infinity, right: Infinity };   // the splices' outermost lanes on each side
+      Object.keys(splices).forEach(function (key) {
+        var s = splices[key];
+        if (s.x === undefined) return;
+        if (s.left) outer.left = Math.max(outer.left, s.x); else outer.right = Math.min(outer.right, s.x);
+      });
+      function tag(at, y, label, dir, cls, id) {   // a tag from ``at`` going ``dir``; where it ends
+        var g = el('g', { class: 'pd-tag ' + cls, 'data-tag-of': id }, over), t = text(g, 0, y + 3.5, label, 'pd-tag-text'), long = 0;
+        try { long = t.getComputedTextLength(); } catch (err) { /* not drawn yet */ }
+        var w = Math.max((long || label.length * 5.6) + 8, 22), cx = at + dir * w / 2;
+        t.setAttribute('x', cx);
+        g.insertBefore(el('rect', { x: cx - w / 2, y: y - 7, width: w, height: 14, rx: 4 }), t);
+        return at + dir * (w + 4);
+      }
+      rows.forEach(function (r) {
+        r.tagEnd = {};
+        if (r.y === undefined) return;
+        if (editing) {   // its boxes where what they set shows: gauge, purpose by the contact; set over the twist; then the rest
+          var L = r.loop ? r.loop.L : true, dir = L ? 1 : -1, start = L ? r.ax : r.bx, own = start === (L ? x.left : x.right);
+          var sp = spliceOf[(L ? 'L' : 'R') + r.w.id], at = start + dir * (sp && !sp.first ? 8 : 6);
+          r.slots = { dir: dir, gauge: at, purpose: at + dir * BOX };
+          r.tagEnd[L ? 'left' : 'right'] = at + dir * 2 * BOX;
+          r.slots.set = own ? (L ? x.left + EL + 20 : x.right - ER - 20) : at + dir * (2 * BOX + 10);
+          r.slots.rest = r.slots.set + dir * 206;
+          return;
+        }
+        var w = r.w, spliced = spliceOf['L' + w.id] || spliceOf['R' + w.id];
+        [['left', 1, r.ax, x.left], ['right', -1, r.bx, x.right]].forEach(function (s) {
+          var sp = spliceOf[(s[0] === 'left' ? 'L' : 'R') + w.id], dir = s[1], at = s[2] + dir * (sp && !sp.first ? 8 : 6);
+          var gauge = w.gauge && (s[0] === 'left' || spliced || r.loop) && (s[2] === s[3] || sp), length = sp && w.length;
+          if (gauge) at = tag(at, r.y, w.gauge, dir, 'pd-gauge', w.id);
+          if (gauge) r.tagEnd[s[0]] = at;
+          if (w.signal && s[0] === (r.loop ? (r.loop.L ? 'left' : 'right') : 'left')) r.tagEnd[s[0]] = at = tag(at, r.y, w.signal, dir, 'pd-label', w.id);
+          if (length && sp.first) tag(dir > 0 ? Math.max(at, outer.left + 20) : Math.min(at, outer.right - 20), r.y, w.length + ' mm', dir, 'pd-length', w.id);   // past the lanes
+          else if (length) r.tagEnd[s[0]] = tag(at, r.y, w.length + ' mm', dir, 'pd-length', w.id);
+        });
+        if (r.loop && r.b.pin) {   // a loopback coming back: its gauge, its own purpose (TX going out, RX coming back)
+          var back = r.loop.edge + r.loop.dir * 6;
+          if (w.gauge) back = tag(back, r.yBack, w.gauge, r.loop.dir, 'pd-gauge', w.id);
+          if (w.to_signal) tag(back, r.yBack, w.to_signal, r.loop.dir, 'pd-label', w.id);
+        }
+      });
+
       // the wires
       var lines = [];
-      function smooth(pts) {   // a line through the points, its corners slightly rounded
-        var d = 'M' + pts[0];
+      function smooth(pts) {   // a line through the points, its corners slightly rounded (a point's third: its own radius)
+        function xy(p) { return p[0] + ',' + p[1]; }
+        var d = 'M' + xy(pts[0]);
         for (var i = 1; i < pts.length - 1; i++) {
           var a = pts[i - 1], p = pts[i], b = pts[i + 1];
-          var la = Math.hypot(p[0] - a[0], p[1] - a[1]), lb = Math.hypot(b[0] - p[0], b[1] - p[1]), k = Math.min(8, la / 2, lb / 2);
-          if (!k) { d += ' L' + p; continue; }
-          d += ' L' + [p[0] + (a[0] - p[0]) * k / la, p[1] + (a[1] - p[1]) * k / la] + ' Q' + p + ' ' +
-               [p[0] + (b[0] - p[0]) * k / lb, p[1] + (b[1] - p[1]) * k / lb];
+          var la = Math.hypot(p[0] - a[0], p[1] - a[1]), lb = Math.hypot(b[0] - p[0], b[1] - p[1]), k = Math.min(p[2] || 8, la / 2, lb / 2);
+          if (!k) { d += ' L' + xy(p); continue; }
+          d += ' L' + xy([p[0] + (a[0] - p[0]) * k / la, p[1] + (a[1] - p[1]) * k / la]) + ' Q' + xy(p) + ' ' +
+               xy([p[0] + (b[0] - p[0]) * k / lb, p[1] + (b[1] - p[1]) * k / lb]);
         }
-        return d + ' L' + pts[pts.length - 1];
+        return d + ' L' + xy(pts[pts.length - 1]);
       }
       function twistOf(pair) {   // where a set's twists sit: near each end of the stretch its wires run side by side
         // (just past a shield's ellipses); one in the middle when there is no room for two
-        var from = Math.max.apply(null, pair.map(function (r) { return r.ax === x.left ? x.left + 100 : r.ax + 14; }));
-        var to = Math.min.apply(null, pair.map(function (r) { return r.bx === x.right ? x.right - 100 : r.bx - 14; }));
+        var from = Math.max.apply(null, pair.map(function (r) { return Math.max(r.ax === x.left ? x.left + EL + 30 : r.ax + 14, (r.tagEnd.left || 0) + 10); }));
+        var to = Math.min.apply(null, pair.map(function (r) { return Math.min(r.bx === x.right ? x.right - ER - 30 : r.bx - 14, (r.tagEnd.right || Infinity) - 10); }));
         // a twist only by a connector, not where the wires come from a splice
         var atLeft = pair.every(function (r) { return r.ax === x.left; }), atRight = pair.every(function (r) { return r.bx === x.right; });
         var half = pair.length > 2 ? pair.length * TWIST * 0.8 : TWIST;   // a multi twist: a step per wire
@@ -352,37 +532,75 @@
         lines.push({ w: w, g: g });
       }
       var ellipses = {};   // a shielded set: where its ellipses sit
+      function drainCircle(s, cx, cy, sideOf, on, shield) {   // its circle: picked, then a contact on its side joins the shield
+        // there (a loopback: going out, coming back); picked again, the shield is not joined there
+        var lit = state.drain && state.drain.set === s.name && state.drain.side === sideOf;
+        var c = el('circle', { cx: cx, cy: cy, r: 5.5, class: 'pd-drain' + (lit ? ' chosen' : ''), 'data-drain': s.name + ':' + sideOf }, tools);
+        el('title', {}, c).textContent = 'Shield of ' + s.name + ': join it to a contact on this side';
+        c.addEventListener('click', function () {
+          if (lit) {
+            var joined = shield && (sideOf === 'left' ? shield.a.pin : shield.b.pin);
+            if (joined) shieldTo(s.name, sideOf, null, '');
+            else { state.drain = null; render(); }
+            return;
+          }
+          state.drain = { set: s.name, side: sideOf, on: on };
+          state.from = null;
+          render();
+        });
+      }
+      function loopShieldDraw(s, inner, shield) {   // a loopback set's shield: an ellipse round its wires going out, one
+        var lp = inner[0].loop, cx = lp.edge + lp.dir * E(lp.L), kept = loopShield[s.name];   // round them coming back
+        var outY = inner.map(function (r) { return r.y; }), backY = inner.map(function (r) { return r.yBack; });
+        var outTop = Math.min.apply(null, outY) - 16, outLow = shield ? shield.y : kept.out;
+        var backTop = shield ? shield.yBack : kept.back, backLow = Math.max.apply(null, backY) + 16;
+        ellipses[s.name] = { loop: true, x: cx };
+        [[outTop, outLow, outLow, 'left'], [backTop, backLow, backTop, 'right']].forEach(function (e) {
+          var n = el('ellipse', { cx: cx, cy: (e[0] + e[1]) / 2, rx: 18, ry: (e[1] - e[0]) / 2, class: 'pd-shield', 'data-set': s.name }, over);
+          el('title', {}, n).textContent = 'Set ' + s.name + ': ' + s.type.toLowerCase();
+          if (editing) drainCircle(s, cx, e[2], e[3], lp.L ? 'left' : 'right', shield);
+        });
+        if (!shield) el('path', { d: smooth([[cx, kept.out], [kept.turn, kept.out, 14], [kept.turn, kept.back, 14], [cx, kept.back]]), class: 'pd-shield-line' }, wiresG);
+      }
       setOrder.forEach(function (s) {   // editing too: what a set is shows as soon as it is picked
         if (!shielded(s.type)) return;
         var inner = s.rows.filter(function (r) { return r.w.type !== 'Shield'; }), shield = s.rows.filter(function (r) { return r.w.type === 'Shield'; })[0];
         if (!inner.length) return;
+        if (inner[0].loop) { loopShieldDraw(s, inner, shield); return; }
         var ys = inner.map(function (r) { return r.y; });
         var top = Math.min.apply(null, ys) - 16, low = shield ? shield.y : Math.max.apply(null, ys) + 16;
-        ellipses[s.name] = [x.left + 70, x.right - 70];
+        ellipses[s.name] = [x.left + EL, x.right - ER];
         ellipses[s.name].forEach(function (cx, i) {
           var e = el('ellipse', { cx: cx, cy: (top + low) / 2, rx: 18, ry: (low - top) / 2, class: 'pd-shield', 'data-set': s.name }, over);
           el('title', {}, e).textContent = 'Set ' + s.name + ': ' + s.type.toLowerCase();
-          if (!editing) return;
-          // its circle: picked, then a contact on its side joins the shield there; picked again, the shield isn't joined there
-          var sideOf = i === 0 ? 'left' : 'right', on = state.drain && state.drain.set === s.name && state.drain.side === sideOf;
-          var c = el('circle', { cx: cx, cy: low, r: 5.5, class: 'pd-drain' + (on ? ' chosen' : ''), 'data-drain': s.name + ':' + sideOf }, tools);
-          el('title', {}, c).textContent = 'Shield of ' + s.name + ': join it to a contact on this side';
-          c.addEventListener('click', function () {
-            if (on) {
-              var joined = shield && (sideOf === 'left' ? shield.a.pin : shield.b.pin);
-              if (joined) shieldTo(s.name, sideOf, null, '');
-              else { state.drain = null; render(); }
-              return;
-            }
-            state.drain = { set: s.name, side: sideOf };
-            state.from = null;
-            render();
-          });
+          if (editing) drainCircle(s, cx, low, i === 0 ? 'left' : 'right', i === 0 ? 'left' : 'right', shield);
         });
-        if (!shield) el('path', { d: 'M' + (x.left + 70) + ',' + low + ' H' + (x.right - 70), class: 'pd-shield-line' }, wiresG);
+        if (!shield) el('path', { d: 'M' + (x.left + EL) + ',' + low + ' H' + (x.right - ER), class: 'pd-shield-line' }, wiresG);
       });
+      function loopWire(r) {   // out, round the turn, back; a twisted set twists going out and coming back
+        var lp = r.loop, dir = lp.dir, s = r.w.set && sets[r.w.set], ex = lp.edge + dir * E(lp.L);
+        var outX = r.a.pin ? lp.edge : ex, backX = r.b.pin ? lp.edge : ex, turn = lp.turn;
+        if (r.w.type === 'Shield' && ellipses[s.name]) {   // the shield: into the ellipses, dashed between them
+          wire(r, 'M' + outX + ',' + r.y + ' H' + ex);
+          wire(r, smooth([[ex, r.y], [turn, r.y, 14], [turn, r.yBack, 14], [ex, r.yBack]]), true);
+          wire(r, 'M' + ex + ',' + r.yBack + ' H' + backX);
+          return;
+        }
+        var out = [[outX, r.y]], back = [];
+        var pair = lp.unit.filter(function (o) { return o.w.type !== 'Shield'; });
+        if (s && twisted(s.type) && pair.length > 1) {
+          var half = pair.length > 2 ? pair.length * TWIST * 0.8 : TWIST, t = { mid: lp.edge + dir * (E(lp.L) + 30 + half), half: half };
+          var going = twistPoints(pair, pair.indexOf(r), t);
+          var backPair = pair.slice().sort(function (p, q) { return p.yBack - q.yBack; });
+          var coming = twistPoints(backPair.map(function (o) { return { y: o.yBack }; }), backPair.indexOf(r), t);
+          out = out.concat(dir > 0 ? going : going.reverse());
+          back = dir > 0 ? coming.reverse() : coming;
+        }
+        wire(r, smooth(out.concat([[turn, r.y, 14], [turn, r.yBack, 14]], back, [[backX, r.yBack]])));
+      }
       rows.forEach(function (r) {
         if (r.y === undefined) return;
+        if (r.loop) { loopWire(r); return; }
         var s = r.w.set && sets[r.w.set], y = r.y;
         if (!s) { wire(r, 'M' + r.ax + ',' + y + ' H' + r.bx); return; }
         if (r.w.type === 'Shield' && ellipses[s.name]) {   // the shield: level into the ellipses' bottoms, dashed between them
@@ -413,12 +631,39 @@
         });
       });
 
-      if (editing) {   // each row, in the middle: the set it is in (drawn as it is: twisted, shielded), its colour, ✕
+      if (editing) {   // each row: its tools where what they set shows (its set drawn as it is: twisted, shielded)
+        if (!document.getElementById('pd-gauges')) {   // the usual gauges to pick from
+          var gauges = html('datalist', { id: 'pd-gauges' }, document.body);
+          [10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30].forEach(function (n) { html('option', { value: n + ' AWG' }, gauges); });
+        }
         rows.forEach(function (r) {
           if (r.y === undefined) return;
-          var w = r.w;
-          var fo = el('foreignObject', { x: mid - 180, y: r.y - 12, width: 360, height: 26 }, tools);
-          var box = html('div', { class: 'pd-tools' }, fo);
+          var w = r.w, at = r.slots, dir = at.dir;
+          function spot(x0, y, width, cls) {   // a box of tools from x0 going the row's way
+            var fo = el('foreignObject', { x: dir > 0 ? x0 : x0 - width, y: y - 12, width: width, height: 26 }, tools);
+            return html('div', { class: 'pd-tools' + (dir > 0 ? '' : ' end') + (cls ? ' ' + cls : '') }, fo);
+          }
+          var labelButton = function (parent, value, end) {   // its purpose, picked in the popup
+            var b = html('button', { type: 'button', class: 'btn small pd-label-pick' + (value ? '' : ' muted'), 'aria-label': 'Purpose', 'data-wire-signal': w.id + (end ? ':' + end : '') }, parent);
+            b.textContent = value || 'Label';
+            b.addEventListener('click', function () {
+              purposePicker(value, function (v) { post({ action: 'signal', wire: w.id, signal: v, end: end || 'from' }); });
+            });
+          };
+          var gauge = html('input', { type: 'text', 'aria-label': 'Gauge', placeholder: 'AWG', list: 'pd-gauges', class: 'pd-gauge-input', 'data-wire-gauge': w.id }, spot(at.gauge, r.y, BOX - 4));
+          gauge.value = w.gauge || '';
+          gauge.addEventListener('change', function () { post({ action: 'gauge', wire: w.id, gauge: gauge.value }); });
+          labelButton(spot(at.purpose, r.y, BOX - 4), w.signal, '');
+          if (r.loop) {   // a loopback coming back: its gauge, and a purpose of its own
+            var tag0 = r.loop.edge + dir * 6;
+            if (w.gauge) {
+              var g = el('g', { class: 'pd-tag pd-gauge', 'data-tag-of': w.id }, over), t = text(g, tag0 + dir * (BOX - 4) / 2, r.yBack + 3.5, w.gauge, 'pd-tag-text');
+              g.insertBefore(el('rect', { x: dir > 0 ? tag0 : tag0 - BOX + 4, y: r.yBack - 7, width: BOX - 4, height: 14, rx: 4 }), t);
+            }
+            labelButton(spot(tag0 + dir * BOX, r.yBack, BOX - 4), w.to_signal, 'to');
+          }
+          // over the twist: the set it is in, and how the set's wires go together (or this wire as the set's shield)
+          var box = spot(at.set, r.y, 202);
           var pickSet = html('select', { 'aria-label': 'Set of ' + byId[r.a.end].designator + ':' + r.a.pin, 'data-wire': w.id }, box);
           var add = function (to, value, label) { var o = html('option', { value: value }, to); o.textContent = label; };
           add(pickSet, '', 'No set');
@@ -426,23 +671,24 @@
           add(pickSet, 'new:Straight', '＋ New set');
           pickSet.value = w.set || '';
           pickSet.addEventListener('change', function () { post({ action: 'set', wire: w.id, set: pickSet.value }); });
-          // how the set's wires go together (for the whole set), or this wire as the set's shield
           var pickType = html('select', { 'aria-label': 'Set type', 'data-wire-type': w.id, class: 'pd-type' }, box);
           data.set_types.concat(['Shield']).forEach(function (t) { add(pickType, t, t === 'Shield' ? 'Shield wire' : t); });
           pickType.value = w.type || 'Straight';
           pickType.disabled = !w.set;
           pickType.addEventListener('change', function () { post({ action: 'set_type', wire: w.id, type: pickType.value }); });
-          var pickColour = html('select', { 'aria-label': 'Colour', class: 'pd-colour' }, box);
+          var rest = spot(at.rest, r.y, 130);
+          var pickColour = html('select', { 'aria-label': 'Colour', class: 'pd-colour' }, rest);
           [''].concat(data.colours).forEach(function (c) { var o = html('option', { value: c }, pickColour); o.textContent = c || 'colour'; });
           pickColour.value = w.colour || '';
           pickColour.addEventListener('change', function () { post({ action: 'colour', wire: w.id, colour: pickColour.value }); });
-          var gone = html('button', { type: 'button', class: 'btn small', 'aria-label': 'Take the wire away' }, box);
+          var gone = html('button', { type: 'button', class: 'btn small', 'aria-label': 'Take the wire away' }, rest);
           gone.textContent = '✕';
           gone.addEventListener('click', function () { post({ action: 'delete', wire: w.id }); });
         });
       } else {   // where each set's wires run: clicking there picks the set
         setOrder.forEach(function (s) {
-          var ys = s.rows.map(function (r) { return r.y; }).filter(function (v) { return v !== undefined; });
+          var ys = [];
+          s.rows.forEach(function (r) { if (r.y !== undefined) ys.push(r.y); if (r.yBack !== undefined) ys.push(r.yBack); });
           if (!ys.length) return;
           var top = Math.min.apply(null, ys) - ROW / 2, low = Math.max.apply(null, ys) + ROW / 2;
           var area = el('rect', { x: x.left + 2, y: top, width: x.right - x.left - 4, height: low - top, rx: 8, class: 'pd-area', 'data-set': s.name }, areas);
@@ -452,7 +698,7 @@
         rows.forEach(function (r) {   // a wire in no set: picked on its own
           if (r.w.set || r.y === undefined) return;
           var key = 'wire:' + r.w.id;
-          var area = el('rect', { x: x.left + 2, y: r.y - ROW / 2, width: x.right - x.left - 4, height: ROW, rx: 8, class: 'pd-area', 'data-set': key }, areas);
+          var area = el('rect', { x: x.left + 2, y: r.y - ROW / 2, width: x.right - x.left - 4, height: (r.yBack || r.y) - r.y + ROW, rx: 8, class: 'pd-area', 'data-set': key }, areas);
           el('title', {}, area).textContent = byId[r.a.end].designator + ':' + r.a.pin + ' → ' + byId[r.b.end].designator + ':' + r.b.pin +
             (r.w.signal ? ' · ' + r.w.signal : '');
           area.addEventListener('click', function () { show(key); });

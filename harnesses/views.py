@@ -21,6 +21,9 @@ from projects.models import Project
 from assets.service import next_tag
 from web import excel, rows, versions
 from web.shortcuts import edit_page, errors
+from web.templatetags.osmia import qty
+
+from . import purposes
 from web.forms import initial_for
 
 from .models import COLOURS, SET_TYPES, Harness, HarnessEnd, HarnessItem, HarnessVersion, Wire, parts_of
@@ -149,8 +152,8 @@ def _drawing(harness, wires):
         used = end.used if face_of(end.used) or not end.connector else end.connector.used
         out.append({'id': end.pk, 'designator': end.designator, 'what': end.used_name, 'plugs': str(end.connector or ''),
                     'side': end.side, 'used': _picked_as(end.used), 'face': drawn(used, numbers), 'pins': [[n, pins[n]] for n in numbers]})
-    return {'colours': COLOURS, 'set_types': PIN_SET_TYPES, 'ends': out, 'wires': [{'id': w.pk, 'from': w.from_end_id, 'from_pin': w.from_pin, 'to': w.to_end_id, 'to_pin': w.to_pin, 'signal': w.signal,
-                                    'set': w.wire_set, 'type': w.set_type, 'colour': w.colour} for w in wires]}
+    return {'colours': COLOURS, 'set_types': PIN_SET_TYPES, 'purposes': purposes.tree(), 'ends': out, 'wires': [{'id': w.pk, 'from': w.from_end_id, 'from_pin': w.from_pin, 'to': w.to_end_id, 'to_pin': w.to_pin, 'signal': w.signal,
+                                    'to_signal': w.to_signal, 'set': w.wire_set, 'type': w.set_type, 'colour': w.colour, 'gauge': w.gauge, 'length': qty(w.length)} for w in wires]}
 
 
 @login_required
@@ -158,7 +161,7 @@ def _drawing(harness, wires):
 def pinout_draw(request, pk):
     """The pinout edited in its drawing: a wire added between two pins (its signal and set from the device's pin), a
     wire put in a set (an existing one, a new one, or as a shielded set's shield), a set's type changed (all its
-    wires; or a wire made its shield), coloured, or taken away; connectors added on a side, changed, taken away.
+    wires; or a wire made its shield), coloured, labelled, its gauge given, or taken away; connectors added on a side, changed, taken away.
     Answers with the drawing as it is now."""
     item = get_object_or_404(Harness, pk=pk)
     post, action = request.POST, request.POST.get('action')
@@ -205,6 +208,8 @@ def pinout_draw(request, pk):
         from_pin, to_pin = post.get('from_pin', '').strip()[:20], post.get('to_pin', '').strip()[:20]
         if not (a and b and from_pin and to_pin):
             return JsonResponse({'error': "A wire goes from an end's pin to an end's pin."}, status=400)
+        if a == b and from_pin.lower() == to_pin.lower():
+            return JsonResponse({'error': 'A loopback goes to another pin.'}, status=400)
         signal, wire_set, set_type = '', '', 'Straight'
         for end, number in ((a, from_pin), (b, to_pin)):
             pin = end.connector.pins.filter(number__iexact=number).first() if end.connector_id else None
@@ -220,6 +225,19 @@ def pinout_draw(request, pk):
             wire.delete()
         elif action == 'colour':
             wire.colour = post.get('colour') if post.get('colour') in COLOURS else ''
+            wire.save()
+        elif action == 'signal':   # what it is for: PWR, GND, TX+, …; a loopback's other end its own (TX: RX)
+            value = ' '.join(post.get('signal', '').split())[:100]
+            if post.get('end') == 'to':
+                wire.to_signal = value
+            else:
+                if wire.from_end_id == wire.to_end_id and wire.to_signal in ('', purposes.mate(wire.signal)):
+                    wire.to_signal = purposes.mate(value)
+                wire.signal = value
+            wire.save()
+        elif action == 'gauge':   # a bare number is taken as AWG
+            value = ' '.join(post.get('gauge', '').split())
+            wire.gauge = (f'{value} AWG' if value.isdigit() else value)[:20]
             wire.save()
         elif action == 'set':
             value = post.get('set', '').strip()

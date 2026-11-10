@@ -150,8 +150,17 @@ class DiagramTests(BrowserTestCase):
             page.locator(f'#pinout-drawing select[data-wire="{made.pk}"]').select_option('new:Straight')   # a new set
         with page.expect_response(lambda r: r.request.method == 'POST'):
             page.locator(f'#pinout-drawing select[data-wire-type="{made.pk}"]').select_option('Twisted')   # then its type
+        with page.expect_response(lambda r: r.request.method == 'POST'):
+            page.locator(f'#pinout-drawing input[data-wire-gauge="{made.pk}"]').fill('22')
+            page.locator(f'#pinout-drawing input[data-wire-gauge="{made.pk}"]').press('Enter')       # its gauge
+        expect(page.locator(f'#pinout-drawing input[data-wire-gauge="{made.pk}"]')).to_have_value('22 AWG')
+        page.click(f'#pinout-drawing [data-wire-signal="{made.pk}"]')                     # its purpose: from the tree
+        page.click('.purpose-finder [data-purpose-tree] button:has-text("Power")')
+        with page.expect_response(lambda r: r.request.method == 'POST'):
+            page.click('.purpose-finder [data-purpose="+5V"]')
+        expect(page.locator(f'#pinout-drawing [data-wire-signal="{made.pk}"]')).to_have_text('+5V')
         made.refresh_from_db()
-        self.assertEqual(made.set_type, 'Twisted')
+        self.assertEqual((made.set_type, made.gauge, made.signal), ('Twisted', '22 AWG', '+5V'))
         page.locator('#pinout-drawing .pd-contact').filter(has=page.locator('text.pd-num', has_text=re.compile('^4$'))).first.click()           # P1:4 again, now to P2:6: a splice
         with page.expect_response(lambda r: r.request.method == 'POST'):
             page.locator('#pinout-drawing .pd-pin[data-pin="6"]').nth(1).click()

@@ -86,7 +86,7 @@ class Harness(models.Model):
                           'connector': [e.connector.device.number, e.connector.designator] if e.connector else None}
                          for e in self.ends.select_related('part', 'family', 'connector__device')],
                 'wires': [{'from': w.from_end.designator, 'from_pin': w.from_pin, 'to': w.to_end.designator, 'to_pin': w.to_pin,
-                           'signal': w.signal, 'set': w.wire_set, 'set_type': w.set_type, 'colour': w.colour, 'gauge': w.gauge,
+                           'signal': w.signal, 'to_signal': w.to_signal, 'set': w.wire_set, 'set_type': w.set_type, 'colour': w.colour, 'gauge': w.gauge,
                            'length': str(w.length) if w.length is not None else None, 'part': w.used_name}
                           for w in self.ordered_wires()],
                 'items': [{'part': i.used_name, 'quantity': str(i.quantity), 'note': i.note}
@@ -109,7 +109,7 @@ class Harness(models.Model):
             ends[designator].save()
         for w in data.get('wires', []):
             wire = Wire(harness=self, from_end=ends[w['from']], from_pin=w['from_pin'], to_end=ends[w['to']], to_pin=w['to_pin'],
-                        signal=w.get('signal', ''), wire_set=w.get('set', ''), set_type=w.get('set_type', 'Straight'),
+                        signal=w.get('signal', ''), to_signal=w.get('to_signal', ''), wire_set=w.get('set', ''), set_type=w.get('set_type', 'Straight'),
                         colour=w.get('colour', ''), gauge=w.get('gauge', ''), length=Decimal(w['length']) if w.get('length') else None)
             wire.used = part_or_family(w.get('part'))
             wire.save()
@@ -162,6 +162,7 @@ class Wire(PartOrFamily):
     to_end = models.ForeignKey(HarnessEnd, on_delete=models.CASCADE, related_name='wires_to')
     to_pin = models.CharField(max_length=20)
     signal = models.CharField(max_length=100, blank=True)
+    to_signal = models.CharField('signal at its other end', max_length=100, blank=True)   # a loopback's (TX: RX)
     wire_set = models.CharField('set', max_length=20, blank=True)
     set_type = models.CharField(max_length=20, default='Straight', choices=[(t, t) for t in SET_TYPES])
     colour = models.CharField(max_length=20, blank=True, choices=[(c, c) for c in COLOURS])

@@ -283,6 +283,23 @@ ul.tight { margin: 4px 0 0; padding-left: 18px; }
 .pinout-drawing .pd-pin.chosen .pd-num, .pinout-drawing .pd-contact.chosen .pd-num { fill: #fff; }
 .pinout-drawing .pd-tools { display: flex; gap: 4px; align-items: center; }
 .pinout-drawing .pd-tools select { font-size: 11px; padding: 1px 4px; height: 22px; min-width: 0; width: auto; }
+.pinout-drawing .pd-tools .pd-gauge-input { font-size: 11px; padding: 1px 4px; height: 22px; width: 72px; min-width: 0; }
+.pinout-drawing .pd-tools select[data-wire] { width: 80px; }
+.pinout-drawing .pd-tools select.pd-type { width: 118px; }
+.pinout-drawing .pd-tools select.pd-colour { width: 98px; }
+.pinout-drawing .pd-tag rect { fill: var(--panel); stroke: var(--muted); stroke-width: 1; }
+.pinout-drawing .pd-length rect { stroke-dasharray: 3 2; }
+.pinout-drawing .pd-label rect { fill: var(--panel-2); stroke: var(--text); }
+.pinout-drawing .pd-label .pd-tag-text { font-size: 10px; }
+.pinout-drawing .pd-tools .pd-label-pick { width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.pinout-drawing .pd-tools .pd-label-pick.muted { color: var(--muted); }
+.purpose-finder .purpose-list { flex: 1; overflow: auto; padding: 8px 12px; }
+.purpose-finder .purpose-list h5 { margin: 8px 0 4px; color: var(--muted); font-weight: 600; }
+.purpose-finder .purpose-items { display: flex; flex-wrap: wrap; gap: 4px; }
+dialog.finder.purpose-finder { width: min(640px, calc(100vw - 32px)); height: min(460px, calc(100vh - 32px)); }
+.purpose-finder .finder-tree { width: 180px; }
+.purpose-finder .finder-head input { width: 180px; }
+.pinout-drawing .pd-tag-text { font: 600 9px system-ui, sans-serif; fill: var(--text); text-anchor: middle; pointer-events: none; }
 .pinout-drawing .pd-tools .btn { padding: 0 6px; height: 22px; line-height: 20px; }
 .pinout-drawing .pd-wire-edge { fill: none; stroke: var(--text); stroke-width: 4.5; opacity: .35; stroke-linejoin: round; }
 .pinout-drawing .pd-wire-core { fill: none; stroke-width: 2.5; stroke-linejoin: round; }
