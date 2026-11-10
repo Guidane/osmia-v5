@@ -68,7 +68,7 @@ class Harness(models.Model):
             pair = frozenset(((wire.from_end_id, wire.from_pin.lower()), (wire.to_end_id, wire.to_pin.lower())))
             joined.setdefault(pair, []).append(wire)
             for end, pin in ((wire.from_end, wire.from_pin), (wire.to_end, wire.to_pin)):
-                if end.connector_id is None:
+                if end.connector_id is None or not pin:   # no pin: a shield not joined on that side
                     continue
                 device_pin = end.connector.pins.filter(number__iexact=pin).first()
                 if device_pin is None:
@@ -145,6 +145,7 @@ class HarnessEnd(PartOrFamily):
     part = models.ForeignKey(Part, null=True, blank=True, on_delete=models.SET_NULL, related_name='harness_ends')
     connector = models.ForeignKey(Connector, null=True, blank=True, on_delete=models.SET_NULL, related_name='harness_ends')
     position = models.PositiveIntegerField(default=0)
+    side = models.CharField(max_length=5, blank=True, choices=[('left', 'Left'), ('right', 'Right')])   # in the drawing: where it was added
 
     class Meta:
         ordering = ['position', 'designator']

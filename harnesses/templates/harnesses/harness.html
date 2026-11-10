@@ -38,9 +38,9 @@
 </div>
 
 <section class="card flush">
-  <div class="card-head"><h3>Pinout <span class="muted small">{{ wire_count }} wire{{ wire_count|pluralize }}</span></h3><a class="btn small" href="{% url 'harnesses:pinout' harness.pk %}">Change</a></div>
-  {% if ends %}<div class="pinout-draw" id="pinout-draw" data-url="{% url 'harnesses:pinout_draw' harness.pk %}" data-csrf="{{ csrf_token }}"><div class="set-chips" id="set-chips"></div><svg id="pinout-drawing" class="pinout-drawing" role="img" aria-label="The pinout drawn"></svg></div>
-  {{ drawing|json_script:"pinout-data" }}{% endif %}
+  <div class="card-head"><h3>Pinout <span class="muted small">{{ wire_count }} wire{{ wire_count|pluralize }}</span></h3></div>
+  <div class="pinout-draw" id="pinout-draw" data-url="{% url 'harnesses:pinout_draw' harness.pk %}" data-csrf="{{ csrf_token }}"><div class="set-chips" id="set-chips"></div><svg id="pinout-drawing" class="pinout-drawing" role="img" aria-label="The pinout drawn"></svg></div>
+  {{ drawing|json_script:"pinout-data" }}{{ family_picker }}
   <div style="overflow-x:auto"><table class="list">
     <tr><th>From</th><th>Pin</th><th>To</th><th>Pin</th><th>Signal</th><th>Set</th><th>Set type</th><th>Colour</th><th>Gauge</th><th class="num">Length</th><th>Wire</th></tr>
     {% for between, wires in groups %}<tr class="group-row"><th colspan="11">{{ between }}</th></tr>

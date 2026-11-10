@@ -214,6 +214,12 @@ tr.pick.on { background: var(--select); }
 .finder-foot { padding: 8px 12px; border-top: 1px solid var(--border); }
 .finder-foot #picked { font-weight: 600; }
 .family-pick { display: flex; gap: 6px; }
+.pd-tools.end { justify-content: flex-end; }
+.pinout-drawing .pd-shield-line { fill: none; stroke: #9ca3af; stroke-width: 2.5; stroke-dasharray: 5 5; }
+.pinout-drawing .pd-drain { fill: var(--panel); stroke: var(--text); stroke-width: 1.5; cursor: pointer; }
+.pinout-drawing .pd-drain:hover { stroke: var(--brand); stroke-width: 2.5; }
+.pinout-drawing .pd-drain.chosen { fill: var(--brand); stroke: var(--brand); }
+.pd-end-tools .btn { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 dialog.finder.family-finder { height: min(640px, calc(100vh - 32px)); }
 .family-finder .finder-tree[hidden] { display: none; }
 .family-tree td:first-child { padding-left: calc(10px + var(--depth, 0) * 1.4em); }
@@ -275,8 +281,6 @@ ul.tight { margin: 4px 0 0; padding-left: 18px; }
 .pinout-drawing.editing .pd-contact:hover circle { stroke: var(--brand); stroke-width: 2; }
 .pinout-drawing .pd-pin.chosen circle, .pinout-drawing .pd-contact.chosen circle { fill: var(--brand); stroke: var(--brand); }
 .pinout-drawing .pd-pin.chosen .pd-num, .pinout-drawing .pd-contact.chosen .pd-num { fill: #fff; }
-.pinout-drawing .pd-splice { fill: var(--text); stroke: var(--panel); stroke-width: 1.5; }
-.pinout-drawing .pd-setname { font: 600 11px system-ui, sans-serif; fill: var(--text); paint-order: stroke; stroke: var(--panel); stroke-width: 5px; }
 .pinout-drawing .pd-tools { display: flex; gap: 4px; align-items: center; }
 .pinout-drawing .pd-tools select { font-size: 11px; padding: 1px 4px; height: 22px; min-width: 0; width: auto; }
 .pinout-drawing .pd-tools .btn { padding: 0 6px; height: 22px; line-height: 20px; }
@@ -284,6 +288,12 @@ ul.tight { margin: 4px 0 0; padding-left: 18px; }
 .pinout-drawing .pd-wire-core { fill: none; stroke-width: 2.5; stroke-linejoin: round; }
 .pinout-drawing .pd-pin.lit circle, .pinout-drawing .pd-contact.lit circle { fill: #fde047; stroke: #b45309; stroke-width: 2; }
 .wire-colour { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--border-strong); margin-right: 4px; vertical-align: middle; }
+.wire-colour[data-colour="black"] { background: #1f2937; } .wire-colour[data-colour="brown"] { background: #92400e; }
+.wire-colour[data-colour="red"] { background: #ef4444; } .wire-colour[data-colour="orange"] { background: #f97316; }
+.wire-colour[data-colour="yellow"] { background: #facc15; } .wire-colour[data-colour="green"] { background: #22c55e; }
+.wire-colour[data-colour="blue"] { background: #3b82f6; } .wire-colour[data-colour="violet"] { background: #8b5cf6; }
+.wire-colour[data-colour="grey"] { background: #9ca3af; } .wire-colour[data-colour="white"] { background: #f3f4f6; }
+.wire-colour[data-colour="green/yellow"] { background: linear-gradient(90deg, #22c55e 50%, #facc15 50%); }
 .connectors { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0 10px; }
 .connectors-card { margin-top: 14px; }
 .connector-pick { display: grid; grid-template-columns: 260px 1fr; min-height: 160px; }
@@ -455,6 +465,8 @@ form.inline { display: inline; }
 .brief .details { clear: both; }
 .brief-tiles { margin: 8px 0; }
 .brief h4 { margin: 12px 0 4px; }
+.harness-browser { grid-template-columns: 250px minmax(0, 1fr) 440px; }
+.brief-problems { margin: 4px 0; padding-left: 18px; color: var(--warn, #b45309); }
 @media (max-width: 1100px) { .parts-browser { grid-template-columns: 200px minmax(0, 1fr); } .parts-detail { grid-column: 1 / -1; position: static; } }
 @media (max-width: 700px) { .parts-browser { grid-template-columns: 1fr; } .parts-tree { position: static; max-height: 240px; } }
 

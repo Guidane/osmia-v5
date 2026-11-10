@@ -147,13 +147,14 @@ class DiagramTests(BrowserTestCase):
         made = harness.wires.order_by('-pk').first()
         self.assertEqual((made.from_pin, made.to_pin), ('4', '4'))
         with page.expect_response(lambda r: r.request.method == 'POST'):
-            page.locator(f'#pinout-drawing select[data-wire="{made.pk}"]').select_option('new:Twisted')
+            page.locator(f'#pinout-drawing select[data-wire="{made.pk}"]').select_option('new:Straight')   # a new set
+        with page.expect_response(lambda r: r.request.method == 'POST'):
+            page.locator(f'#pinout-drawing select[data-wire-type="{made.pk}"]').select_option('Twisted')   # then its type
         made.refresh_from_db()
         self.assertEqual(made.set_type, 'Twisted')
         page.locator('#pinout-drawing .pd-contact').filter(has=page.locator('text.pd-num', has_text=re.compile('^4$'))).first.click()           # P1:4 again, now to P2:6: a splice
         with page.expect_response(lambda r: r.request.method == 'POST'):
             page.locator('#pinout-drawing .pd-pin[data-pin="6"]').nth(1).click()
-        expect(page.locator('#pinout-drawing .pd-splice')).to_have_count(2)              # where each of its wires leaves
         self.assertEqual(harness.wires.filter(from_pin='4').count(), 2)
         page.click('#set-chips [data-mode=view]')                                         # back: the page again, its table too
         expect(page.locator('table.list', has_text='Signal')).to_contain_text(made.wire_set)

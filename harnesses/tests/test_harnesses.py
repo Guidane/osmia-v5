@@ -57,6 +57,19 @@ class PinoutTests(HarnessBase):
         self.assertContains(response, 'Row 1: there is no part or family &quot;NOPE&quot;.')
         self.assertEqual(self.harness.wires.count(), 3)                         # nothing of it was kept
 
+    def test_the_harness_list_as_a_tree_and_a_harness_picked(self):
+        from work.models import Project as Work
+        rack = Work.objects.create(code='BR', name='Rack')
+        type(self.harness.project).objects.filter(pk=self.harness.project_id).update(in_project=rack)
+        self.connect('6', '2', signal='CAN H')
+        page = self.client.get(reverse('harnesses:list'), {'work': rack.pk, 'harness': self.harness.pk})
+        self.assertEqual([(kind, depth, n) for kind, _, depth, n in page.context['tree']], [('work', 0, 1), ('diagram', 1, 1)])
+        self.assertContains(page, self.harness.number)
+        self.assertContains(page, 'data-brief="%d"' % self.harness.pk)                    # its details, already open
+        brief = self.client.get(reverse('harnesses:brief', args=[self.harness.pk]))
+        self.assertContains(brief, 'CAN H')
+        self.assertContains(self.client.get(reverse('harnesses:list'), {'q': 'nothing like it'}), 'No harnesses match')
+
     def test_the_pinout_drawn_in_each_connector_s_layout(self):
         from inventory.faces import start
         from inventory.models import Branch, Family
@@ -83,6 +96,40 @@ class PinoutTests(HarnessBase):
         self.assertIn({'id': Wire.objects.get().pk, 'from': self.p1.pk, 'from_pin': '6', 'to': self.p2.pk, 'to_pin': '2', 'signal': '', 'set': 'CAN', 'type': 'Twisted',
                        'colour': ''}, page.context['drawing']['wires'])
 
+    def test_a_shield_joined_on_one_side_or_both(self):
+        url = reverse('harnesses:pinout_draw', args=[self.harness.pk])
+        self.connect('6', '2', wire_set='CAN', set_type='Shielded twisted')
+        self.connect('7', '7', wire_set='CAN', set_type='Shielded twisted')
+        common = {'action': 'shield', 'set': 'CAN', 'a_end': self.p1.pk, 'b_end': self.p2.pk}
+        self.client.post(url, {**common, 'a_pin': '9', 'b_pin': ''})                      # the left side only
+        shield = Wire.objects.get(set_type='Shield')
+        self.assertEqual((shield.wire_set, shield.from_pin, shield.to_pin), ('CAN', '9', ''))
+        self.assertFalse(any('no pin  (' in text for _, text in self.harness.problems()))  # not joined there: no problem
+        self.client.post(url, {**common, 'a_pin': '9', 'b_pin': '8'})                     # both sides: the same wire
+        self.assertEqual(Wire.objects.get(set_type='Shield').to_pin, '8')
+        self.client.post(url, {**common, 'a_pin': '', 'b_pin': ''})                       # on neither: gone
+        self.assertFalse(Wire.objects.filter(set_type='Shield').exists())
+        self.assertEqual(self.client.post(url, {**common, 'set': 'NONE', 'a_pin': '9'}).status_code, 400)
+
+    def test_connectors_added_changed_and_taken_away_in_the_drawing(self):
+        from inventory.faces import start
+        from inventory.models import Family
+        dsub = Family.objects.create(name='D-sub 9', face=start('staggered', 9))
+        url = reverse('harnesses:pinout_draw', args=[self.harness.pk])
+        drawing = self.client.post(url, {'action': 'end_add', 'side': 'right', 'used': 'D-sub 9 / socket'}).json()
+        added = self.harness.ends.get(designator='P3')                                      # the next free one
+        self.assertEqual((added.side, str(added.used), added.used.contacts), ('right', 'D-sub 9 / socket', 'socket'))   # made
+        end = next(e for e in drawing['ends'] if e['id'] == added.pk)
+        self.assertEqual((end['side'], end['used']), ('right', 'D-sub 9 / socket'))
+        self.client.post(url, {'action': 'end_set', 'end': added.pk, 'used': 'D-sub 9'})
+        added.refresh_from_db()
+        self.assertEqual(added.used, dsub)
+        self.assertEqual(self.client.post(url, {'action': 'end_set', 'end': added.pk, 'used': 'NOPE'}).status_code, 400)
+        wire = self.connect('6', '2')
+        self.client.post(url, {'action': 'end_delete', 'end': self.p2.pk})
+        self.assertFalse(self.harness.ends.filter(pk=self.p2.pk).exists())
+        self.assertFalse(Wire.objects.filter(pk=wire.pk).exists())                           # its wires with it
+
     def test_the_pinout_edited_in_its_drawing(self):
         url = reverse('harnesses:pinout_draw', args=[self.harness.pk])
         drawing = self.client.post(url, {'action': 'add', 'from_end': self.p1.pk, 'from_pin': '6', 'to_end': self.p2.pk, 'to_pin': '2'}).json()
@@ -100,6 +147,12 @@ class PinoutTests(HarnessBase):
         self.client.post(url, {'action': 'set', 'wire': drain.pk, 'set': 'shield:1'})
         drain.refresh_from_db()
         self.assertEqual((drain.wire_set, drain.set_type), ('1', 'Shield'))
+        self.client.post(url, {'action': 'set_type', 'wire': wire.pk, 'type': 'Twisted'})     # the set's type changed
+        self.assertEqual(sorted(Wire.objects.filter(wire_set='1').values_list('set_type', flat=True)), ['Shield', 'Twisted', 'Twisted'])
+        self.client.post(url, {'action': 'set_type', 'wire': other.pk, 'type': 'Shield'})     # a wire made its shield
+        self.assertEqual(Wire.objects.get(pk=other.pk).set_type, 'Shield')
+        loose = self.connect('3', '5')
+        self.assertEqual(self.client.post(url, {'action': 'set_type', 'wire': loose.pk, 'type': 'Twisted'}).status_code, 400)
         self.client.post(url, {'action': 'colour', 'wire': drain.pk, 'colour': 'grey'})
         self.assertEqual(Wire.objects.get(pk=drain.pk).colour, 'grey')
         self.client.post(url, {'action': 'delete', 'wire': drain.pk})

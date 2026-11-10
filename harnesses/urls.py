@@ -8,6 +8,7 @@ urlpatterns = [
     path('', views.harness_list, name='list'),
     path('new/', views.harness_form, name='new'),
     path('<int:pk>/', views.harness, name='harness'),
+    path('<int:pk>/brief/', views.harness_brief, name='brief'),
     path('<int:pk>/edit/', views.harness_form, name='edit'),
     path('<int:pk>/ends/', views.ends, name='ends'),
     path('<int:pk>/pinout/', views.pinout, name='pinout'),

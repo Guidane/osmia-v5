@@ -1,20 +1,72 @@
 {% extends "base.html" %}
 {% block title %}Harnesses · Osmia{% endblock %}
+{% block content_class %}wide{% endblock %}
 {% block content %}
-<p class="small"><a href="{% url 'projects:list' %}">← Wire diagrams</a></p>
 <div class="page-head"><h1>Harnesses</h1><span class="spacer"></span>
   <a class="btn primary" href="{% url 'harnesses:new' %}{% if project %}?project={{ project.pk }}{% endif %}">＋ New harness</a></div>
-<form method="get" class="filters"><select name="project" aria-label="Wire diagram" onchange="this.form.submit()"><option value="">Every wire diagram</option>
-  {% for p in projects %}<option value="{{ p.pk }}"{% if project.pk == p.pk %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></form>
-<div class="card flush">
-  <table class="list">
-    <tr><th>Harness</th><th>Name</th><th>Wire diagram</th><th>Status</th><th>Version</th></tr>
-    {% for h in harnesses %}<tr>
-      <td><a href="{{ h.get_absolute_url }}">{{ h.number }}</a></td><td>{{ h.name }}</td>
-      <td class="small"><a href="{{ h.project.get_absolute_url }}">{{ h.project }}</a></td>
-      <td><span class="badge{% if h.status == 'released' %} ok{% elif h.status == 'obsolete' %} failed{% endif %}">{{ h.get_status_display }}</span></td>
-      <td class="small">{% if h.version %}v{{ h.version }}{% else %}<span class="badge">Not saved</span>{% endif %}</td>
-    </tr>{% empty %}<tr><td colspan="5" class="empty small">No harnesses yet.</td></tr>{% endfor %}
-  </table>
+
+<div class="parts-browser harness-browser">
+  <nav class="card parts-tree" aria-label="Wire diagrams">
+    <a href="?{% if q %}q={{ q|urlencode }}{% endif %}"{% if not project and not work %} class="on"{% endif %}><span>All harnesses</span><span class="muted small">{{ every }}</span></a>
+    {% for kind, thing, depth, n in tree %}{% if kind == 'work' %}
+      <a href="?work={{ thing.pk }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}" style="--depth: {{ depth }}" class="{% if work.pk == thing.pk %}on{% elif project.in_project_id == thing.pk %}open{% endif %}"><span>📁 {{ thing.code|default:thing.name }}{% if thing.code %} <span class="muted">{{ thing.name }}</span>{% endif %}</span><span class="muted small">{{ n }}</span></a>
+    {% else %}
+      <a href="?project={{ thing.pk }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}" style="--depth: {{ depth }}" class="{% if project.pk == thing.pk %}on{% endif %}"><span>{{ thing }}</span><span class="muted small">{{ n }}</span></a>
+    {% endif %}{% endfor %}
+  </nav>
+
+  <div class="parts-middle">
+    <form method="get" class="filters">
+      {% if project %}<input type="hidden" name="project" value="{{ project.pk }}">{% elif work %}<input type="hidden" name="work" value="{{ work.pk }}">{% endif %}
+      <input type="search" name="q" value="{{ q }}" placeholder="Number, name…" aria-label="Search harnesses">
+      <select name="status" aria-label="Status" onchange="this.form.submit()"><option value="">Every status</option>
+        {% for value, label in statuses %}<option value="{{ value }}"{% if status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+      <button class="btn">Find</button>
+    </form>
+    <div class="card flush">
+      <table class="list parts-list">
+        <tr><th>Harness</th><th>Name</th>{% if not project %}<th>Wire diagram</th>{% endif %}<th class="num">Ends</th><th class="num">Wires</th><th>Status</th><th>Version</th></tr>
+        {% for h in harnesses %}<tr data-part="{{ h.pk }}" data-brief-url="{% url 'harnesses:brief' h.pk %}" class="{% if picked.pk == h.pk %}on{% endif %}" tabindex="0">
+          <td><a href="{{ h.get_absolute_url }}">{{ h.number }}</a></td><td>{{ h.name }}</td>
+          {% if not project %}<td class="small">{{ h.project }}</td>{% endif %}
+          <td class="num">{{ h.n_ends }}</td><td class="num">{{ h.n_wires }}</td>
+          <td><span class="badge{% if h.status == 'released' %} ok{% elif h.status == 'obsolete' %} failed{% endif %}">{{ h.get_status_display }}</span></td>
+          <td class="small">{% if h.version %}v{{ h.version }}{% else %}<span class="badge">Not saved</span>{% endif %}</td>
+        </tr>{% empty %}<tr><td colspan="7" class="empty small">{% if q or project or work or status %}No harnesses match.{% else %}No harnesses yet.{% endif %}</td></tr>{% endfor %}
+      </table>
+    </div>
+  </div>
+
+  <aside class="card parts-detail" data-detail>
+    {% if brief %}{% include "harnesses/_brief.html" with harness=brief.harness ends=brief.ends wires=brief.wires parts=brief.parts problems=brief.problems %}
+    {% else %}<p class="muted small pad">Pick a harness to see it here.</p>{% endif %}
+  </aside>
 </div>
 {% endblock %}
+{% block scripts %}<script>
+  /* A row picked (clicked, or the arrow keys): its details on the right, kept in the address as ?harness=. */
+  (function () {
+    var detail = document.querySelector('[data-detail]'), rows = Array.prototype.slice.call(document.querySelectorAll('tr[data-part]'));
+    var asked = 0;
+    function pick(row) {
+      rows.forEach(function (r) { r.classList.toggle('on', r === row); });
+      var url = new URL(location.href);
+      url.searchParams.set('harness', row.dataset.part);
+      history.replaceState(null, '', url);
+      var mine = ++asked;
+      fetch(row.dataset.briefUrl, { headers: { 'X-Requested-With': 'fetch' } }).then(function (r) { return r.text(); }).then(function (html) {
+        if (mine === asked) detail.innerHTML = html;
+      });
+    }
+    rows.forEach(function (row, i) {
+      row.addEventListener('click', function (e) { if (!e.target.closest('a, input, button')) pick(row); });
+      row.addEventListener('keydown', function (e) {
+        var to = e.key === 'ArrowDown' ? rows[i + 1] : e.key === 'ArrowUp' ? rows[i - 1] : e.key === 'Enter' ? row : null;
+        if (!to) return;
+        e.preventDefault();
+        to.focus();
+        pick(to);
+      });
+    });
+  })();
+</script>{% endblock %}

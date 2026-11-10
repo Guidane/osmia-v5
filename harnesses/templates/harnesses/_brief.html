@@ -1,0 +1,35 @@
+{% load osmia %}<div class="brief" data-brief="{{ harness.pk }}">
+  <div class="brief-head"><h3><a href="{{ harness.get_absolute_url }}">{{ harness.number }}</a></h3>
+    <span class="badge{% if harness.status == 'released' %} ok{% elif harness.status == 'obsolete' %} failed{% endif %}">{{ harness.get_status_display }}</span>
+    <span class="spacer"></span><a class="btn small" href="{{ harness.get_absolute_url }}">Open</a></div>
+  <p class="brief-what">{{ harness.name }}</p>
+  <dl class="details">
+    <dt>Wire diagram</dt><dd><a href="{{ harness.project.get_absolute_url }}">{{ harness.project }}</a></dd>
+    <dt>Version</dt><dd>{% if harness.version %}v{{ harness.version }}{% else %}not saved{% endif %}</dd>
+    {% if harness.description %}<dt>Description</dt><dd>{{ harness.description|linebreaksbr }}</dd>{% endif %}
+  </dl>
+
+  <h4>Ends</h4>
+  <table class="list compact">
+    {% for e in ends %}<tr><td><b>{{ e.designator }}</b></td><td class="small">{% if e.used %}<a href="{{ e.used.get_absolute_url }}">{{ e.used }}</a>{% endif %}</td>
+      <td class="small">{% if e.connector %}→ <a href="{{ e.connector.device.get_absolute_url }}#c{{ e.connector_id }}">{{ e.connector }}</a>{% endif %}</td></tr>
+    {% empty %}<tr><td class="empty small">No ends yet.</td></tr>{% endfor %}
+  </table>
+
+  <h4>Wires <span class="muted small">{{ wires|length }}</span></h4>
+  <table class="list compact">
+    {% for w in wires %}<tr><td class="nowrap">{{ w.from_end.designator }}:{{ w.from_pin }}</td><td class="nowrap">{{ w.to_end.designator }}:{{ w.to_pin }}</td>
+      <td class="small">{{ w.signal }}</td>
+      <td class="small">{% if w.wire_set %}{{ w.wire_set }}{% endif %}</td>
+      <td class="small nowrap">{% if w.colour %}<span class="wire-colour" data-colour="{{ w.colour }}"></span>{{ w.colour }}{% endif %}</td></tr>
+    {% empty %}<tr><td class="empty small">No wires yet.</td></tr>{% endfor %}
+  </table>
+
+  {% if parts %}<h4>Made of</h4>
+  <table class="list compact">
+    {% for part, quantity in parts %}<tr><td class="small"><a href="{{ part.get_absolute_url }}">{{ part.number }}</a></td><td class="num">{{ quantity|qty }} {{ part.unit }}</td></tr>{% endfor %}
+  </table>{% endif %}
+
+  {% if problems %}<h4>To look at</h4>
+  <ul class="small brief-problems">{% for p in problems %}<li>{{ p }}</li>{% endfor %}</ul>{% endif %}
+</div>
