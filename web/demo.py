@@ -220,17 +220,17 @@ def _make(user):
     base = Configuration.objects.create(project=project, name='Base', description='One load board.')
     ctrl = configs.place(base, kind='device', device_id=devices['CTRL-100'].pk, label='Controller', x=40, y=60)
     first = configs.place(base, kind='device', device_id=devices['LOAD-200'].pk, label='Load board 1', x=420, y=40)
-    configs.place(base, kind='harness', harness_id=bus.pk, ends={str(e.pk): k for e, k in zip(bus.ends.all(), (ctrl, first))})
+    configs.place(base, kind='harness', harness_id=bus.pk, ends={str(e.pk): [k, bus.plugs[e.pk].pk] for e, k in zip(bus.ends.all(), (ctrl, first))})
     two = Configuration.objects.create(project=project, name='Two load boards', parent=base)
     second = configs.place(two, kind='device', device_id=devices['LOAD-200'].pk, label='Load board 2', x=420, y=260)
-    configs.place(two, kind='harness', harness_id=link.pk, ends={str(e.pk): k for e, k in zip(link.ends.all(), (first, second))})
+    configs.place(two, kind='harness', harness_id=link.pk, ends={str(e.pk): [k, link.plugs[e.pk].pk] for e, k in zip(link.ends.all(), (first, second))})
     Configuration.objects.create(project=project, name='Test rig', parent=two, description='Two load boards, on the bench.')
     rack = Configuration.objects.create(project=project, name='Rack hub', description='The rack hub and the five devices it feeds.')
     at = {'HUB-500': configs.place(rack, kind='device', device_id=hub.pk, label='Rack hub', x=40, y=250)}
     for i, n in enumerate(['SENS-10', 'FAN-20', 'LED-30', 'MOT-40', 'CAM-50']):
         at[n] = configs.place(rack, kind='device', device_id=devices[n].pk, label=devices[n].name, x=840, y=20 + i * 120)
     configs.place(rack, kind='harness', harness_id=loom.pk,
-                  ends={str(e.pk): at[e.connector.device.number] for e in loom.ends.select_related('connector__device')})
+                  ends={str(e.pk): [at[loom.plugs[e.pk].device.number], loom.plugs[e.pk].pk] for e in loom.ends.all()})
     configs.ask_harness(two, ctrl, second, 'The sensor cable from the controller to load board 2, about 2 m, shielded.', user, sam)
     number_up(asset_id, list(Asset.objects.filter(category__in=workshop.below()).order_by('pk')))
     _work(user, engineering, project, devices, psu, parts, [late, coming, asked, mine])
@@ -365,17 +365,18 @@ def _work(user, engineering, diagram, devices, psu, parts, orders):
 
 def _harness(project, name, ends, wires, parts, user):
     h = Harness.objects.create(project=project, name=name, status='released')
-    made = []
+    made, h.plugs = [], {}   # (where each end plugs in is the wire diagram's: kept here for placing it there)
     for position, (designator, part, device, connector) in enumerate(ends):   # a part, or a family
-        end = HarnessEnd(harness=h, designator=designator, position=position, connector=device.connectors.get(designator=connector))
+        end = HarnessEnd(harness=h, designator=designator, position=position)
         end.used = part_or_family(part) if part else None
         end.save()
         made.append(end)
+        h.plugs[end.pk] = device.connectors.get(designator=connector)
     named = {e.designator: e for e in made}
     for a, b, colour, part, wire_set, set_type in wires:   # from the first end to the second, or 'P2:7' to 'P7:1'
         start, a = (named[a.split(':')[0]], a.split(':')[1]) if ':' in a else (made[0], a)
         to, b = (named[b.split(':')[0]], b.split(':')[1]) if ':' in b else (made[1], b)
-        signal = start.connector.pins.get(number=a).signal
+        signal = h.plugs[start.pk].pins.get(number=a).signal
         Wire.objects.create(harness=h, from_end=start, from_pin=a, to_end=to, to_pin=b, signal=signal, colour=colour,
                             gauge='22 AWG', length=Decimal(450), part=parts[part] if part else None, wire_set=wire_set, set_type=set_type)
     HarnessItem.objects.create(harness=h, part=parts['DSUB-CONTACT-M'], quantity=2 * len(wires))

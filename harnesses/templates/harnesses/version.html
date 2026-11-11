@@ -7,8 +7,8 @@
   <form method="post" action="{% url 'harnesses:restore' harness.pk version.number %}" data-confirm="Make {{ harness.number }} as it was in v{{ version.number }}?">{% csrf_token %}
     <button class="btn">↺ Make it as it was</button></form></div>
 <div class="columns">
-  <section class="card flush"><div class="card-head"><h3>Ends</h3></div>
-    <table class="list">{% for e in data.ends %}<tr><td><b>{{ e.designator }}</b></td><td class="small">{{ e.part }}</td><td class="small">{% if e.connector %}{{ e.connector.0 }} {{ e.connector.1 }}{% endif %}</td></tr>{% endfor %}</table></section>
+  <section class="card flush"><div class="card-head"><h3>Connectors</h3></div>
+    <table class="list">{% for e in data.ends %}<tr><td><b>{{ e.designator }}</b></td><td class="small">{{ e.part }}</td></tr>{% endfor %}</table></section>
   <section class="card flush"><div class="card-head"><h3>Parts list</h3></div>
     <table class="list">{% for p, q in parts %}<tr><td>{{ p.number }}</td><td class="num">{{ q|qty }} {{ p.unit }}</td></tr>{% endfor %}</table></section>
 </div>

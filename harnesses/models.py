@@ -58,23 +58,12 @@ class Harness(models.Model):
         return parts_of(self.snapshot())
 
     def problems(self):
-        """What is wrong with its pinout: [(wire or end or None, message)]."""
+        """What is wrong with its pinout: [(wire or end or None, message)]. (What it plugs into, and whether the
+        devices' pins fit, is its wire diagram's to say: ``projects.configs.problems``.)"""
         found, joined = [], {}
-        ends = list(self.ends.select_related('connector__device').prefetch_related('connector__pins'))
-        for end in ends:
-            if end.connector is None:
-                found.append((end, f'{end.designator} is not plugged into a device connector.'))
         for wire in self.ordered_wires():   # a pin with several wires is a splice; the same two pins joined twice isn't
             pair = frozenset(((wire.from_end_id, wire.from_pin.lower()), (wire.to_end_id, wire.to_pin.lower())))
             joined.setdefault(pair, []).append(wire)
-            for end, pin in ((wire.from_end, wire.from_pin), (wire.to_end, wire.to_pin)):
-                if end.connector_id is None or not pin:   # no pin: a shield not joined on that side
-                    continue
-                device_pin = end.connector.pins.filter(number__iexact=pin).first()
-                if device_pin is None:
-                    found.append((wire, f'{end.connector} has no pin {pin} ({wire}).'))
-                elif wire.signal and device_pin.signal and wire.signal.strip().lower() != device_pin.signal.strip().lower():
-                    found.append((wire, f'{wire}: the wire carries "{wire.signal}", {end.connector}:{pin} is "{device_pin.signal}".'))
         for wires in joined.values():
             if len(wires) > 1:
                 found.append((wires[1], f'{wires[0]} is there {len(wires)} times.'))
@@ -82,9 +71,7 @@ class Harness(models.Model):
 
     def snapshot(self):
         return {'name': self.name, 'description': self.description, 'notes': self.notes,
-                'ends': [{'designator': e.designator, 'part': e.used_name,
-                          'connector': [e.connector.device.number, e.connector.designator] if e.connector else None}
-                         for e in self.ends.select_related('part', 'family', 'connector__device')],
+                'ends': [{'designator': e.designator, 'part': e.used_name} for e in self.ends.select_related('part', 'family')],
                 'wires': [{'from': w.from_end.designator, 'from_pin': w.from_pin, 'to': w.to_end.designator, 'to_pin': w.to_pin,
                            'signal': w.signal, 'to_signal': w.to_signal, 'set': w.wire_set, 'set_type': w.set_type, 'colour': w.colour, 'gauge': w.gauge,
                            'length': str(w.length) if w.length is not None else None, 'part': w.used_name}
@@ -101,10 +88,7 @@ class Harness(models.Model):
         self.ends.exclude(designator__in=wanted).delete()
         ends = {}
         for position, (designator, e) in enumerate(wanted.items()):
-            where = e.get('connector')
-            connector = Connector.objects.filter(device__number=where[0], designator=where[1]).first() if where else None
-            ends[designator], _ = HarnessEnd.objects.update_or_create(harness=self, designator=designator, defaults={
-                'connector': connector, 'position': position})
+            ends[designator], _ = HarnessEnd.objects.update_or_create(harness=self, designator=designator, defaults={'position': position})
             ends[designator].used = part_or_family(e.get('part'))
             ends[designator].save()
         for w in data.get('wires', []):
@@ -143,7 +127,6 @@ class HarnessEnd(PartOrFamily):
     harness = models.ForeignKey(Harness, on_delete=models.CASCADE, related_name='ends')
     designator = models.CharField(max_length=30)
     part = models.ForeignKey(Part, null=True, blank=True, on_delete=models.SET_NULL, related_name='harness_ends')
-    connector = models.ForeignKey(Connector, null=True, blank=True, on_delete=models.SET_NULL, related_name='harness_ends')
     position = models.PositiveIntegerField(default=0)
     side = models.CharField(max_length=5, blank=True, choices=[('left', 'Left'), ('right', 'Right')])   # in the drawing: where it was added
 

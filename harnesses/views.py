@@ -75,7 +75,7 @@ def harness_list(request):
 def _brief(harness):
     """What the details beside the harness list show of ``harness``."""
     wires = harness.ordered_wires()
-    return {'harness': harness, 'ends': harness.ends.select_related('part', 'family', 'branch', 'connector__device'),
+    return {'harness': harness, 'ends': harness.ends.select_related('part', 'family', 'branch'),
             'wires': wires, 'parts': harness.parts_list(), 'problems': [text for _, text in harness.problems()]}
 
 
@@ -97,9 +97,8 @@ def _sheets(harness):
     return [('Pinout', ['From', 'Pin', 'To', 'Pin', 'Signal', 'Set', 'Set type', 'Colour', 'Gauge', 'Length (mm)', 'Wire part'],
              [(w.from_end.designator, w.from_pin, w.to_end.designator, w.to_pin, w.signal, w.wire_set, w.set_type, w.colour,
                w.gauge, w.length, w.used_name) for w in wires]),
-            ('Ends', ['End', 'Connector part', 'Plugs into'],
-             [(e.designator, e.used_name, str(e.connector) if e.connector else '')
-              for e in harness.ends.select_related('part', 'family', 'connector__device')]),
+            ('Connectors', ['Connector', 'Part'],
+             [(e.designator, e.used_name) for e in harness.ends.select_related('part', 'family')]),
             ('Parts list', ['Part', 'Description', 'Quantity', 'Unit'],
              [(p.number, p.description, q, p.unit) for p, q in harness.parts_list()])]
 
@@ -119,7 +118,7 @@ def harness(request, pk):
     found = item.problems()
     from inventory import picker
     return render(request, 'harnesses/harness.html', {'drawing': _drawing(item, wires), 'family_picker': picker.dialog(),
-        'harness': item, 'ends': item.ends.select_related('part', 'connector__device'), 'groups': groups, 'wire_count': len(wires),
+        'harness': item, 'ends': item.ends.select_related('part', 'family', 'branch'), 'groups': groups, 'wire_count': len(wires),
         'items': item.items.select_related('part'), 'parts': item.parts_list(),
         'problems': [text for _, text in found], 'bad_wires': {thing.pk for thing, _ in found if isinstance(thing, Wire)},
         'versions': item.versions.select_related('created_by'), 'changed': versions.changed(item),
@@ -136,22 +135,20 @@ def _picked_as(found):
 
 
 def _drawing(harness, wires):
-    """What the pinout drawing draws: each end (its connector's pins, in the layout of its part, else of the device
-    connector it plugs into) and the wires between their contact numbers."""
+    """What the pinout drawing draws: each end (the pins its wires use, in the layout of its part or family) and the
+    wires between their contact numbers. (What it plugs into is its wire diagram's to say.)"""
     from devices.models import pin_order
-    ends = harness.ends.select_related('part__family', 'family', 'branch__family', 'connector__device', 'connector__part__family',
-                                       'connector__family', 'connector__branch__family').prefetch_related('connector__pins')
+    ends = harness.ends.select_related('part__family', 'family', 'branch__family')
     out = []
     for end in ends:
-        pins = {p.number: p.signal for p in end.connector.pins.all()} if end.connector else {}
+        pins = {}
         for w in wires:
             for at, pin in ((w.from_end_id, w.from_pin), (w.to_end_id, w.to_pin)):
                 if at == end.pk and pin:   # (a shield joined on one side only has no pin on the other)
                     pins.setdefault(pin, '')
         numbers = sorted(pins, key=pin_order)
-        used = end.used if face_of(end.used) or not end.connector else end.connector.used
-        out.append({'id': end.pk, 'designator': end.designator, 'what': end.used_name, 'plugs': str(end.connector or ''),
-                    'side': end.side, 'used': _picked_as(end.used), 'face': drawn(used, numbers), 'pins': [[n, pins[n]] for n in numbers]})
+        out.append({'id': end.pk, 'designator': end.designator, 'what': end.used_name,
+                    'side': end.side, 'used': _picked_as(end.used), 'face': drawn(end.used, numbers), 'pins': [[n, pins[n]] for n in numbers]})
     return {'colours': COLOURS, 'set_types': PIN_SET_TYPES, 'purposes': purposes.tree(), 'ends': out, 'wires': [{'id': w.pk, 'from': w.from_end_id, 'from_pin': w.from_pin, 'to': w.to_end_id, 'to_pin': w.to_pin, 'signal': w.signal,
                                     'to_signal': w.to_signal, 'set': w.wire_set, 'type': w.set_type, 'colour': w.colour, 'gauge': w.gauge, 'length': qty(w.length)} for w in wires]}
 
@@ -203,22 +200,14 @@ def pinout_draw(request, pk):
             shield.save()
         return JsonResponse(_drawing(item, item.ordered_wires()))
     if action == 'add':
-        a = item.ends.select_related('connector').filter(pk=post.get('from_end') or 0).first()
-        b = item.ends.select_related('connector').filter(pk=post.get('to_end') or 0).first()
+        a = item.ends.filter(pk=post.get('from_end') or 0).first()
+        b = item.ends.filter(pk=post.get('to_end') or 0).first()
         from_pin, to_pin = post.get('from_pin', '').strip()[:20], post.get('to_pin', '').strip()[:20]
         if not (a and b and from_pin and to_pin):
-            return JsonResponse({'error': "A wire goes from an end's pin to an end's pin."}, status=400)
+            return JsonResponse({'error': "A wire goes from a connector's pin to a connector's pin."}, status=400)
         if a == b and from_pin.lower() == to_pin.lower():
             return JsonResponse({'error': 'A loopback goes to another pin.'}, status=400)
-        signal, wire_set, set_type = '', '', 'Straight'
-        for end, number in ((a, from_pin), (b, to_pin)):
-            pin = end.connector.pins.filter(number__iexact=number).first() if end.connector_id else None
-            if pin:
-                signal = signal or pin.signal
-                if not wire_set and pin.wire_set:
-                    wire_set, set_type = pin.wire_set, pin.set_type
-        Wire.objects.create(harness=item, from_end=a, from_pin=from_pin, to_end=b, to_pin=to_pin, signal=signal[:100],
-                            wire_set=wire_set, set_type=set_type)
+        Wire.objects.create(harness=item, from_end=a, from_pin=from_pin, to_end=b, to_pin=to_pin)
     else:
         wire = get_object_or_404(Wire, pk=post.get('wire') or 0, harness=item)
         if action == 'delete':
@@ -322,30 +311,26 @@ def _edit(request, harness, title, columns, records, values, apply):
 @login_required
 def ends(request, pk):
     item = get_object_or_404(Harness, pk=pk)
-    connectors = [(c.pk, f'{c.device.number} {c.designator}{" · " + c.name if c.name else ""}')
-                  for c in Connector.objects.select_related('device').order_by('device__number', 'position')]
-    columns = [rows.Column('designator', 'End', width='70px'), rows.Column('part', 'Connector part or family', datalist='parts', width='180px'),
-               rows.Column('connector', 'Plugs into', 'select', connectors, width='220px')]
+    columns = [rows.Column('designator', 'Connector', width='80px'), rows.Column('part', 'Connector part or family', datalist='parts', width='220px')]
     records = list(item.ends.select_related('part', 'family'))
 
     def apply(row, end, cells):
         if not cells['designator']:
-            raise ValidationError(f'Row {row}: give the end a name, e.g. P1.')
+            raise ValidationError(f'Row {row}: give the connector a name, e.g. P1.')
         clash = item.ends.filter(designator__iexact=cells['designator']).exclude(pk=getattr(end, 'pk', None))
         if clash.exists():
-            raise ValidationError(f'Row {row}: there is already an end {cells["designator"]}.')
+            raise ValidationError(f'Row {row}: there is already a connector {cells["designator"]}.')
         end = end or HarnessEnd(harness=item, position=item.ends.count())
         end.designator, end.used = cells['designator'][:30], _part(cells['part'], row)
-        end.connector = Connector.objects.filter(pk=cells['connector']).first() if cells['connector'].isdigit() else None
         end.save()
-    return _edit(request, item, 'The ends', columns, records,
-                 lambda e: {'designator': e.designator, 'part': e.used_name, 'connector': e.connector_id}, apply)
+    return _edit(request, item, 'The connectors', columns, records,
+                 lambda e: {'designator': e.designator, 'part': e.used_name}, apply)
 
 
 @login_required
 def pinout(request, pk):
     item = get_object_or_404(Harness, pk=pk)
-    end_list = list(item.ends.select_related('connector').prefetch_related('connector__pins'))
+    end_list = list(item.ends.all())
     if not end_list:
         messages.error(request, 'Give the harness its ends first.')
         return redirect('harnesses:ends', pk)
@@ -362,14 +347,9 @@ def pinout(request, pk):
     def apply(row, wire, cells):
         a, b = ends_by_id.get(int(cells['from_end'] or 0)), ends_by_id.get(int(cells['to_end'] or 0))
         if a is None or b is None or not cells['from_pin'] or not cells['to_pin']:
-            raise ValidationError(f'Row {row}: a wire goes from an end\'s pin to an end\'s pin.')
+            raise ValidationError(f'Row {row}: a wire goes from a connector\'s pin to a connector\'s pin.')
         signal, wire_set = cells['signal'], cells['wire_set']
         set_type = cells['set_type'] if cells['set_type'] in SET_TYPES else 'Straight'
-        pin = a.connector.pins.filter(number__iexact=cells['from_pin']).first() if a.connector_id else None
-        if pin and not signal:   # blank: what the device's pin carries
-            signal = pin.signal
-        if pin and not wire_set and pin.wire_set:   # and the set it is in
-            wire_set, set_type = pin.wire_set, pin.set_type
         wire = wire or Wire(harness=item)
         wire.from_end, wire.from_pin, wire.to_end, wire.to_pin = a, cells['from_pin'][:20], b, cells['to_pin'][:20]
         wire.signal, wire.wire_set, wire.gauge, wire.set_type = signal[:100], wire_set[:20], cells['gauge'][:20], set_type

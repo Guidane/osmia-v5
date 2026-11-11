@@ -12,6 +12,25 @@ from .models import Configuration, Placement
 FIELDS = ('kind', 'device_id', 'label', 'x', 'y', 'harness_id', 'ends', 'handles')
 
 
+def spot(value):
+    """Where a placed harness's end plugs in, from its placement's ``ends``: (device key, connector id); (None, None)
+    when it is not plugged in. (Older rows: just the device key.)"""
+    if isinstance(value, (list, tuple)):
+        return (value[0], value[1]) if len(value) > 1 else (value[0], None)
+    return (value or None, None)
+
+
+def family_of(thing):
+    """The family a harness end or a device connector is of (its part's, its branch's, its own), or None."""
+    if thing is None:
+        return None
+    if thing.family_id:
+        return thing.family_id
+    if thing.branch_id:
+        return thing.branch.family_id
+    return thing.part.family_id if thing.part_id else None
+
+
 def _row(placement):
     return {'key': placement.key, **{f: getattr(placement, f) for f in FIELDS}}
 
@@ -105,8 +124,8 @@ def take_away(config, key):
         Placement.objects.update_or_create(configuration=config, key=key, defaults={'kind': rows[key]['kind'], 'removed': True})
     if rows[key]['kind'] == 'device':
         for row in rows.values():
-            if row['kind'] == 'harness' and key in row['ends'].values():
-                place(config, row['key'], ends={e: k for e, k in row['ends'].items() if k != key})
+            if row['kind'] == 'harness' and any(spot(v)[0] == key for v in row['ends'].values()):
+                place(config, row['key'], ends={e: v for e, v in row['ends'].items() if spot(v)[0] != key})
 
 
 def undo(config, placement_id):
@@ -149,7 +168,7 @@ def connect(config, ends, name, pairs, parts=(None, None)):
     harness = Harness.objects.create(project=config.project, name=name.strip()[:200] or 'Harness')
     made = []
     for i, ((_, connector), part) in enumerate(zip(ends, parts)):
-        end = HarnessEnd(harness=harness, designator=f'P{i + 1}', connector=connector, position=i)
+        end = HarnessEnd(harness=harness, designator=f'P{i + 1}', position=i)
         end.used = part
         end.save()
         made.append(end)
@@ -161,7 +180,8 @@ def connect(config, ends, name, pairs, parts=(None, None)):
         in_set = pa if pa.wire_set else pb
         Wire.objects.create(harness=harness, from_end=made[0], from_pin=a, to_end=made[1], to_pin=b, signal=pa.signal or pb.signal,
                             wire_set=in_set.wire_set, set_type=in_set.set_type)
-    place(config, kind='harness', harness_id=harness.pk, ends={str(made[0].pk): ends[0][0], str(made[1].pk): ends[1][0]})
+    place(config, kind='harness', harness_id=harness.pk,
+          ends={str(end.pk): [key, connector.pk] for end, (key, connector) in zip(made, ends)})
     between = {ends[0][0], ends[1][0]}
     for wanted in config.harness_requests.filter(status='open'):   # what someone asked for between these two: made
         if {wanted.a, wanted.b} == between:
@@ -169,50 +189,85 @@ def connect(config, ends, name, pairs, parts=(None, None)):
     return harness
 
 
+def sockets(config, rows=None):
+    """The device connectors of ``config`` a harness end can plug into: [(value "key:connector id", label, device key,
+    connector)], by device then connector."""
+    from devices.models import Connector
+    rows = rows if rows is not None else resolve(config)
+    placed = [(k, r) for k, r in rows.items() if r['kind'] == 'device' and r['device_id']]
+    connectors = {}
+    for c in Connector.objects.filter(device_id__in={r['device_id'] for _, r in placed}).select_related('device', 'part', 'branch'):
+        connectors.setdefault(c.device_id, []).append(c)
+    out = []
+    for key, row in placed:
+        for c in connectors.get(row['device_id'], []):
+            out.append((f'{key}:{c.pk}', f'{row["label"] or c.device.number} {c.designator}{" · " + c.name if c.name else ""}', key, c))
+    return out
+
+
 def plug(config, harness, wanted=None):
-    """How ``harness``'s ends plug in: ``wanted`` ({end id: device key}) where given, else the one device of the
-    configuration each end's connector is on (when there is just one)."""
+    """How ``harness``'s ends plug in: {end id: [device key, connector id]}. ``wanted`` ({end id: "key:connector id"})
+    where given; else, for each end, the one free connector of the configuration of the end's family (when there is
+    just one)."""
     rows = resolve(config)
+    choices = sockets(config, rows)
+    by_value = {value: (key, c) for value, _, key, c in choices}
     out = {}
-    for end in harness.ends.select_related('connector'):
-        chosen = (wanted or {}).get(str(end.pk))
-        if chosen in rows:
-            out[str(end.pk)] = chosen
-        elif end.connector_id and not wanted:
-            fits = [k for k, r in rows.items() if r['kind'] == 'device' and r['device_id'] == end.connector.device_id]
-            if len(fits) == 1:
-                out[str(end.pk)] = fits[0]
+    if wanted:
+        for end_id, value in wanted.items():
+            if value in by_value:
+                key, c = by_value[value]
+                out[str(end_id)] = [key, c.pk]
+        return out
+    taken = {spot(v) for r in rows.values() if r['kind'] == 'harness' for v in r['ends'].values()}
+    for end in harness.ends.select_related('part', 'branch'):
+        mine = family_of(end)
+        fits = [(key, c) for _, _, key, c in choices if mine and family_of(c) == mine and (key, c.pk) not in taken]
+        if len(fits) == 1:
+            out[str(end.pk)] = [fits[0][0], fits[0][1].pk]
+            taken.add((fits[0][0], fits[0][1].pk))
     return out
 
 
 def problems(config, rows=None):
-    """What is wrong with ``config``: [(key, message)]."""
-    from devices.models import Device
-    from harnesses.models import HarnessEnd
+    """What is wrong with ``config``: [(key, message)]: a harness end not plugged in, two in one connector, a wire on a
+    pin the device connector hasn't, a wire whose signal is not the pin's."""
+    from devices.models import Connector
+    from harnesses.models import HarnessEnd, Wire
     rows = rows if rows is not None else resolve(config)
-    devices = {d.pk: d for d in Device.objects.filter(pk__in=[r['device_id'] for r in rows.values() if r['device_id']])}
     found, taken = [], {}
     for key, row in rows.items():
         if row['kind'] != 'harness':
             continue
-        for end in HarnessEnd.objects.filter(harness_id=row['harness_id']).select_related('connector__device', 'harness'):
-            where = row['ends'].get(str(end.pk))
+        ends = {e.pk: e for e in HarnessEnd.objects.filter(harness_id=row['harness_id']).select_related('harness')}
+        plugged = {}
+        for end in ends.values():
+            where, connector_id = spot(row['ends'].get(str(end.pk)))
             label = f'{end.harness.number} {end.designator}'
             if where is None or where not in rows:
                 found.append((key, f'{label} is not plugged in.'))
                 continue
             target = rows[where]
-            if end.connector is None:
-                found.append((key, f'{label} has no device connector to plug into.'))
-            elif end.connector.device_id != target['device_id']:
-                found.append((key, f'{label} is for {end.connector.device.number} {end.connector.designator}, '
-                                   f'but {target["label"] or devices.get(target["device_id"])} is a {devices.get(target["device_id"])}.'))
-            else:
-                spot = (where, end.connector_id)
-                if spot in taken:
-                    found.append((key, f'{label} and {taken[spot]} both plug into '
-                                       f'{target["label"] or devices[target["device_id"]].number} {end.connector.designator}.'))
-                taken[spot] = label
+            connector = Connector.objects.filter(pk=connector_id or 0, device_id=target['device_id']).select_related('device').first()
+            if connector is None:
+                found.append((key, f'{label} is plugged into {target["label"] or "a device"}, but not into one of its connectors.'))
+                continue
+            plugged[end.pk] = connector
+            spot_at = (where, connector.pk)
+            if spot_at in taken:
+                found.append((key, f'{label} and {taken[spot_at]} both plug into {target["label"] or connector.device.number} {connector.designator}.'))
+            taken[spot_at] = label
+        for wire in Wire.objects.filter(harness_id=row['harness_id']):   # each wire's pins: there, and carrying what they do
+            for end_id, pin in ((wire.from_end_id, wire.from_pin), (wire.to_end_id, wire.to_pin)):
+                connector = plugged.get(end_id)
+                if connector is None or not pin:   # no pin: a shield not joined on that side
+                    continue
+                device_pin = connector.pins.filter(number__iexact=pin).first()
+                if device_pin is None:
+                    found.append((key, f'{connector} has no pin {pin} ({ends[end_id].harness.number} {wire}).'))
+                elif wire.signal and device_pin.signal and wire.signal.strip().lower() != device_pin.signal.strip().lower():
+                    found.append((key, f'{ends[end_id].harness.number} {wire}: the wire carries "{wire.signal}", '
+                                       f'{connector}:{pin} is "{device_pin.signal}".'))
     return found
 
 

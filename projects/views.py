@@ -107,8 +107,8 @@ def _diagram(config, rows, found):
             h = harnesses[row['harness_id']]
             out['harnesses'].append({'key': key, 'number': h.number, 'name': h.name, 'url': h.get_absolute_url(), 'state': state(key, row),
                                      'bad': key in bad, 'handles': row['handles'],
-                                     'ends': [{'id': str(e.pk), 'designator': e.designator, 'device': row['ends'].get(str(e.pk)),
-                                               'connector': e.connector_id} for e in h.ends.all()]})
+                                     'ends': [{'id': str(e.pk), 'designator': e.designator, 'device': configs.spot(row['ends'].get(str(e.pk)))[0],
+                                               'connector': configs.spot(row['ends'].get(str(e.pk)))[1]} for e in h.ends.all()]})
     for key, row in base.items():
         if key not in rows and row['kind'] == 'device' and row['device_id'] in devices:
             out['ghosts'].append({'label': row['label'] or devices[row['device_id']].number, 'x': row['x'], 'y': row['y']})
@@ -126,15 +126,17 @@ def project(request, pk):
     harness_rows = []
     for key, r in rows.items():
         if r['kind'] == 'harness':
-            h = Harness.objects.filter(pk=r['harness_id']).prefetch_related('ends__connector__device').first()
-            if h:
-                harness_rows.append((key, h, [(e, r['ends'].get(str(e.pk))) for e in h.ends.all()]))
+            h = Harness.objects.filter(pk=r['harness_id']).prefetch_related('ends').first()
+            if h:   # each end, and where it plugs in ("device key:connector id")
+                harness_rows.append((key, h, [(e, '{}:{}'.format(*configs.spot(r['ends'].get(str(e.pk)))) if configs.spot(r['ends'].get(str(e.pk)))[1] else '')
+                                              for e in h.ends.all()]))
     return render(request, 'projects/project.html', {
         'project': item, 'config': config, 'tree': _tree(item), 'changes': configs.changes(config) if config else [],
         'problems': [text for _, text in found],
         'diagram': _diagram(config, rows, found) if config else {'devices': [], 'harnesses': [], 'ghosts': [], 'requests': []},
         'placed_devices': [(key, r, device_names.get(r['device_id'])) for key, r in placed_devices],
-        'harness_rows': harness_rows, 'devices': Device.objects.all(), 'harnesses': item.harnesses.exclude(status=Harness.Status.OBSOLETE),
+        'harness_rows': harness_rows, 'sockets': [(value, label) for value, label, _, _ in configs.sockets(config, rows)] if config else [],
+        'devices': Device.objects.all(), 'harnesses': item.harnesses.exclude(status=Harness.Status.OBSOLETE),
         'part_choices': choices_of_parts() if config else [], 'people': get_user_model().objects.filter(is_active=True),
         'requests': [(r, configs.label_of(rows, r.a), configs.label_of(rows, r.b)) for r in
                      config.harness_requests.select_related('created_by', 'ask', 'harness')[:20]] if config else []})

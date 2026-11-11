@@ -79,9 +79,16 @@ def device(request, pk):
     if request.GET.get('export'):
         return excel.download(item.number, [('Pins', PIN_HEAD, _pin_rows([item]))])
     connectors = list(item.connectors.select_related('part', 'family').prefetch_related('pins'))
-    plugged = {}
-    for end in HarnessEnd.objects.filter(connector__device=item).select_related('harness__project', 'connector'):
-        plugged.setdefault(end.connector_id, []).append(end)
+    from projects.configs import spot
+    from projects.models import Placement
+    plugged, mine = {}, {c.pk for c in connectors}   # the harness ends the wire diagrams plug into its connectors
+    for p in Placement.objects.filter(kind='harness', removed=False).exclude(harness=None):
+        for end_id, value in (p.ends or {}).items():
+            connector_id = spot(value)[1]
+            if connector_id in mine:
+                plugged.setdefault(connector_id, set()).add(int(end_id))
+    ends = {e.pk: e for e in HarnessEnd.objects.filter(pk__in={e for found in plugged.values() for e in found}).select_related('harness__project')}
+    plugged = {c: sorted((ends[e] for e in found if e in ends), key=lambda e: (e.harness.number, e.designator)) for c, found in plugged.items()}
     faces = {}
     for c in connectors:
         pins = c.ordered_pins()

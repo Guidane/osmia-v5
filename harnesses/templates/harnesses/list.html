@@ -25,7 +25,7 @@
     </form>
     <div class="card flush">
       <table class="list parts-list">
-        <tr><th>Harness</th><th>Name</th>{% if not project %}<th>Wire diagram</th>{% endif %}<th class="num">Ends</th><th class="num">Wires</th><th>Status</th><th>Version</th></tr>
+        <tr><th>Harness</th><th>Name</th>{% if not project %}<th>Wire diagram</th>{% endif %}<th class="num">Connectors</th><th class="num">Wires</th><th>Status</th><th>Version</th></tr>
         {% for h in harnesses %}<tr data-part="{{ h.pk }}" data-brief-url="{% url 'harnesses:brief' h.pk %}" class="{% if picked.pk == h.pk %}on{% endif %}" tabindex="0">
           <td><a href="{{ h.get_absolute_url }}">{{ h.number }}</a></td><td>{{ h.name }}</td>
           {% if not project %}<td class="small">{{ h.project }}</td>{% endif %}

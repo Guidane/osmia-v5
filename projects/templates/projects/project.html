@@ -94,9 +94,9 @@
             <td><a href="{{ harness.get_absolute_url }}"><b>{{ harness.number }}</b></a> <span class="muted small">{{ harness.name }}</span>
               <form method="post" action="{% url 'projects:change' project.pk %}" class="plug-form">{% csrf_token %}
                 <input type="hidden" name="config" value="{{ config.pk }}"><input type="hidden" name="key" value="{{ key }}">
-                {% for end, plugged in ends %}<label class="small">{{ end.designator }}{% if end.connector %} <span class="muted">({{ end.connector.designator }})</span>{% endif %} →
+                {% for end, plugged in ends %}<label class="small">{{ end.designator }} →
                   <select name="end_{{ end.pk }}" aria-label="{{ end.designator }} plugs into"><option value="">not plugged in</option>
-                    {% for dkey, drow, device in placed_devices %}<option value="{{ dkey }}"{% if dkey == plugged %} selected{% endif %}>{{ drow.label|default:device.number }}</option>{% endfor %}</select></label>{% endfor %}
+                    {% for value, label in sockets %}<option value="{{ value }}"{% if value == plugged %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>{% endfor %}
                 <button class="btn small" name="action" value="plug">Plug in</button></form></td>
             <td><form method="post" action="{% url 'projects:change' project.pk %}">{% csrf_token %}<input type="hidden" name="config" value="{{ config.pk }}">
               <input type="hidden" name="key" value="{{ key }}"><button class="btn small ghost" name="action" value="remove" title="Take it away from {{ config }}">✕</button></form></td>

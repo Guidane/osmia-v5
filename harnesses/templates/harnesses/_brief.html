@@ -9,11 +9,10 @@
     {% if harness.description %}<dt>Description</dt><dd>{{ harness.description|linebreaksbr }}</dd>{% endif %}
   </dl>
 
-  <h4>Ends</h4>
+  <h4>Connectors</h4>
   <table class="list compact">
-    {% for e in ends %}<tr><td><b>{{ e.designator }}</b></td><td class="small">{% if e.used %}<a href="{{ e.used.get_absolute_url }}">{{ e.used }}</a>{% endif %}</td>
-      <td class="small">{% if e.connector %}→ <a href="{{ e.connector.device.get_absolute_url }}#c{{ e.connector_id }}">{{ e.connector }}</a>{% endif %}</td></tr>
-    {% empty %}<tr><td class="empty small">No ends yet.</td></tr>{% endfor %}
+    {% for e in ends %}<tr><td><b>{{ e.designator }}</b></td><td class="small">{% if e.used %}<a href="{{ e.used.get_absolute_url }}">{{ e.used }}</a>{% endif %}</td></tr>
+    {% empty %}<tr><td class="empty small">No connectors yet.</td></tr>{% endfor %}
   </table>
 
   <h4>Wires <span class="muted small">{{ wires|length }}</span></h4>

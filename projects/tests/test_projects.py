@@ -1,6 +1,7 @@
 """Projects: a configuration tree where each child is its parent with its own changes (added, taken away, swapped,
 moved, plugged in differently), changes flowing down, taking a change back, detaching, what is wrong (a harness not
-plugged in, plugged into the wrong device, two in one connector) and what building it needs."""
+plugged in, not into a connector of the device, two in one connector, a pin the device connector hasn't, a signal not
+the pin's) and what building it needs. Which device connector a harness's connector plugs into is the diagram's."""
 from decimal import Decimal
 
 from django.urls import reverse
@@ -21,7 +22,8 @@ class ProjectBase(HarnessBase):
         cls.base = Configuration.objects.create(project=cls.project, name='Base')
         cls.ctrl = configs.place(cls.base, kind='device', device_id=cls.controller.pk, label='Controller')
         cls.load = configs.place(cls.base, kind='device', device_id=cls.board.pk, label='Load board 1', x=300)
-        cls.loom = configs.place(cls.base, kind='harness', harness_id=cls.harness.pk, ends=configs.plug(cls.base, cls.harness))
+        cls.loom = configs.place(cls.base, kind='harness', harness_id=cls.harness.pk,
+                                 ends={str(cls.p1.pk): [cls.ctrl, cls.j1.pk], str(cls.p2.pk): [cls.load, cls.board_j1.pk]})
         cls.child = Configuration.objects.create(project=cls.project, name='Two load boards', parent=cls.base)
 
     def labels(self, config):
@@ -29,10 +31,26 @@ class ProjectBase(HarnessBase):
 
 
 class TreeTests(ProjectBase):
-    def test_a_harness_plugs_itself_in_where_one_device_fits(self):
-        ends = configs.resolve(self.base)[self.loom]['ends']
-        self.assertEqual(ends, {str(self.p1.pk): self.ctrl, str(self.p2.pk): self.load})
+    def test_a_harness_plugs_itself_in_where_one_connector_of_its_family_is_free(self):
+        from harnesses.models import Harness
+        from inventory.models import Family
+        dsub = Family.objects.create(name='D-sub 9')
+        Connector.objects.filter(pk=self.board_j1.pk).update(family=dsub)
+        spare = Harness.objects.create(project=self.project, name='Spare')
+        end = HarnessEnd.objects.create(harness=spare, designator='P1', family=dsub)
+        self.assertEqual(configs.plug(self.base, spare), {})                     # its one fitting connector is taken
+        configs.place(self.base, self.loom, ends={str(self.p1.pk): [self.ctrl, self.j1.pk]})
+        self.assertEqual(configs.plug(self.base, spare), {str(end.pk): [self.load, self.board_j1.pk]})
+        wanted = configs.plug(self.base, spare, {str(end.pk): f'{self.ctrl}:{self.j1.pk}'})   # picked in the list
+        self.assertEqual(wanted, {str(end.pk): [self.ctrl, self.j1.pk]})
+
+    def test_the_device_pins_a_harness_meets(self):
         self.assertEqual(configs.problems(self.base), [])
+        self.connect('6', '7', signal='CAN H')                                   # crossed over
+        self.connect('9', '3')
+        texts = [t for _, t in configs.problems(self.base)]
+        self.assertIn(f'{self.harness.number} P1:6 → P2:7: the wire carries "CAN H", LOAD-1 J1:7 is "CAN L".', texts)
+        self.assertIn(f'CTRL-1 J1 has no pin 9 ({self.harness.number} P1:9 → P2:3).', texts)
 
     def test_a_child_is_its_parent_with_its_changes_and_changes_flow_down(self):
         self.assertEqual(self.labels(self.child), ['Controller', 'Load board 1'])
@@ -61,10 +79,10 @@ class TreeTests(ProjectBase):
         other = Device.objects.create(number='LOAD-2', name='Bigger load board')
         Connector.objects.create(device=other, designator='J1')
         configs.place(self.child, self.load, device_id=other.pk)
-        self.assertIn(f'{self.harness.number} P2 is for LOAD-1 J1, but Load board 1 is a LOAD-2 Bigger load board.',
+        self.assertIn(f'{self.harness.number} P2 is plugged into Load board 1, but not into one of its connectors.',
                       [t for _, t in configs.problems(self.child)])
-        configs.place(self.child, self.loom, ends={str(self.p1.pk): self.ctrl, str(self.p2.pk): self.ctrl})
-        self.assertTrue(any('is for LOAD-1 J1' in t for _, t in configs.problems(self.child)))
+        configs.place(self.child, self.loom, ends={str(self.p1.pk): [self.ctrl, self.j1.pk], str(self.p2.pk): [self.ctrl, self.board_j1.pk]})
+        self.assertTrue(any('P2 is plugged into Controller, but not' in t for _, t in configs.problems(self.child)))
 
     def test_detach_and_copy(self):
         configs.place(self.child, kind='device', device_id=self.board.pk, label='Load board 2')
@@ -117,8 +135,8 @@ class PageTests(ProjectBase):
     def test_two_harnesses_in_one_connector(self):
         from harnesses.models import Harness
         other = Harness.objects.create(project=self.project, name='Spare loom')
-        HarnessEnd.objects.create(harness=other, designator='P1', connector=self.j1)
-        configs.place(self.base, kind='harness', harness_id=other.pk, ends=configs.plug(self.base, other))
+        end = HarnessEnd.objects.create(harness=other, designator='P1')
+        configs.place(self.base, kind='harness', harness_id=other.pk, ends={str(end.pk): [self.ctrl, self.j1.pk]})
         self.assertTrue(any('both plug into Controller J1' in t for _, t in configs.problems(self.base)))
 
 
@@ -132,11 +150,11 @@ class ConnectTests(ProjectBase):
         harness = self.project.harnesses.get(name='Controller J1 to board J1')
         self.assertContains(response, f'{harness} is made, with 3 wires.')
         p1, p2 = harness.ends.all()
-        self.assertEqual((p1.designator, p1.connector, p2.designator, p2.connector), ('P1', self.j1, 'P2', self.board_j1))
+        self.assertEqual((p1.designator, p2.designator), ('P1', 'P2'))
         self.assertEqual(sorted((w.from_pin, w.to_pin, w.signal, w.wire_set, w.set_type) for w in harness.wires.all()),
                          [('1', '1', '+24 V', '', 'Straight'), ('2', '3', '0 V', '', 'Straight'), ('6', '2', 'CAN H', 'CAN', 'Twisted')])
         row = next(r for r in configs.resolve(self.child).values() if r['harness_id'] == harness.pk)
-        self.assertEqual(row['ends'], {str(p1.pk): self.ctrl, str(p2.pk): self.load})   # placed here, plugged in
+        self.assertEqual(row['ends'], {str(p1.pk): [self.ctrl, self.j1.pk], str(p2.pk): [self.load, self.board_j1.pk]})   # placed here, plugged in
         self.assertFalse(any(r['harness_id'] == harness.pk for r in configs.resolve(self.base).values()))
 
     def test_what_can_t_be_connected(self):

@@ -183,6 +183,12 @@ a.tile:hover { border-color: var(--brand); text-decoration: none; }
 .tabs { display: flex; gap: 2px; }
 .tabs a { padding: 3px 10px; border-radius: var(--radius); color: var(--text); }
 .tabs a.on { background: var(--brand-soft); color: var(--brand-dark); font-weight: 600; }
+.page-tabs { border-bottom: 1px solid var(--border); margin: 4px 0 12px; gap: 4px; flex-wrap: wrap; }
+.page-tabs a { padding: 7px 14px; border-radius: var(--radius) var(--radius) 0 0; margin-bottom: -1px; border: 1px solid transparent; text-decoration: none; }
+.page-tabs a:hover { background: var(--hover); }
+.page-tabs a.on { background: var(--panel); border-color: var(--border); border-bottom-color: var(--panel); color: var(--text); }
+.tab-panel[hidden] { display: none; }
+.tab-side { max-width: 720px; }
 dl.details { display: grid; grid-template-columns: 130px 1fr; gap: 2px 10px; margin: 0 0 6px; }
 dl.details dt { color: var(--muted); }
 dl.details dd { margin: 0; }
@@ -460,6 +466,7 @@ form.inline { display: inline; }
 @media (max-width: 800px) { .doc-page, .history { grid-template-columns: 1fr; } .doc-nav { position: static; } }
 
 /* Parts: the categories as a tree, the parts of the one picked, the details of the part picked */
+.used-in { margin: -6px 0 12px; color: var(--muted); }
 .tree-cell { padding-left: calc(8px + var(--depth, 0) * 1.4em) !important; }
 .tree-cell .tree-elbow { color: var(--faint); margin-right: 4px; }
 tr.muted > td > a { color: var(--muted); }

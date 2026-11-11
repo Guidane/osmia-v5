@@ -1,4 +1,4 @@
-"""Harnesses: ends plugged into device connectors, the pinout edited as a table (signals from the devices' pins),
+"""Harnesses: their connectors (what they plug into is the wire diagram's to say), the pinout edited as a table,
 what is wrong with it, its parts list, versions, and building one: a serial number, a checklist, parts out of stock."""
 from decimal import Decimal
 
@@ -25,8 +25,8 @@ class HarnessBase(DeviceBase):
             Pin.objects.create(connector=cls.board_j1, number=number, signal=signal)
         cls.project = Project.objects.create(name='Burn-in rack')
         cls.harness = Harness.objects.create(project=cls.project, name='Bus loom')
-        cls.p1 = HarnessEnd.objects.create(harness=cls.harness, designator='P1', part=cls.plug, connector=cls.j1)
-        cls.p2 = HarnessEnd.objects.create(harness=cls.harness, designator='P2', part=cls.plug, connector=cls.board_j1, position=1)
+        cls.p1 = HarnessEnd.objects.create(harness=cls.harness, designator='P1', part=cls.plug)
+        cls.p2 = HarnessEnd.objects.create(harness=cls.harness, designator='P2', part=cls.plug, position=1)
 
     def connect(self, a, b, signal='', **more):
         return Wire.objects.create(harness=self.harness, from_end=self.p1, from_pin=a, to_end=self.p2, to_pin=b, signal=signal, **more)
@@ -44,12 +44,9 @@ class PinoutTests(HarnessBase):
             'r3_seen': 1})
         self.assertRedirects(response, reverse('harnesses:harness', args=[self.harness.pk]))
         wires = {w.from_pin: w for w in self.harness.wires.all()}
-        self.assertEqual(wires['1'].signal, '+24 V')                           # taken from the device's pin
-        self.assertEqual((wires['6'].wire_set, wires['6'].set_type), ('CAN', 'Twisted'))   # its set too
+        self.assertEqual((wires['1'].signal, wires['9'].signal), ('', 'GND'))   # its own: it knows no device
         self.assertEqual((wires['1'].wire_set, wires['1'].set_type), ('', 'Straight'))
-        texts = [t for _, t in self.harness.problems()]
-        self.assertIn('P1:6 → P2:7: the wire carries "CAN H", LOAD-1 J1:7 is "CAN L".', texts)
-        self.assertIn('CTRL-1 J1 has no pin 9 (P1:9 → P2:3).', texts)
+        self.assertEqual(self.harness.problems(), [])                           # the devices' pins: the wire diagram's to check
         self.assertIn((self.wire, Decimal('0.45')), self.harness.parts_list())   # metres of wire
         self.assertIn((self.plug, Decimal(2)), self.harness.parts_list())                 # its two ends
         response = self.client.post(reverse('harnesses:pinout', args=[self.harness.pk]), {
@@ -75,10 +72,13 @@ class PinoutTests(HarnessBase):
         from inventory.models import Branch, Family
         self.connect('6', '2', wire_set='CAN', set_type='Twisted')
         page = self.client.get(reverse('harnesses:harness', args=[self.harness.pk]))
+        self.assertContains(page, f'?project={self.harness.project_id}&amp;harness={self.harness.pk}">← Harnesses')   # back: the list
+        self.assertContains(page, 'Used in wire diagram')
+        for tab in ('pinout', 'wires', 'connectors', 'parts', 'versions', 'built', 'notes'):         # the page in tabs
+            self.assertContains(page, f'data-panel="{tab}"')
         p1, p2 = page.context['drawing']['ends']
         self.assertEqual(p1['face']['shape'], 'rect')                                    # nothing known: a row of its pins
-        self.assertEqual([c[0] for c in p1['face']['contacts']], ['1', '2', '3', '4', '5', '6', '7'])
-        self.assertEqual([n for n, _ in p1['pins']], ['1', '2', '6', '7'])                  # the device connector's pins
+        self.assertEqual(([n for n, _ in p1['pins']], [n for n, _ in p2['pins']]), (['6'], ['2']))   # only the pins its wires use
         dsub = Family.objects.create(name='D-sub 9', face=start('staggered', 9))
         self.plug.family = dsub
         self.plug.save()
@@ -134,7 +134,7 @@ class PinoutTests(HarnessBase):
         url = reverse('harnesses:pinout_draw', args=[self.harness.pk])
         drawing = self.client.post(url, {'action': 'add', 'from_end': self.p1.pk, 'from_pin': '6', 'to_end': self.p2.pk, 'to_pin': '2'}).json()
         wire = Wire.objects.get()
-        self.assertEqual((wire.from_pin, wire.to_pin, wire.signal), ('6', '2', 'CAN H'))   # the device pin's signal
+        self.assertEqual((wire.from_pin, wire.to_pin, wire.signal), ('6', '2', ''))   # a purpose: given in the drawing
         self.assertEqual(drawing['wires'][0]['id'], wire.pk)
         self.client.post(url, {'action': 'set', 'wire': wire.pk, 'set': 'new:Shielded twisted'})
         wire.refresh_from_db()

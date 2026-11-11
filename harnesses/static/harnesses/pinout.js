@@ -220,7 +220,6 @@
         var left = side[e.id] === 'left', f = faces[e.id];
         var fx = left ? x.leftFace + widest.left - f.w : x.rightFace, fy = y0 - 10;
         text(over, left ? x.leftFace : width - 10, y0 - 34, e.designator + (e.what ? ' · ' + e.what : ''), 'pd-title' + (left ? '' : ' end'));
-        if (e.plugs) text(over, left ? x.leftFace : width - 10, y0 - 20, '→ ' + e.plugs, 'pd-sub' + (left ? '' : ' end'));
         outline(under, f, fx, fy);
         if (editing) {   // its family (and gender) changed in the family popup, or taken away with its wires
           var fo = el('foreignObject', { x: left ? x.leftFace : width - 10 - 240, y: fy + f.h + 6, width: 240, height: 28 }, tools);
