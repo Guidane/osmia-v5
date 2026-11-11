@@ -49,3 +49,31 @@ class ProjectTests(Base):
         self.assertEqual(page.context['own'].initial['in_project'], str(project.pk))
         self.client.post(reverse('projects:new'), {'name': 'Rack', 'in_project': project.pk})
         self.assertEqual(WireDiagram.objects.get().in_project, project)
+
+    def test_sub_projects(self):
+        rack = Project.objects.create(name='Burn-in rack', code='BR')
+        response = self.client.post(reverse('work:new') + f'?parent={rack.pk}', {'name': 'Load boards', 'code': 'BR-LB', 'status': 'active', 'parent': rack.pk})
+        boards = Project.objects.get(code='BR-LB')
+        self.assertEqual(boards.parent, rack)
+        self.assertEqual(self.client.get(reverse('work:new'), {'parent': rack.pk}).context['form'].initial['parent'], str(rack.pk))
+        deep = Project.objects.create(name='Board rev B', code='BR-LB-B', parent=boards)
+        changed = self.client.post(reverse('work:edit', args=[rack.pk]), {'name': 'Burn-in rack', 'status': 'active', 'parent': deep.pk})
+        self.assertEqual(changed.status_code, 200)                                          # not under one of its own
+        rack.refresh_from_db()
+        self.assertIsNone(rack.parent)
+        # what the sub-projects have shows on the project too, marked with where it is from
+        device = Device.objects.create(number='LB-1', name='Load board')
+        deep.devices.add(device)
+        tool = Asset.objects.create(number='T-9', name='Crimper', kind='tool')
+        boards.assets.add(tool)
+        WireDiagram.objects.create(name='Boards', in_project=deep)
+        page = self.client.get(rack.get_absolute_url())
+        self.assertEqual(list(page.context['children']), [boards])
+        self.assertEqual([(d, d.via) for d in page.context['sub_devices']], [(device, deep)])
+        self.assertEqual([(t, t.via) for t in page.context['sub_tools']], [(tool, boards)])
+        self.assertEqual([d.name for d in page.context['sub_diagrams']], ['Boards'])
+        self.assertContains(page, 'BR-LB-B')
+        # the list: a tree; a sub-project found stands under the project it is part of
+        listed = self.client.get(reverse('work:list'), {'q': 'rev B'})
+        self.assertEqual([(p.name, p.depth, p.matched) for p in listed.context['projects']],
+                         [('Burn-in rack', 0, False), ('Load boards', 1, False), ('Board rev B', 2, True)])

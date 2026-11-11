@@ -1,9 +1,10 @@
-"""Projects: the list, a project's page (its wire diagrams, orders, devices, assets and tools, notes, files and
-documentation), making and changing one, and adding things to it or taking them out."""
+"""Projects: the list (a tree: sub-projects under the project they are part of), a project's page (its sub-projects;
+its wire diagrams, orders, devices, assets and tools, and those of its sub-projects; notes, files and documentation),
+making and changing one, and adding things to it or taking them out."""
 from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Q
+from django.db.models import Count, Min, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -23,8 +24,16 @@ class ProjectForm(TreeForm):
 
     class Meta:
         model = Project
-        fields = ['code', 'name', 'status', 'owner', 'department', 'description', 'notes']
+        fields = ['code', 'name', 'parent', 'status', 'owner', 'department', 'description', 'notes']
         widgets = {'description': forms.Textarea(attrs={'rows': 3}), 'notes': forms.Textarea(attrs={'rows': 6})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)   # the projects it can be part of: not itself, nor one under it
+        inside = self.instance.below() if self.instance.pk else set()
+        self.fields['parent'].choices = [('', '—')] + [(p.pk, '\u2003' * depth + str(p)) for p, depth in Project.ordered() if p.pk not in inside]
+
+    def clean_parent(self):
+        return self._not_inside_itself('parent', 'A project cannot be part of itself or of one of its sub-projects.')
 
 
 @login_required
@@ -38,21 +47,53 @@ def project_list(request):
     q = request.GET.get('q', '').strip()
     if q:
         found = found.filter(Q(name__icontains=q) | Q(code__icontains=q) | Q(description__icontains=q))
-    return render(request, 'work/list.html', {'projects': found, 'shown': shown, 'statuses': Project.Status.choices, 'q': q})
+    every = {p.pk: p for p in Project.objects.select_related('owner').annotate(
+        n_diagrams=Count('wire_diagrams', distinct=True), n_orders=Count('orders', distinct=True),
+        n_devices=Count('devices', distinct=True), n_assets=Count('assets', distinct=True))}
+    matched = set(found.values_list('pk', flat=True))
+    shown_pks = set(matched)   # those found, and the projects they are part of (to stand under)
+    for pk in matched:
+        shown_pks.update(every[pk].chain_pks())
+    rows = []
+    for p, depth in Project.ordered(every.values()):
+        if p.pk in shown_pks:
+            p.depth, p.matched = depth, p.pk in matched
+            rows.append(p)
+    return render(request, 'work/list.html', {'projects': rows, 'shown': shown, 'statuses': Project.Status.choices, 'q': q})
 
 
 @login_required
 def project_form(request, pk=None):
     item = get_object_or_404(Project, pk=pk) if pk else None
-    return edit_page(request, ProjectForm(request.POST or None, instance=item, initial=initial_for(item, owner=request.user.pk)), 'project')
+    initial = initial_for(item, owner=request.user.pk, parent=request.GET.get('parent'))
+    return edit_page(request, ProjectForm(request.POST or None, instance=item, initial=initial), 'project')
 
 
 @login_required
 def project(request, pk):
     item = get_object_or_404(Project.objects.select_related('owner', 'department'), pk=pk)
     assets = list(item.assets.select_related('location', 'keeper'))
-    return render(request, 'work/project.html', {
+    under = {p.pk: p for p in Project.objects.filter(pk__in=item.below() - {item.pk})}   # its sub-projects, all the way down
+
+    def rolled(things, own, via):   # what its sub-projects have (and it hasn't itself), each with the sub-project it is from
+        seen, out = {t.pk for t in own}, []
+        for t in things:
+            if t.pk not in seen:
+                seen.add(t.pk)
+                t.via = under[via(t)]
+                out.append(t)
+        return out
+    sub_assets = rolled(Asset.objects.filter(work_projects__in=under).select_related('location').annotate(via_pk=Min('work_projects', filter=Q(work_projects__in=under))).order_by('number'),
+                        assets, lambda t: t.via_pk)
+    context = {
         'project': item,
+        'children': item.children.order_by('code', 'name'),
+        'sub_diagrams': rolled(WireDiagram.objects.filter(in_project__in=under).prefetch_related('harnesses'), [], lambda t: t.in_project_id),
+        'sub_orders': rolled(Order.objects.filter(in_project__in=under).select_related('vendor'), [], lambda t: t.in_project_id),
+        'sub_devices': rolled(Device.objects.filter(work_projects__in=under).annotate(via_pk=Min('work_projects', filter=Q(work_projects__in=under))).order_by('number'),
+                              item.devices.all(), lambda t: t.via_pk),
+        'sub_assets': [a for a in sub_assets if a.kind != Asset.Kind.TOOL],
+        'sub_tools': [a for a in sub_assets if a.kind == Asset.Kind.TOOL],
         'diagrams': item.wire_diagrams.prefetch_related('harnesses'),
         'orders': item.orders.select_related('vendor', 'created_by'),
         'devices': item.devices.all(),
@@ -63,7 +104,9 @@ def project(request, pk):
         'other_devices': Device.objects.exclude(pk__in=item.devices.values('pk')),
         'other_assets': Asset.objects.exclude(pk__in=item.assets.values('pk')).exclude(kind=Asset.Kind.TOOL),
         'other_tools': Asset.objects.exclude(pk__in=item.assets.values('pk')).filter(kind=Asset.Kind.TOOL),
-    })
+    }
+    context['n_sub'] = {k: len(context['sub_' + k]) for k in ('diagrams', 'orders', 'devices', 'assets', 'tools')}
+    return render(request, 'work/project.html', context)
 
 
 @login_required

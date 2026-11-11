@@ -1,4 +1,5 @@
-"""Assets: the list (by kind, category and status, those due for calibration), an asset's page (checking it out and
+"""Assets: the list (like the parts: the categories as a tree on the left, the assets of the one picked in the middle,
+by status, those due for calibration; the details of the asset picked on the right), an asset's page (checking it out and
 back, calibration, sending it away, putting it on an order, a harness's checklist, its history and what links to it)."""
 from datetime import date
 
@@ -8,7 +9,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -78,10 +79,32 @@ def asset_list(request):
                                           [(a.number, a.name, a.get_kind_display(), a.category.path if a.category else '', a.manufacturer, a.model,
                                             a.serial, a.location.path if a.location else '', str(a.keeper or ''), a.get_status_display(),
                                             str(a.holder or ''), a.calibrated_on, a.calibration_due) for a in assets])])
+    tree = Category.of(Category.Kind.ASSETS)
+    own = dict(Asset.objects.exclude(status=Asset.Status.RETIRED).values('category').annotate(n=Count('pk')).values_list('category', 'n'))
+    children = {}
+    for c, _ in tree:
+        children.setdefault(c.parent_id, []).append(c.pk)
+
+    def counted(pk):   # its assets and those of the categories under it
+        return own.get(pk, 0) + sum(counted(child) for child in children.get(pk, []))
+    picked = Asset.objects.filter(pk=request.GET.get('asset') or 0).first()
     return render(request, 'assets/list.html', {
         'rows': kept.columns(assets, attributes, AssetStore()), 'attributes': attributes, 'filters': kept.filters(attributes, request.GET),
-        'q': q, 'category': category, 'status': status, 'categories': Category.of(Category.Kind.ASSETS),
-        'statuses': Asset.Status.choices})
+        'q': q, 'category': category, 'status': status, 'categories': [(c, depth, counted(c.pk)) for c, depth in tree],
+        'open': set(category.chain_pks()) if category else set(), 'every': sum(own.values()),
+        'statuses': Asset.Status.choices, 'picked': picked, 'brief': _brief(picked) if picked else None})
+
+
+def _brief(asset):
+    """What the details beside the asset list show of ``asset``."""
+    return {'asset': asset, 'attributes': kept.shown(asset, asset.category), 'events': asset.events.select_related('user')[:8]}
+
+
+@login_required
+def asset_brief(request, pk):
+    """The details of an asset beside the asset list (fetched when one is picked)."""
+    item = get_object_or_404(Asset.objects.select_related('category', 'location', 'keeper', 'holder', 'device', 'harness'), pk=pk)
+    return render(request, 'assets/_brief.html', _brief(item))
 
 
 @login_required

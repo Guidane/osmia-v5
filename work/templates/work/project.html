@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% load osmia %}
 {% block title %}{{ project }} · Osmia{% endblock %}
 {% block content %}
-<p class="small"><a href="{% url 'work:list' %}">← Projects</a></p>
+<p class="small"><a href="{% url 'work:list' %}">← Projects</a>{% for p in project.chain %}{% if p != project %} › <a href="{{ p.get_absolute_url }}">{{ p }}</a>{% endif %}{% endfor %}</p>
 <div class="page-head"><h1>{{ project }}</h1>
   <span class="badge{% if project.status == 'active' %} ok{% endif %}">{{ project.get_status_display }}</span>
   <span class="spacer"></span><a class="btn" href="{% url 'work:edit' project.pk %}">Change</a></div>
@@ -14,41 +14,57 @@
   </section>{% endif %}
 
   <section class="card flush">
-    <div class="card-head"><h3>Wire diagrams <span class="muted small">{{ diagrams|length }}</span></h3><a class="btn small" href="{% url 'projects:new' %}?in_project={{ project.pk }}">＋ New</a></div>
+    <div class="card-head"><h3>Sub-projects <span class="muted small">{{ children|length }}</span></h3><a class="btn small" href="{% url 'work:new' %}?parent={{ project.pk }}">＋ Sub-project</a></div>
+    <table class="list">{% for c in children %}<tr><td><a href="{{ c.get_absolute_url }}">{{ c }}</a> <span class="muted small">{{ c.description|truncatechars:80 }}</span></td>
+      <td><span class="badge{% if c.status == 'active' %} ok{% endif %}">{{ c.get_status_display }}</span></td><td class="small">{{ c.owner|default:"" }}</td></tr>
+    {% empty %}<tr><td class="empty small">No sub-projects.</td></tr>{% endfor %}</table>
+  </section>
+
+  <section class="card flush">
+    <div class="card-head"><h3>Wire diagrams <span class="muted small">{{ diagrams|length|add:n_sub.diagrams }}</span></h3><a class="btn small" href="{% url 'projects:new' %}?in_project={{ project.pk }}">＋ New</a></div>
     <table class="list">{% for d in diagrams %}<tr><td><a href="{{ d.get_absolute_url }}">{{ d }}</a></td><td class="small muted">{{ d.harnesses.all|length }} harness{{ d.harnesses.all|length|pluralize:"es" }}</td>
-      <td class="num">{% include "work/_out.html" with what="diagram" id=d.pk name=d %}</td></tr>{% endfor %}</table>
+      <td class="num">{% include "work/_out.html" with what="diagram" id=d.pk name=d %}</td></tr>{% endfor %}
+      {% for d in sub_diagrams %}<tr><td><a href="{{ d.get_absolute_url }}">{{ d }}</a> {% include "work/_via.html" with via=d.via %}</td><td class="small muted">{{ d.harnesses.all|length }} harness{{ d.harnesses.all|length|pluralize:"es" }}</td><td></td></tr>{% endfor %}</table>
     {% include "work/_add.html" with what="diagram" choices=free_diagrams label="A wire diagram" %}
   </section>
 
   <section class="card flush">
-    <div class="card-head"><h3>Orders <span class="muted small">{{ orders|length }}</span></h3><a class="btn small" href="{% url 'orders:new' %}?in_project={{ project.pk }}">＋ New</a></div>
+    <div class="card-head"><h3>Orders <span class="muted small">{{ orders|length|add:n_sub.orders }}</span></h3><a class="btn small" href="{% url 'orders:new' %}?in_project={{ project.pk }}">＋ New</a></div>
     <table class="list">{% for o in orders %}<tr><td><a href="{{ o.get_absolute_url }}">{{ o.number }}</a> <span class="small">{{ o.vendor|default:"" }}</span></td>
       <td><span class="badge{% if o.status == 'received' %} ok{% elif o.status == 'cancelled' %} failed{% endif %}">{{ o.get_status_display }}</span></td>
       <td class="small muted nowrap">{{ o.created_at|date:"j M Y" }}</td>
-      <td class="num">{% include "work/_out.html" with what="order" id=o.pk name=o.number %}</td></tr>{% endfor %}</table>
+      <td class="num">{% include "work/_out.html" with what="order" id=o.pk name=o.number %}</td></tr>{% endfor %}
+      {% for o in sub_orders %}<tr><td><a href="{{ o.get_absolute_url }}">{{ o.number }}</a> <span class="small">{{ o.vendor|default:"" }}</span> {% include "work/_via.html" with via=o.via %}</td>
+      <td><span class="badge{% if o.status == 'received' %} ok{% elif o.status == 'cancelled' %} failed{% endif %}">{{ o.get_status_display }}</span></td>
+      <td class="small muted nowrap">{{ o.created_at|date:"j M Y" }}</td><td></td></tr>{% endfor %}</table>
     {% include "work/_add.html" with what="order" choices=free_orders label="An order" %}
   </section>
 
   <section class="card flush">
-    <div class="card-head"><h3>Devices <span class="muted small">{{ devices|length }}</span></h3></div>
+    <div class="card-head"><h3>Devices <span class="muted small">{{ devices|length|add:n_sub.devices }}</span></h3></div>
     <table class="list">{% for d in devices %}<tr><td class="thumb-cell">{% thumb d %}</td><td><a href="{{ d.get_absolute_url }}">{{ d.number }}</a> <span class="small">{{ d.name }}</span></td>
-      <td class="num">{% include "work/_out.html" with what="device" id=d.pk name=d.number %}</td></tr>{% endfor %}</table>
+      <td class="num">{% include "work/_out.html" with what="device" id=d.pk name=d.number %}</td></tr>{% endfor %}
+      {% for d in sub_devices %}<tr><td class="thumb-cell">{% thumb d %}</td><td><a href="{{ d.get_absolute_url }}">{{ d.number }}</a> <span class="small">{{ d.name }}</span> {% include "work/_via.html" with via=d.via %}</td><td></td></tr>{% endfor %}</table>
     {% include "work/_add.html" with what="device" choices=other_devices label="A device" %}
   </section>
 
   <section class="card flush">
-    <div class="card-head"><h3>Assets <span class="muted small">{{ assets|length }}</span></h3></div>
+    <div class="card-head"><h3>Assets <span class="muted small">{{ assets|length|add:n_sub.assets }}</span></h3></div>
     <table class="list">{% for a in assets %}<tr><td class="thumb-cell">{% thumb a %}</td><td><a href="{{ a.get_absolute_url }}">{{ a.number }}</a> <span class="small">{{ a.name }}</span></td>
       <td class="small muted">{{ a.location|default:"" }}</td>
-      <td class="num">{% include "work/_out.html" with what="asset" id=a.pk name=a.number %}</td></tr>{% endfor %}</table>
+      <td class="num">{% include "work/_out.html" with what="asset" id=a.pk name=a.number %}</td></tr>{% endfor %}
+      {% for a in sub_assets %}<tr><td class="thumb-cell">{% thumb a %}</td><td><a href="{{ a.get_absolute_url }}">{{ a.number }}</a> <span class="small">{{ a.name }}</span> {% include "work/_via.html" with via=a.via %}</td>
+      <td class="small muted">{{ a.location|default:"" }}</td><td></td></tr>{% endfor %}</table>
     {% include "work/_add.html" with what="asset" choices=other_assets label="An asset" %}
   </section>
 
   <section class="card flush">
-    <div class="card-head"><h3>Tools <span class="muted small">{{ tools|length }}</span></h3></div>
+    <div class="card-head"><h3>Tools <span class="muted small">{{ tools|length|add:n_sub.tools }}</span></h3></div>
     <table class="list">{% for a in tools %}<tr><td class="thumb-cell">{% thumb a %}</td><td><a href="{{ a.get_absolute_url }}">{{ a.number }}</a> <span class="small">{{ a.name }}</span></td>
       <td class="small muted">{{ a.location|default:"" }}</td>
-      <td class="num">{% include "work/_out.html" with what="asset" id=a.pk name=a.number %}</td></tr>{% endfor %}</table>
+      <td class="num">{% include "work/_out.html" with what="asset" id=a.pk name=a.number %}</td></tr>{% endfor %}
+      {% for a in sub_tools %}<tr><td class="thumb-cell">{% thumb a %}</td><td><a href="{{ a.get_absolute_url }}">{{ a.number }}</a> <span class="small">{{ a.name }}</span> {% include "work/_via.html" with via=a.via %}</td>
+      <td class="small muted">{{ a.location|default:"" }}</td><td></td></tr>{% endfor %}</table>
     {% include "work/_add.html" with what="asset" choices=other_tools label="A tool" %}
   </section>
 </div>

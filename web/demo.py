@@ -313,10 +313,14 @@ def _work(user, engineering, diagram, devices, psu, parts, orders):
     burn = Work.objects.create(code='BR', name='Burn-in rack', owner=user, department=engineering,
                                description='The burn-in rack: a controller, its load boards, the rack hub and the five devices it feeds.',
                                notes='Ready for the test lab by the end of the quarter.')
-    burn.devices.set(devices.values())
-    burn.assets.set(list(Asset.objects.filter(device__in=devices.values())) + tools)
+    burn.assets.set(tools)
     Project.objects.filter(pk=diagram.pk).update(in_project=burn)
     Order.objects.filter(pk__in=[o.pk for o in orders[:3]]).update(in_project=burn)
+    for device in sorted(devices.values(), key=lambda d: d.number):   # a sub-project for each of its devices, with the units built
+        sub = Work.objects.create(code=f'BR-{device.number.split("-")[0]}', name=device.name, parent=burn, owner=user,
+                                  department=engineering, description=f'The {device.name.lower()} of the burn-in rack.')
+        sub.devices.set([device])
+        sub.assets.set(Asset.objects.filter(device=device))
     lab = Work.objects.create(code='LAB', name='Lab upkeep', owner=user, department=engineering,
                               description='Keeping the lab going: tools, instruments, the bench supply.')
     lab.devices.set([psu])

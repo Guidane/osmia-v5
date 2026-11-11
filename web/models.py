@@ -57,6 +57,21 @@ class TreeWalk:
             todo = list(type(self).objects.filter(parent_id__in=todo).exclude(pk__in=found).values_list('pk', flat=True))
         return found
 
+    @classmethod
+    def ordered(cls, nodes=None):
+        """Every node (or those of ``nodes``, whole trees), depth first, as (node, depth): for lists and dropdowns."""
+        children = {}
+        for node in cls.objects.all() if nodes is None else nodes:
+            children.setdefault(node.parent_id, []).append(node)
+        out = []
+
+        def walk(parent, depth):
+            for node in children.get(parent, []):
+                out.append((node, depth))
+                walk(node.pk, depth + 1)
+        walk(None, 0)
+        return out
+
 
 class Tree(TreeWalk, models.Model):
     """A record with a parent of its own kind: categories, locations."""
@@ -76,20 +91,6 @@ class Tree(TreeWalk, models.Model):
         return ' / '.join(node.name for node in self.chain())
 
 
-    @classmethod
-    def ordered(cls, nodes=None):
-        """Every node (or those of ``nodes``, whole trees), depth first, as (node, depth): for lists and dropdowns."""
-        children = {}
-        for node in cls.objects.all() if nodes is None else nodes:
-            children.setdefault(node.parent_id, []).append(node)
-        out = []
-
-        def walk(parent, depth):
-            for node in children.get(parent, []):
-                out.append((node, depth))
-                walk(node.pk, depth + 1)
-        walk(None, 0)
-        return out
 
 
 IMAGES = ('png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp')

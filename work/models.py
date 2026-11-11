@@ -1,11 +1,13 @@
 """Projects: what the work is for. A wire diagram or an order is of one project; a device or an asset (a tool too) can
-be in several."""
+be in several. A project can be part of another (a sub-project), as deep as need be."""
 from django.conf import settings
 from django.db import models
 from django.urls import reverse
 
+from web.models import TreeWalk
 
-class Project(models.Model):
+
+class Project(TreeWalk, models.Model):
     class Status(models.TextChoices):
         ACTIVE = 'active', 'Active'
         ON_HOLD = 'on_hold', 'On hold'
@@ -13,6 +15,7 @@ class Project(models.Model):
 
     code = models.CharField(max_length=50, blank=True)
     name = models.CharField(max_length=200)
+    parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.PROTECT, related_name='children', verbose_name='part of')
     status = models.CharField(max_length=10, choices=Status, default=Status.ACTIVE)
     description = models.TextField(blank=True)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')

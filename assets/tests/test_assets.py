@@ -56,6 +56,11 @@ class AssetTests(Base):
         page = self.client.get(reverse('assets:list'), {'category': self.tools.pk})
         self.assertContains(page, 'T-001')
         self.assertNotContains(page, 'PSU-01')
+        counts = {c.pk: n for c, _, n in page.context['categories']}                     # the tree: each with what is under it
+        self.assertEqual(counts[self.tools.pk], 1)
+        picked = self.client.get(reverse('assets:list'), {'asset': self.tool.pk})        # its details beside the list
+        self.assertEqual(picked.context['brief']['asset'], self.tool)
+        self.assertContains(self.client.get(reverse('assets:brief', args=[self.tool.pk])), self.tool.name)
         service.send_away(self.tool, self.ada, Asset.Status.RETIRED)
         self.assertNotContains(self.client.get(reverse('assets:list')), 'T-001')
         self.assertContains(self.client.get(reverse('assets:list'), {'status': 'retired'}), 'T-001')

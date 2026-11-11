@@ -1,32 +1,48 @@
 {% extends "base.html" %}{% load osmia %}
 {% block title %}Assets · Osmia{% endblock %}
+{% block content_class %}wide{% endblock %}
 {% block content %}
 <div class="page-head"><h1>Assets</h1><span class="spacer"></span>
   <a class="btn" href="?{{ request.GET.urlencode }}{% if request.GET %}&amp;{% endif %}export=1">⬇ Excel</a>
   <button type="button" class="btn" data-labels="{% url 'web:labels' 'asset' %}" title="Labels of the ticked assets (none ticked: of all listed)">🏷 Labels</button>
   <a class="btn" href="{% url 'inventory:categories' %}?kind=assets">Categories</a>
   <a class="btn primary" href="{% url 'assets:new' %}{% if category %}?category={{ category.pk }}{% endif %}">＋ New asset</a></div>
-<form method="get" class="filters">
-  <input type="search" name="q" value="{{ q }}" placeholder="Asset tag, name, category, model, serial…" aria-label="Search assets">
-  <select name="category" aria-label="Category" onchange="this.form.submit()"><option value="">Every category</option>
-    {% for c, depth in categories %}<option value="{{ c.pk }}"{% if category.pk == c.pk %} selected{% endif %}>{% for _ in ""|ljust:depth %}&nbsp;&nbsp;&nbsp;{% endfor %}{{ c.name }}</option>{% endfor %}</select>
-  <select name="status" aria-label="Status" onchange="this.form.submit()"><option value="">Not retired</option>
-    {% for value, label in statuses %}<option value="{{ value }}"{% if status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
-  <label class="small"><input type="checkbox" name="due" value="1"{% if request.GET.due %} checked{% endif %} onchange="this.form.submit()"> due for calibration</label>
-  {% include "inventory/_attribute_filters.html" %}
-</form>
-<div class="card flush">
-  <table class="list">
-    <tr><th><input type="checkbox" data-pick-all aria-label="Tick them all"></th><th></th><th>Asset tag</th><th>Name</th><th>Kind</th><th>Category</th>{% for a in attributes %}<th>{{ a.name }}</th>{% endfor %}<th>Kept at</th><th>Status</th><th>Calibration due</th></tr>
-    {% for a, values in rows %}<tr>
-      <td><input type="checkbox" name="pick" value="{{ a.pk }}" aria-label="{{ a.number }}"></td>
-      <td class="thumb-cell">{% thumb a %}</td><td><a href="{{ a.get_absolute_url }}">{{ a.number }}</a></td><td>{{ a.name }} <span class="muted small">{{ a.manufacturer }} {{ a.model }}</span></td>
-      <td class="small">{{ a.get_kind_display }}</td><td class="small">{{ a.category.name|default:"" }}</td>
-      {% for v in values %}<td class="small">{{ v }}</td>{% endfor %}<td class="small">{{ a.location.name|default:"" }}</td>
-      <td><span class="badge{% if a.status == 'available' or a.status == 'in_use' %} ok{% elif a.status == 'retired' or a.status == 'repair' %} failed{% endif %}">{{ a.get_status_display }}</span>{% if a.holder %} <span class="small">{{ a.holder }}</span>{% endif %}</td>
-      <td class="small{% if a.calibration_overdue %} error{% endif %}">{{ a.calibration_due|default:"" }}</td>
-    </tr>{% empty %}<tr><td colspan="{{ attributes|length|add:9 }}" class="empty small">No assets here.</td></tr>{% endfor %}
-  </table>
+<div class="parts-browser">
+  <nav class="card parts-tree" aria-label="Categories">
+    <a href="?{% if q %}q={{ q|urlencode }}{% endif %}"{% if not category %} class="on"{% endif %}><span>All assets</span><span class="muted small">{{ every }}</span></a>
+    {% for c, depth, n in categories %}<a href="?category={{ c.pk }}{% if q %}&amp;q={{ q|urlencode }}{% endif %}" style="--depth: {{ depth }}"
+      class="{% if category.pk == c.pk %}on{% elif c.pk in open %}open{% endif %}"><span>{{ c.name }}</span><span class="muted small">{{ n }}</span></a>{% endfor %}
+  </nav>
+
+  <div class="parts-middle">
+    <form method="get" class="filters">
+      {% if category %}<input type="hidden" name="category" value="{{ category.pk }}">{% endif %}
+      <input type="search" name="q" value="{{ q }}" placeholder="Asset tag, name, model, serial…" aria-label="Search assets">
+      <select name="status" aria-label="Status" onchange="this.form.submit()"><option value="">Not retired</option>
+        {% for value, label in statuses %}<option value="{{ value }}"{% if status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+      <label class="small"><input type="checkbox" name="due" value="1"{% if request.GET.due %} checked{% endif %} onchange="this.form.submit()"> due for calibration</label>
+      <button class="btn">Find</button>
+      {% include "inventory/_attribute_filters.html" %}
+    </form>
+    <div class="card flush">
+      <table class="list parts-list">
+        <tr><th><input type="checkbox" data-pick-all aria-label="Tick them all"></th><th></th><th>Asset tag</th><th>Name</th>{% if not category %}<th>Category</th>{% endif %}{% for a in attributes %}<th>{{ a.name }}</th>{% endfor %}<th>Kept at</th><th>Status</th><th>Calibration due</th></tr>
+        {% for a, values in rows %}<tr data-part="{{ a.pk }}" data-brief-url="{% url 'assets:brief' a.pk %}" class="{% if picked.pk == a.pk %}on{% endif %}" tabindex="0">
+          <td><input type="checkbox" name="pick" value="{{ a.pk }}" aria-label="{{ a.number }}"></td>
+          <td class="thumb-cell">{% thumb a %}</td><td><a href="{{ a.get_absolute_url }}">{{ a.number }}</a></td><td>{{ a.name }} <span class="muted small">{{ a.manufacturer }} {{ a.model }}</span></td>
+          {% if not category %}<td class="small">{{ a.category.name|default:"" }}</td>{% endif %}
+          {% for v in values %}<td class="small">{{ v }}</td>{% endfor %}<td class="small">{{ a.location.name|default:"" }}</td>
+          <td><span class="badge{% if a.status == 'available' or a.status == 'in_use' %} ok{% elif a.status == 'retired' or a.status == 'repair' %} failed{% endif %}">{{ a.get_status_display }}</span>{% if a.holder %} <span class="small">{{ a.holder }}</span>{% endif %}</td>
+          <td class="small{% if a.calibration_overdue %} error{% endif %}">{{ a.calibration_due|default:"" }}</td>
+        </tr>{% empty %}<tr><td colspan="{{ attributes|length|add:9 }}" class="empty small">{% if q or category or status %}No assets match.{% else %}No assets yet.{% endif %}</td></tr>{% endfor %}
+      </table>
+    </div>
+  </div>
+
+  <aside class="card parts-detail" data-detail>
+    {% if brief %}{% include "assets/_brief.html" with asset=brief.asset attributes=brief.attributes events=brief.events %}
+    {% else %}<p class="muted small pad">Pick an asset to see it here.</p>{% endif %}
+  </aside>
 </div>
 {% endblock %}
 {% block scripts %}<script>
@@ -40,4 +56,30 @@
   });
   var all = document.querySelector('input[data-pick-all]');
   if (all) all.addEventListener('change', function () { document.querySelectorAll('input[name=pick]').forEach(function (x) { x.checked = all.checked; }); });
+
+  /* A row picked (clicked, or Enter, or the arrow keys): its details on the right, kept in the address as ?asset=. */
+  (function () {
+    var detail = document.querySelector('[data-detail]'), rows = Array.prototype.slice.call(document.querySelectorAll('tr[data-part]'));
+    var asked = 0;
+    function pick(row) {
+      rows.forEach(function (r) { r.classList.toggle('on', r === row); });
+      var url = new URL(location.href);
+      url.searchParams.set('asset', row.dataset.part);
+      history.replaceState(null, '', url);
+      var mine = ++asked;
+      fetch(row.dataset.briefUrl, { headers: { 'X-Requested-With': 'fetch' } }).then(function (r) { return r.text(); }).then(function (html) {
+        if (mine === asked) detail.innerHTML = html;
+      });
+    }
+    rows.forEach(function (row, i) {
+      row.addEventListener('click', function (e) { if (!e.target.closest('a, input, button')) pick(row); });
+      row.addEventListener('keydown', function (e) {
+        var to = e.key === 'ArrowDown' ? rows[i + 1] : e.key === 'ArrowUp' ? rows[i - 1] : e.key === 'Enter' ? row : null;
+        if (!to) return;
+        e.preventDefault();
+        to.focus();
+        pick(to);
+      });
+    });
+  })();
 </script>{% endblock %}

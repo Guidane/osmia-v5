@@ -460,6 +460,10 @@ form.inline { display: inline; }
 @media (max-width: 800px) { .doc-page, .history { grid-template-columns: 1fr; } .doc-nav { position: static; } }
 
 /* Parts: the categories as a tree, the parts of the one picked, the details of the part picked */
+.tree-cell { padding-left: calc(8px + var(--depth, 0) * 1.4em) !important; }
+.tree-cell .tree-elbow { color: var(--faint); margin-right: 4px; }
+tr.muted > td > a { color: var(--muted); }
+.badge.via { text-decoration: none; font-weight: normal; }
 .parts-browser { display: grid; grid-template-columns: 230px minmax(0, 1fr) 360px; gap: 10px; align-items: start; }
 .parts-tree { padding: 6px 0; position: sticky; top: 8px; max-height: calc(100vh - 70px); overflow: auto; }
 .parts-tree a { display: flex; justify-content: space-between; gap: 8px; padding: 5px 12px 5px calc(12px + var(--depth, 0) * 1.1em);

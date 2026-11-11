@@ -1,0 +1,22 @@
+{% load osmia %}<div class="brief" data-brief="{{ asset.pk }}">
+  <div class="brief-head"><h3><a href="{{ asset.get_absolute_url }}">{{ asset.number }}</a></h3>
+    <span class="badge{% if asset.status == 'available' or asset.status == 'in_use' %} ok{% elif asset.status == 'retired' or asset.status == 'repair' %} failed{% endif %}">{{ asset.get_status_display }}</span>
+    <span class="spacer"></span><a class="btn small" href="{{ asset.get_absolute_url }}">Open</a><a class="btn small ghost" href="{% url 'assets:edit' asset.pk %}">Change</a></div>
+  <p class="brief-what">{{ asset.name }}</p>
+  {% preview asset %}
+  <dl class="details">
+    <dt>Kind</dt><dd>{{ asset.get_kind_display }}</dd>
+    <dt>Category</dt><dd>{{ asset.category|default:"—" }}</dd>
+    {% include "inventory/_attribute_values.html" %}
+    <dt>Make</dt><dd>{{ asset.manufacturer|default:"—" }}{% if asset.model %} · {{ asset.model }}{% endif %}</dd>
+    <dt>Serial number</dt><dd>{{ asset.serial|default:"—" }}</dd>
+    {% if asset.device %}<dt>Device</dt><dd><a href="{{ asset.device.get_absolute_url }}">{{ asset.device }}</a>{% if asset.version %} v{{ asset.version }}{% endif %}</dd>{% endif %}
+    {% if asset.harness %}<dt>Harness</dt><dd><a href="{{ asset.harness.get_absolute_url }}">{{ asset.harness }}</a>{% if asset.version %} v{{ asset.version }}{% endif %}</dd>{% endif %}
+    <dt>Kept at</dt><dd>{{ asset.location|default:"—" }}</dd>
+    <dt>Looked after by</dt><dd>{{ asset.keeper|default:"—" }}</dd>
+    {% if asset.holder %}<dt>Out with</dt><dd>{{ asset.holder }}</dd>{% endif %}
+    <dt>Calibration</dt><dd>{% if asset.calibration_months %}due <b{% if asset.calibration_overdue %} class="error"{% endif %}>{{ asset.calibration_due }}</b>{% else %}not needed{% endif %}</dd>
+  </dl>
+  {% if events %}<h4>What happened</h4>
+  <table class="list compact">{% for e in events %}<tr><td class="small nowrap">{{ e.at|date:"j M Y" }}</td><td class="small">{{ e.get_kind_display }} <span class="muted">{{ e.note }}</span></td></tr>{% endfor %}</table>{% endif %}
+</div>
