@@ -24,7 +24,7 @@
       {% empty %}<tr><td class="empty small">No orders yet.</td></tr>{% endfor %}</table>
   </section>
 </div>
-<div class="side">{% include "web/_notes.html" with notes=vendor.notes %}{% side vendor %}</div>
+<div class="side">{% include "web/_notes.html" with notes=vendor.notes owner=vendor %}{% side vendor %}</div>
 </div>
 <section class="card flush">
   <div class="card-head"><h3>Parts ordered from it</h3></div>

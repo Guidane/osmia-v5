@@ -41,6 +41,7 @@ class Asset(models.Model):
     category = models.ForeignKey(Category, null=True, blank=True, on_delete=models.SET_NULL, related_name='assets')
     manufacturer = models.CharField(max_length=200, blank=True)
     model = models.CharField(max_length=200, blank=True)
+    asset_number = models.CharField('asset number', max_length=100, blank=True)   # e.g. the company's own (finance) number
     serial = models.CharField('serial number', max_length=100, blank=True)
     device = models.ForeignKey('devices.Device', null=True, blank=True, on_delete=models.PROTECT, related_name='assets')
     harness = models.ForeignKey('harnesses.Harness', null=True, blank=True, on_delete=models.PROTECT, related_name='assets')

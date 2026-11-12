@@ -72,7 +72,13 @@ class ProjectTests(Base):
         self.assertEqual([(d, d.via) for d in page.context['sub_devices']], [(device, deep)])
         self.assertEqual([(t, t.via) for t in page.context['sub_tools']], [(tool, boards)])
         self.assertEqual([d.name for d in page.context['sub_diagrams']], ['Boards'])
+        from harnesses.models import Harness
+        loom = Harness.objects.create(project=WireDiagram.objects.get(name='Boards'), name='Board loom')
+        page = self.client.get(rack.get_absolute_url())
+        self.assertEqual([(h, h.via) for h in page.context['sub_harnesses']], [(loom, deep)])   # a sub-project's diagram's
         self.assertContains(page, 'BR-LB-B')
+        for tab in ('subs', 'diagrams', 'harnesses', 'orders', 'devices', 'assets', 'tools', 'notes'):   # the page in tabs
+            self.assertContains(page, f'data-panel="{tab}"')
         # the list: a tree; a sub-project found stands under the project it is part of
         listed = self.client.get(reverse('work:list'), {'q': 'rev B'})
         self.assertEqual([(p.name, p.depth, p.matched) for p in listed.context['projects']],

@@ -17,7 +17,7 @@
   <div class="parts-middle">
     <form method="get" class="filters">
       {% if category %}<input type="hidden" name="category" value="{{ category.pk }}">{% endif %}
-      <input type="search" name="q" value="{{ q }}" placeholder="Asset tag, name, model, serial…" aria-label="Search assets">
+      <input type="search" name="q" value="{{ q }}" placeholder="Asset tag, asset number, name, model, serial…" aria-label="Search assets">
       <select name="status" aria-label="Status" onchange="this.form.submit()"><option value="">Not retired</option>
         {% for value, label in statuses %}<option value="{{ value }}"{% if status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
       <label class="small"><input type="checkbox" name="due" value="1"{% if request.GET.due %} checked{% endif %} onchange="this.form.submit()"> due for calibration</label>
@@ -29,7 +29,7 @@
         <tr><th><input type="checkbox" data-pick-all aria-label="Tick them all"></th><th></th><th>Asset tag</th><th>Name</th>{% if not category %}<th>Category</th>{% endif %}{% for a in attributes %}<th>{{ a.name }}</th>{% endfor %}<th>Kept at</th><th>Status</th><th>Calibration due</th></tr>
         {% for a, values in rows %}<tr data-part="{{ a.pk }}" data-brief-url="{% url 'assets:brief' a.pk %}" class="{% if picked.pk == a.pk %}on{% endif %}" tabindex="0">
           <td><input type="checkbox" name="pick" value="{{ a.pk }}" aria-label="{{ a.number }}"></td>
-          <td class="thumb-cell">{% thumb a %}</td><td><a href="{{ a.get_absolute_url }}">{{ a.number }}</a></td><td>{{ a.name }} <span class="muted small">{{ a.manufacturer }} {{ a.model }}</span></td>
+          <td class="thumb-cell">{% thumb a %}</td><td><a href="{{ a.get_absolute_url }}">{{ a.number }}</a>{% if a.asset_number %} <span class="muted small">{{ a.asset_number }}</span>{% endif %}</td><td>{{ a.name }} <span class="muted small">{{ a.manufacturer }} {{ a.model }}</span></td>
           {% if not category %}<td class="small">{{ a.category.name|default:"" }}</td>{% endif %}
           {% for v in values %}<td class="small">{{ v }}</td>{% endfor %}<td class="small">{{ a.location.name|default:"" }}</td>
           <td><span class="badge{% if a.status == 'available' or a.status == 'in_use' %} ok{% elif a.status == 'retired' or a.status == 'repair' %} failed{% endif %}">{{ a.get_status_display }}</span>{% if a.holder %} <span class="small">{{ a.holder }}</span>{% endif %}</td>

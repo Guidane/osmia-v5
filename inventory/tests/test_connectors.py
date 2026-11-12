@@ -50,6 +50,13 @@ class ConnectorTests(Base):
         self.assertEqual(sorted(hd.branches.values_list('contacts', flat=True)), ['pin', 'socket'])
         self.client.post(reverse('inventory:families_standard'))                             # again: nothing more
         self.assertEqual(Family.objects.count(), len(PRESETS))
+        ring = Family.objects.get(name='Ring terminal M4')                                   # a terminal: no sides
+        self.assertEqual((ring.group.name, ring.group.parent.name, ring.branches.count()), ('Ring', 'Terminals', 0))
+        from inventory.picker import genders
+        self.assertEqual(genders(ring), [])
+        self.assertEqual([g['name'] for g in genders(Family.objects.get(name='Flat terminal 6.3'))], ['pin', 'socket'])   # a blade: tab and receptacle
+        m12 = Family.objects.get(name='M12 5-pin')
+        self.assertEqual((m12.group.name, m12.group.parent.name, len(m12.face['contacts'])), ('M12', 'Circular', 5))
 
     def test_changed_by_hand(self):
         family = Family.objects.create(name='Header 3', face=start('row', 3))

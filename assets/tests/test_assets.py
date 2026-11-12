@@ -53,6 +53,16 @@ class AssetTests(Base):
         self.assertContains(page, 'PSU-01')
         self.assertNotContains(page, 'T-001')
         self.assertContains(self.client.get(reverse('assets:list'), {'q': 'crimp tools'}), 'T-001')   # its category's name
+        Asset.objects.filter(pk=self.tool.pk).update(asset_number='FIN-2026-0042')
+        self.assertContains(self.client.get(reverse('assets:list'), {'q': 'fin-2026'}), 'T-001')   # its asset number
+        self.assertContains(self.client.get(reverse('assets:asset', args=[self.tool.pk])), 'FIN-2026-0042')
+        page = self.client.get(reverse('assets:asset', args=[self.tool.pk]))
+        self.assertContains(page, 'data-notes-form')                                        # a Notes card, even empty
+        back = self.client.post(reverse('web:notes', args=['asset', self.tool.pk]), {'notes': ' Keep it oiled. ', 'next': '/assets/'})
+        self.assertRedirects(back, '/assets/', fetch_redirect_response=False)
+        self.tool.refresh_from_db()
+        self.assertEqual(self.tool.notes, 'Keep it oiled.')
+        self.assertEqual(self.client.post(reverse('web:notes', args=['nothing', 1]), {'notes': 'x'}).status_code, 404)
         page = self.client.get(reverse('assets:list'), {'category': self.tools.pk})
         self.assertContains(page, 'T-001')
         self.assertNotContains(page, 'PSU-01')

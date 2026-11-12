@@ -30,7 +30,7 @@
       <td class="small">{{ v.note }}</td><td class="small muted nowrap">{{ v.created_by|default:"" }}, {{ v.created_at|date:"j M Y" }}</td></tr>{% endfor %}</table>
   </section>
 </div>
-<div class="side">{% include "web/_notes.html" with notes=device.notes %}{% side device %}</div>
+<div class="side">{% include "web/_notes.html" with notes=device.notes owner=device %}{% side device %}</div>
 </div>
 
 <section class="card flush connectors-card">

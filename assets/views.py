@@ -31,7 +31,7 @@ class AssetForm(AttributesForm):
 
     class Meta:
         model = Asset
-        fields = ['number', 'name', 'kind', 'category', 'manufacturer', 'model', 'serial', 'device', 'harness', 'version', 'location', 'keeper',
+        fields = ['number', 'asset_number', 'name', 'kind', 'category', 'manufacturer', 'model', 'serial', 'device', 'harness', 'version', 'location', 'keeper',
                   'vendor', 'vendor_number', 'price', 'calibrated_on', 'calibration_months', 'built_on', 'notes']
         widgets = {'calibrated_on': forms.DateInput(attrs={'type': 'date'}), 'built_on': forms.DateInput(attrs={'type': 'date'}),
                    'notes': forms.Textarea(attrs={'rows': 3})}
@@ -57,7 +57,8 @@ def asset_list(request):
     if q:
         for word in q.split():
             found = found.filter(Q(number__icontains=word) | Q(name__icontains=word) | Q(category__name__icontains=word)
-                                 | Q(manufacturer__icontains=word) | Q(model__icontains=word) | Q(serial__icontains=word))
+                                 | Q(manufacturer__icontains=word) | Q(model__icontains=word) | Q(serial__icontains=word)
+                                 | Q(asset_number__icontains=word))
     category = Category.objects.filter(pk=request.GET.get('category') or 0).first()
     if category is not None:
         found = found.filter(category_id__in=category.below())
@@ -74,9 +75,9 @@ def asset_list(request):
         due = {a.pk for a in service.due()}
         assets = [a for a in assets if a.pk in due]
     if request.GET.get('export'):
-        return excel.download('assets', [('Assets', ['Asset tag', 'Name', 'Kind', 'Category', 'Manufacturer', 'Model', 'Serial number',
+        return excel.download('assets', [('Assets', ['Asset tag', 'Asset number', 'Name', 'Kind', 'Category', 'Manufacturer', 'Model', 'Serial number',
                                                      'Kept at', 'Keeper', 'Status', 'Out with', 'Calibrated', 'Due'],
-                                          [(a.number, a.name, a.get_kind_display(), a.category.path if a.category else '', a.manufacturer, a.model,
+                                          [(a.number, a.asset_number, a.name, a.get_kind_display(), a.category.path if a.category else '', a.manufacturer, a.model,
                                             a.serial, a.location.path if a.location else '', str(a.keeper or ''), a.get_status_display(),
                                             str(a.holder or ''), a.calibrated_on, a.calibration_due) for a in assets])])
     tree = Category.of(Category.Kind.ASSETS)

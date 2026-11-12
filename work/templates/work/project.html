@@ -6,29 +6,54 @@
   <span class="badge{% if project.status == 'active' %} ok{% endif %}">{{ project.get_status_display }}</span>
   <span class="spacer"></span><a class="btn" href="{% url 'work:edit' project.pk %}">Change</a></div>
 
-<div class="with-notes">
-<div class="main">
-  {% if project.description or project.owner or project.department %}<section class="card">{% preview project %}
+{% if project.description or project.owner or project.department %}<section class="card summary">{% preview project %}
     {% if project.description %}<p>{{ project.description|linebreaksbr }}</p>{% endif %}
     <p class="small muted">{% if project.owner %}Owner: {{ project.owner }}{% endif %}{% if project.department %}{% if project.owner %} · {% endif %}{{ project.department }}{% endif %}</p>
   </section>{% endif %}
 
-  <section class="card flush">
+<nav class="tabs page-tabs" data-tabs aria-label="Project">
+  <a href="#subs" data-tab="subs">Sub-projects <span class="muted small">{{ children|length }}</span></a>
+  <a href="#diagrams" data-tab="diagrams">Wire diagrams <span class="muted small">{{ diagrams|length|add:n_sub.diagrams }}</span></a>
+  <a href="#harnesses" data-tab="harnesses">Harnesses <span class="muted small">{{ harnesses|length|add:n_sub.harnesses }}</span></a>
+  <a href="#orders" data-tab="orders">Orders <span class="muted small">{{ orders|length|add:n_sub.orders }}</span></a>
+  <a href="#devices" data-tab="devices">Devices <span class="muted small">{{ devices|length|add:n_sub.devices }}</span></a>
+  <a href="#assets" data-tab="assets">Assets <span class="muted small">{{ assets|length|add:n_sub.assets }}</span></a>
+  <a href="#tools" data-tab="tools">Tools <span class="muted small">{{ tools|length|add:n_sub.tools }}</span></a>
+  <a href="#notes" data-tab="notes">Notes and files</a>
+</nav>
+
+<div class="tab-panel" data-panel="subs">
+<section class="card flush">
     <div class="card-head"><h3>Sub-projects <span class="muted small">{{ children|length }}</span></h3><a class="btn small" href="{% url 'work:new' %}?parent={{ project.pk }}">＋ Sub-project</a></div>
     <table class="list">{% for c in children %}<tr><td><a href="{{ c.get_absolute_url }}">{{ c }}</a> <span class="muted small">{{ c.description|truncatechars:80 }}</span></td>
       <td><span class="badge{% if c.status == 'active' %} ok{% endif %}">{{ c.get_status_display }}</span></td><td class="small">{{ c.owner|default:"" }}</td></tr>
     {% empty %}<tr><td class="empty small">No sub-projects.</td></tr>{% endfor %}</table>
   </section>
+</div>
 
-  <section class="card flush">
+<div class="tab-panel" data-panel="diagrams" hidden>
+<section class="card flush">
     <div class="card-head"><h3>Wire diagrams <span class="muted small">{{ diagrams|length|add:n_sub.diagrams }}</span></h3><a class="btn small" href="{% url 'projects:new' %}?in_project={{ project.pk }}">＋ New</a></div>
     <table class="list">{% for d in diagrams %}<tr><td><a href="{{ d.get_absolute_url }}">{{ d }}</a></td><td class="small muted">{{ d.harnesses.all|length }} harness{{ d.harnesses.all|length|pluralize:"es" }}</td>
       <td class="num">{% include "work/_out.html" with what="diagram" id=d.pk name=d %}</td></tr>{% endfor %}
       {% for d in sub_diagrams %}<tr><td><a href="{{ d.get_absolute_url }}">{{ d }}</a> {% include "work/_via.html" with via=d.via %}</td><td class="small muted">{{ d.harnesses.all|length }} harness{{ d.harnesses.all|length|pluralize:"es" }}</td><td></td></tr>{% endfor %}</table>
     {% include "work/_add.html" with what="diagram" choices=free_diagrams label="A wire diagram" %}
   </section>
+</div>
 
-  <section class="card flush">
+<div class="tab-panel" data-panel="harnesses" hidden>
+<section class="card flush">
+    <div class="card-head"><h3>Harnesses <span class="muted small">{{ harnesses|length|add:n_sub.harnesses }}</span></h3>{% if diagrams %}<a class="btn small" href="{% url 'harnesses:list' %}?work={{ project.pk }}">Open in Harnesses</a>{% endif %}</div>
+    <table class="list">
+      {% for h in harnesses %}{% include "work/_harness_row.html" %}{% endfor %}
+      {% for h in sub_harnesses %}{% include "work/_harness_row.html" with via=h.via %}{% endfor %}
+      {% if not harnesses and not sub_harnesses %}<tr><td class="empty small">No harnesses.</td></tr>{% endif %}
+    </table>
+  </section>
+</div>
+
+<div class="tab-panel" data-panel="orders" hidden>
+<section class="card flush">
     <div class="card-head"><h3>Orders <span class="muted small">{{ orders|length|add:n_sub.orders }}</span></h3><a class="btn small" href="{% url 'orders:new' %}?in_project={{ project.pk }}">＋ New</a></div>
     <table class="list">{% for o in orders %}<tr><td><a href="{{ o.get_absolute_url }}">{{ o.number }}</a> <span class="small">{{ o.vendor|default:"" }}</span></td>
       <td><span class="badge{% if o.status == 'received' %} ok{% elif o.status == 'cancelled' %} failed{% endif %}">{{ o.get_status_display }}</span></td>
@@ -39,16 +64,20 @@
       <td class="small muted nowrap">{{ o.created_at|date:"j M Y" }}</td><td></td></tr>{% endfor %}</table>
     {% include "work/_add.html" with what="order" choices=free_orders label="An order" %}
   </section>
+</div>
 
-  <section class="card flush">
+<div class="tab-panel" data-panel="devices" hidden>
+<section class="card flush">
     <div class="card-head"><h3>Devices <span class="muted small">{{ devices|length|add:n_sub.devices }}</span></h3></div>
     <table class="list">{% for d in devices %}<tr><td class="thumb-cell">{% thumb d %}</td><td><a href="{{ d.get_absolute_url }}">{{ d.number }}</a> <span class="small">{{ d.name }}</span></td>
       <td class="num">{% include "work/_out.html" with what="device" id=d.pk name=d.number %}</td></tr>{% endfor %}
       {% for d in sub_devices %}<tr><td class="thumb-cell">{% thumb d %}</td><td><a href="{{ d.get_absolute_url }}">{{ d.number }}</a> <span class="small">{{ d.name }}</span> {% include "work/_via.html" with via=d.via %}</td><td></td></tr>{% endfor %}</table>
     {% include "work/_add.html" with what="device" choices=other_devices label="A device" %}
   </section>
+</div>
 
-  <section class="card flush">
+<div class="tab-panel" data-panel="assets" hidden>
+<section class="card flush">
     <div class="card-head"><h3>Assets <span class="muted small">{{ assets|length|add:n_sub.assets }}</span></h3></div>
     <table class="list">{% for a in assets %}<tr><td class="thumb-cell">{% thumb a %}</td><td><a href="{{ a.get_absolute_url }}">{{ a.number }}</a> <span class="small">{{ a.name }}</span></td>
       <td class="small muted">{{ a.location|default:"" }}</td>
@@ -57,8 +86,10 @@
       <td class="small muted">{{ a.location|default:"" }}</td><td></td></tr>{% endfor %}</table>
     {% include "work/_add.html" with what="asset" choices=other_assets label="An asset" %}
   </section>
+</div>
 
-  <section class="card flush">
+<div class="tab-panel" data-panel="tools" hidden>
+<section class="card flush">
     <div class="card-head"><h3>Tools <span class="muted small">{{ tools|length|add:n_sub.tools }}</span></h3></div>
     <table class="list">{% for a in tools %}<tr><td class="thumb-cell">{% thumb a %}</td><td><a href="{{ a.get_absolute_url }}">{{ a.number }}</a> <span class="small">{{ a.name }}</span></td>
       <td class="small muted">{{ a.location|default:"" }}</td>
@@ -68,6 +99,9 @@
     {% include "work/_add.html" with what="asset" choices=other_tools label="A tool" %}
   </section>
 </div>
-<div class="side">{% include "web/_notes.html" with notes=project.notes %}{% side project %}</div>
+
+<div class="tab-panel tab-side" data-panel="notes" hidden>
+  {% include "web/_notes.html" with notes=project.notes owner=project %}{% side project %}
 </div>
 {% endblock %}
+{% block scripts %}<script src="{% fresh 'web/tabs.js' %}"></script>{% endblock %}

@@ -114,3 +114,10 @@ def markup(text):
     """Documentation, cleaned (see web.markup)."""
     from web.markup import render
     return render(text)
+
+
+@register.filter
+def kind(obj):
+    """What ``obj`` is called in addresses (``web.things``): part, asset, harness, …"""
+    from web.things import kind_of
+    return kind_of(obj)

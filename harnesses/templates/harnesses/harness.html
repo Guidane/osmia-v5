@@ -107,7 +107,7 @@
 </div>
 
 <div class="tab-panel tab-side" data-panel="notes" hidden>
-  {% include "web/_notes.html" with notes=harness.notes %}{% side harness %}
+  {% include "web/_notes.html" with notes=harness.notes owner=harness %}{% side harness %}
 </div>
 {% endblock %}
 {% block scripts %}<script src="{% fresh 'harnesses/pinout.js' %}"></script><script>
@@ -117,22 +117,4 @@
   var drawn = document.getElementById('pinout-data');
   if (drawn) Pinout.mount(document.getElementById('pinout-draw'), JSON.parse(drawn.textContent), COLOURS);
 
-  /* The tabs: the one in the address (#ends, …) shown, the pinout first. */
-  (function () {
-    var links = document.querySelectorAll('[data-tabs] [data-tab]'), panels = document.querySelectorAll('[data-panel]');
-    function show(name) {
-      if (!document.querySelector('[data-panel="' + name + '"]')) name = 'pinout';
-      links.forEach(function (a) { a.classList.toggle('on', a.dataset.tab === name); });
-      panels.forEach(function (p) { p.hidden = p.dataset.panel !== name; });
-      if (name === 'pinout') window.dispatchEvent(new Event('resize'));   // drawn to the width it has now
-    }
-    links.forEach(function (a) {
-      a.addEventListener('click', function (e) {
-        e.preventDefault();
-        history.replaceState(null, '', '#' + a.dataset.tab);
-        show(a.dataset.tab);
-      });
-    });
-    show(location.hash.slice(1));
-  })();
-</script>{% endblock %}
+</script><script src="{% fresh 'web/tabs.js' %}"></script>{% endblock %}

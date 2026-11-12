@@ -530,6 +530,14 @@
         if (w.colour === 'green/yellow') el('path', { d: d, class: 'pd-wire-core', style: 'stroke:#facc15', 'stroke-dasharray': '8 8' }, g);
         lines.push({ w: w, g: g });
       }
+      function runs(list) {   // a set's wires in runs of those side by side (a set split between two connectors: two runs)
+        var out = [];
+        list.slice().sort(function (p, q) { return p.y - q.y; }).forEach(function (r) {
+          var last = out[out.length - 1];
+          if (last && r.y - last[last.length - 1].y <= ROW + 1) last.push(r); else out.push([r]);
+        });
+        return out;
+      }
       var ellipses = {};   // a shielded set: where its ellipses sit
       function drainCircle(s, cx, cy, sideOf, on, shield) {   // its circle: picked, then a contact on its side joins the shield
         // there (a loopback: going out, coming back); picked again, the shield is not joined there
@@ -566,15 +574,22 @@
         var inner = s.rows.filter(function (r) { return r.w.type !== 'Shield'; }), shield = s.rows.filter(function (r) { return r.w.type === 'Shield'; })[0];
         if (!inner.length) return;
         if (inner[0].loop) { loopShieldDraw(s, inner, shield); return; }
-        var ys = inner.map(function (r) { return r.y; });
-        var top = Math.min.apply(null, ys) - 16, low = shield ? shield.y : Math.max.apply(null, ys) + 16;
+        // an ellipse round each run of its wires side by side; the shield (its circles, its line) with the run just above it
+        var parts = runs(inner.filter(function (r) { return r.y !== undefined; }));
+        if (!parts.length) return;
+        var main = parts[0];
+        if (shield && shield.y !== undefined) parts.forEach(function (run) { if (run[run.length - 1].y < shield.y) main = run; });
         ellipses[s.name] = [x.left + EL, x.right - ER];
-        ellipses[s.name].forEach(function (cx, i) {
-          var e = el('ellipse', { cx: cx, cy: (top + low) / 2, rx: 18, ry: (low - top) / 2, class: 'pd-shield', 'data-set': s.name }, over);
-          el('title', {}, e).textContent = 'Set ' + s.name + ': ' + s.type.toLowerCase();
-          if (editing) drainCircle(s, cx, low, i === 0 ? 'left' : 'right', i === 0 ? 'left' : 'right', shield);
+        parts.forEach(function (run) {
+          var ys = run.map(function (r) { return r.y; }), mine = run === main;
+          var top = Math.min.apply(null, ys) - 16, low = mine && shield ? shield.y : Math.max.apply(null, ys) + 16;
+          ellipses[s.name].forEach(function (cx, i) {
+            var e = el('ellipse', { cx: cx, cy: (top + low) / 2, rx: 18, ry: (low - top) / 2, class: 'pd-shield', 'data-set': s.name }, over);
+            el('title', {}, e).textContent = 'Set ' + s.name + ': ' + s.type.toLowerCase();
+            if (editing && mine) drainCircle(s, cx, low, i === 0 ? 'left' : 'right', i === 0 ? 'left' : 'right', shield);
+          });
+          if (mine && !shield) el('path', { d: 'M' + (x.left + EL) + ',' + low + ' H' + (x.right - ER), class: 'pd-shield-line' }, wiresG);
         });
-        if (!shield) el('path', { d: 'M' + (x.left + EL) + ',' + low + ' H' + (x.right - ER), class: 'pd-shield-line' }, wiresG);
       });
       function loopWire(r) {   // out, round the turn, back; a twisted set twists going out and coming back
         var lp = r.loop, dir = lp.dir, s = r.w.set && sets[r.w.set], ex = lp.edge + dir * E(lp.L);
@@ -609,7 +624,9 @@
           wire(r, 'M' + e[1] + ',' + y + ' H' + r.bx);
           return;
         }
-        var pair = s.rows.filter(function (o) { return o.w.type !== 'Shield'; }).sort(function (p, q) { return p.y - q.y; });
+        // twisted with the wires of its set beside it (not with one far off, beside another connector)
+        var pair = runs(s.rows.filter(function (o) { return o.w.type !== 'Shield' && o.y !== undefined; }))
+          .filter(function (run) { return run.indexOf(r) !== -1; })[0] || [r];
         if (twisted(s.type) && pair.length > 1) {   // see twistPoints
           var i = pair.indexOf(r), pts = [[r.ax, y]];
           twistOf(pair).forEach(function (t) { pts = pts.concat(twistPoints(pair, i, t)); });

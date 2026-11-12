@@ -15,6 +15,7 @@
       <dt>Category</dt><dd>{% if asset.category %}<a href="{{ asset.category.get_absolute_url }}">{{ asset.category }}</a>{% else %}—{% endif %}</dd>
       {% include "inventory/_attribute_values.html" %}
       <dt>Make</dt><dd>{{ asset.manufacturer|default:"—" }}{% if asset.model %} · {{ asset.model }}{% endif %}</dd>
+      <dt>Asset number</dt><dd>{{ asset.asset_number|default:"—" }}</dd>
       <dt>Serial number</dt><dd>{{ asset.serial|default:"—" }}</dd>
       {% if asset.device %}<dt>Device</dt><dd><a href="{{ asset.device.get_absolute_url }}">{{ asset.device }}</a>{% if asset.version %} v{{ asset.version }}{% endif %}</dd>{% endif %}
       {% if asset.harness %}<dt>Harness</dt><dd><a href="{{ asset.harness.get_absolute_url }}">{{ asset.harness }}</a>{% if asset.version %} v{{ asset.version }}{% endif %}</dd>{% endif %}
@@ -56,7 +57,7 @@
         <button class="btn small ghost" name="action" value="retired" data-confirm="Retire {{ asset.number }}? It stays, with its history.">Retire</button></form>{% endif %}
   </section>
 </div>
-<div class="side">{% include "web/_notes.html" with notes=asset.notes %}{% side asset %}</div>
+<div class="side">{% include "web/_notes.html" with notes=asset.notes owner=asset %}{% side asset %}</div>
 </div>
 
 {% if checks %}

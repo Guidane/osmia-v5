@@ -3,7 +3,9 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model, login, password_validation
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
 from .models import Notification
 
@@ -167,3 +169,17 @@ def notification_open(request, pk):
     note.read = True
     note.save(update_fields=['read'])
     return redirect(note.url or 'web:notifications')
+
+
+@login_required
+@require_POST
+def notes(request, kind, pk):
+    """The notes of a thing (``web.things``) changed in place, from its Notes card."""
+    from .things import thing
+    obj = thing(kind, pk)
+    if not hasattr(obj, 'notes'):
+        raise Http404
+    obj.notes = request.POST.get('notes', '').strip()
+    obj.save(update_fields=['notes'])
+    back = request.POST.get('next', '')
+    return redirect(back if back.startswith('/') and not back.startswith('//') else obj.get_absolute_url())

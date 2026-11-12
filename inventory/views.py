@@ -327,10 +327,13 @@ def connector(request, pk):
         except ValidationError as exc:
             errors(request, exc)
             return redirect('inventory:connector', pk=item.pk)
+        if request.POST.get('action') != 'start' and (item.face or {}).get('genders') is False:
+            face['genders'] = False   # a ring terminal changed by hand: still without sides
         with transaction.atomic():
             item.face = face
             item.save(update_fields=['face'])
-            _with_branches(item)
+            if face.get('genders', True):
+                _with_branches(item)
         messages.success(request, f'The {item} connector is saved.')
         return redirect('inventory:connector' if request.POST.get('action') == 'start' else 'inventory:family', pk=item.pk)
     return render(request, 'inventory/connector.html', {'family': item, 'face': item.face or {'shape': 'rect', 'contacts': []},

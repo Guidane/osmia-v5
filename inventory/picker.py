@@ -10,11 +10,12 @@ from .models import Branch, Family, FamilyBranch
 
 
 def genders(family):
-    """A family's genders to pick from: its own, and pin and socket when it has none of that side yet."""
+    """A family's genders to pick from: its own, and pin and socket when it has none of that side yet (and has sides:
+    a ring terminal hasn't)."""
     own = list(family.branches.all())
     out = [{'name': b.name, 'value': b.number, 'socket': b.contacts == 'socket'} for b in own]
     sides = {b.contacts for b in own} | {b.name.lower() for b in own}
-    for side in ('pin', 'socket'):
+    for side in ('pin', 'socket') if (family.face or {}).get('genders', True) else ():   # (not for a ring terminal)
         if side not in sides:
             out.append({'name': side, 'value': f'{family.name} / {side}', 'socket': side == 'socket'})
     return out

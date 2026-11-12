@@ -21,7 +21,7 @@ SIZES = {
 SHOWN = {   # what a label can show, with what it shows by default
     'part': [('number', 'Part number', True), ('description', 'Description', True), ('picture', 'Picture', False),
              ('category', 'Category', False), ('location', 'Where it is kept', False)],
-    'asset': [('number', 'Asset tag', True), ('name', 'Name', True), ('picture', 'Picture', False), ('serial', 'Serial number', False),
+    'asset': [('number', 'Asset tag', True), ('name', 'Name', True), ('picture', 'Picture', False), ('asset_number', 'Asset number', False), ('serial', 'Serial number', False),
               ('category', 'Category', False), ('location', 'Where it is kept', False)],
 }
 
@@ -59,6 +59,8 @@ def _label(kind, thing, layout, attributes):
     text = thing.description if kind == 'part' else thing.name
     if ('description' in show or 'name' in show) and text:
         lines.append(('text', text))
+    if 'asset_number' in show and getattr(thing, 'asset_number', ''):
+        lines.append(('small', f'No. {thing.asset_number}'))
     if 'serial' in show and getattr(thing, 'serial', ''):
         lines.append(('small', f'S/N {thing.serial}'))
     if 'category' in show and thing.category:

@@ -1,5 +1,5 @@
 """Projects: the list (a tree: sub-projects under the project they are part of), a project's page (its sub-projects;
-its wire diagrams, orders, devices, assets and tools, and those of its sub-projects; notes, files and documentation),
+its wire diagrams, their harnesses, orders, devices, assets and tools, and those of its sub-projects; notes, files and documentation),
 making and changing one, and adding things to it or taking them out."""
 from django import forms
 from django.contrib import messages
@@ -11,6 +11,7 @@ from django.views.decorators.http import require_POST
 from accounts.models import Department
 from assets.models import Asset
 from devices.models import Device
+from harnesses.models import Harness
 from orders.models import Order
 from projects.models import Project as WireDiagram
 from web.forms import TreeForm, initial_for
@@ -89,6 +90,9 @@ def project(request, pk):
         'project': item,
         'children': item.children.order_by('code', 'name'),
         'sub_diagrams': rolled(WireDiagram.objects.filter(in_project__in=under).prefetch_related('harnesses'), [], lambda t: t.in_project_id),
+        'harnesses': Harness.objects.filter(project__in_project=item).select_related('project').order_by('number'),
+        'sub_harnesses': rolled(Harness.objects.filter(project__in_project__in=under).select_related('project').order_by('number'), [],
+                                lambda t: t.project.in_project_id),
         'sub_orders': rolled(Order.objects.filter(in_project__in=under).select_related('vendor'), [], lambda t: t.in_project_id),
         'sub_devices': rolled(Device.objects.filter(work_projects__in=under).annotate(via_pk=Min('work_projects', filter=Q(work_projects__in=under))).order_by('number'),
                               item.devices.all(), lambda t: t.via_pk),
@@ -105,7 +109,7 @@ def project(request, pk):
         'other_assets': Asset.objects.exclude(pk__in=item.assets.values('pk')).exclude(kind=Asset.Kind.TOOL),
         'other_tools': Asset.objects.exclude(pk__in=item.assets.values('pk')).filter(kind=Asset.Kind.TOOL),
     }
-    context['n_sub'] = {k: len(context['sub_' + k]) for k in ('diagrams', 'orders', 'devices', 'assets', 'tools')}
+    context['n_sub'] = {k: len(context['sub_' + k]) for k in ('diagrams', 'harnesses', 'orders', 'devices', 'assets', 'tools')}
     return render(request, 'work/project.html', context)
 
 

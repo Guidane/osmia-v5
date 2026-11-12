@@ -167,7 +167,10 @@ kbd { font: 11px ui-monospace, Consolas, monospace; padding: 1px 5px; border: 1p
 .with-notes { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 0 10px; align-items: start; }
 .with-notes:not(:has(> .notes-card, > .side)) { display: block; }
 .with-notes > .main > .card:not(:last-child) { margin-bottom: 10px; }
-.notes-card h3 { margin: 0 0 6px; }
+.notes-card h3 { margin: 0; }
+.notes-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.notes-actions { display: flex; gap: 6px; margin-top: 6px; }
+.notes-card [hidden] { display: none; }
 .notes-card textarea { width: 100%; min-height: 180px; resize: vertical; }
 .notes-text { margin: 0; overflow-wrap: anywhere; }
 @media (max-width: 800px) { .with-notes { grid-template-columns: minmax(0, 1fr); } }
@@ -188,6 +191,7 @@ a.tile:hover { border-color: var(--brand); text-decoration: none; }
 .page-tabs a:hover { background: var(--hover); }
 .page-tabs a.on { background: var(--panel); border-color: var(--border); border-bottom-color: var(--panel); color: var(--text); }
 .tab-panel[hidden] { display: none; }
+.card.summary { display: flow-root; }   /* its picture stays inside it */
 .tab-side { max-width: 720px; }
 dl.details { display: grid; grid-template-columns: 130px 1fr; gap: 2px 10px; margin: 0 0 6px; }
 dl.details dt { color: var(--muted); }

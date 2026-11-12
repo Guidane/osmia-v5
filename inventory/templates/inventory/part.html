@@ -52,7 +52,7 @@
     {% if not locations %}<p class="small muted">Make a <a href="{% url 'inventory:location_new' %}">location</a> first.</p>{% endif %}
   </section>
 </div>
-<div class="side">{% include "web/_notes.html" with notes=part.notes %}{% side part %}</div>
+<div class="side">{% include "web/_notes.html" with notes=part.notes owner=part %}{% side part %}</div>
 </div>
 
 <div class="columns">
