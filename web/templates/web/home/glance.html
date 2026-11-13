@@ -1,0 +1,14 @@
+{% url 'orders:list' as orders_url %}{% url 'budgets:list' as budgets_url %}{% url 'assets:list' as assets_url %}
+<section class="card flush glance wide">
+  <div class="card-head"><h3>At a glance</h3>{% include "web/home/_x.html" %}</div>
+  <table class="list">
+    {% include "web/_glance.html" with n=to_order|length one="part to order" many="parts to order" url="#to-order" level="warn" %}
+    {% include "web/_glance.html" with n=waiting|length one="order still to come" many="orders still to come" url=orders_url %}
+    {% include "web/_glance.html" with n=late one="order late" many="orders late" url=orders_url level="bad" %}
+    {% include "web/_glance.html" with n=requests one="request to order" many="requests to order" url=orders_url|add:"?show=requests" level="warn" %}
+    {% if harness_requests %}{% include "web/_glance.html" with n=harness_requests|length one="harness asked for" many="harnesses asked for" url="#harness-requests" level="warn" %}{% endif %}
+    {% include "web/_glance.html" with n=drafts one="draft to place" many="drafts to place" url=orders_url|add:"?show=draft" %}
+    {% include "web/_glance.html" with n=over_budget|length one="budget overspent" many="budgets overspent" url=budgets_url level="bad" %}
+    {% include "web/_glance.html" with n=assets_due|length one="asset due for calibration" many="assets due for calibration" url=assets_url|add:"?due=1" level="warn" %}
+  </table>
+</section>

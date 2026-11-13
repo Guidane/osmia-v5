@@ -1,0 +1,11 @@
+{% load osmia %}<section class="card flush">
+  <div class="card-head"><h3>Still to come</h3><span><a class="btn small" href="{% url 'orders:new' %}">＋ New order</a>{% include "web/home/_x.html" %}</span></div>
+  <table class="list">
+    <tr><th>Order</th><th>Vendor</th><th>Expected</th><th></th></tr>
+    {% for o in waiting %}<tr>
+      <td><a href="{{ o.get_absolute_url }}">{{ o.number }}</a></td><td>{{ o.vendor|default:"—" }}</td>
+      <td class="nowrap">{{ o.expected_on|default:"—" }}</td>
+      <td>{% if o.overdue %}<span class="badge failed">Late</span>{% elif o.status == 'partly' %}<span class="badge">Partly received</span>{% endif %}</td>
+    </tr>{% empty %}<tr><td colspan="4" class="empty small">Nothing on its way.</td></tr>{% endfor %}
+  </table>
+</section>

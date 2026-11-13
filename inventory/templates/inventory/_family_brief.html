@@ -1,0 +1,21 @@
+{% load osmia %}<div class="brief" data-brief="{{ family.pk }}">
+  <div class="brief-head"><h3><a href="{{ family.get_absolute_url }}">{{ family.name }}</a></h3><span class="spacer"></span>
+    <a class="btn small" href="{{ family.get_absolute_url }}">Open</a><a class="btn small ghost" href="{% url 'inventory:families' %}?edit={{ family.pk }}">Change</a></div>
+  {% if face %}<div class="brief-face"><svg class="pinout-drawing" data-face></svg></div><script type="application/json" data-face>{{ face|json_text }}</script>{% endif %}
+  <p><a class="btn small" href="{% url 'inventory:connector' family.pk %}">{% if face %}Edit connector{% else %}＋ Connector{% endif %}</a></p>
+  <dl class="details">
+    <dt>Branch</dt><dd>{{ family.group|default:"—" }}</dd>
+    <dt>Contacts</dt><dd>{{ family.face.contacts|length|default:"—" }}</dd>
+    <dt>On hand</dt><dd>{{ family.on_hand|qty }} {{ family.unit }}</dd>
+  </dl>
+  <h4>Genders</h4>
+  <table class="list compact">
+    {% for b in branches %}<tr><td>{{ b.name }}</td><td class="num small">{{ b.n }} part{{ b.n|pluralize }}</td></tr>
+    {% empty %}<tr><td class="empty small">None.</td></tr>{% endfor %}
+  </table>
+  <h4>Parts</h4>
+  <table class="list compact">
+    {% for p in parts %}<tr><td><a href="{{ p.get_absolute_url }}">{{ p.number }}</a></td><td class="small">{{ p.branch.name|default:"" }}</td><td class="num">{{ p.have|default:0|qty }} {{ p.unit }}</td></tr>
+    {% empty %}<tr><td class="empty small">No parts in it yet.</td></tr>{% endfor %}
+  </table>
+</div>

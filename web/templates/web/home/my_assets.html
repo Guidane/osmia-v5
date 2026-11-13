@@ -1,0 +1,6 @@
+<section class="card flush">
+  <div class="card-head"><h3>What I have out</h3>{% include "web/home/_x.html" %}</div>
+  <table class="list">{% for a in my_assets %}<tr><td><a href="{{ a.get_absolute_url }}">{{ a.number }}</a> <span class="muted small">{{ a.name }}</span></td>
+    <td class="small">{{ a.location|default:"" }}</td></tr>
+    {% empty %}<tr><td class="empty small">Nothing checked out.</td></tr>{% endfor %}</table>
+</section>

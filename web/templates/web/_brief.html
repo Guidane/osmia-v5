@@ -1,0 +1,15 @@
+{% load osmia %}{# The details of a thing beside its list (web.briefs): ``brief`` {title, url, badges, what, details, tables, edit_url, obj}. #}
+<div class="brief" data-brief="{{ brief.obj.pk }}">
+  <div class="brief-head"><h3>{% if brief.url %}<a href="{{ brief.url }}">{{ brief.title }}</a>{% else %}{{ brief.title }}{% endif %}</h3>
+    {% for text, level in brief.badges %}<span class="badge{% if level %} {{ level }}{% endif %}">{{ text }}</span>{% endfor %}
+    <span class="spacer"></span>{% if brief.url %}<a class="btn small" href="{{ brief.url }}">Open</a>{% endif %}{% if brief.edit_url %}<a class="btn small ghost" href="{{ brief.edit_url }}">Change</a>{% endif %}</div>
+  {% if brief.what %}<p class="brief-what">{{ brief.what|linebreaksbr }}</p>{% endif %}
+  {% if brief.kind != 'user' %}{% preview brief.obj %}{% endif %}
+  {% if brief.details %}<dl class="details">
+    {% for label, text, link in brief.details %}<dt>{{ label }}</dt><dd>{% if link %}<a href="{{ link }}">{{ text }}</a>{% else %}{{ text|linebreaksbr }}{% endif %}</dd>{% endfor %}
+  </dl>{% endif %}
+  {% for heading, rows, empty in brief.tables %}{% if rows %}<h4>{{ heading }} <span class="muted small">{{ rows|length }}</span></h4>
+  <table class="list compact">
+    {% for row in rows %}<tr>{% for cell in row %}<td class="{% if not forloop.first %}small{% endif %}">{% if cell.url %}<a href="{{ cell.url }}">{{ cell.text }}</a>{% else %}{{ cell.text }}{% endif %}</td>{% endfor %}</tr>{% endfor %}
+  </table>{% endif %}{% endfor %}
+</div>

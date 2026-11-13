@@ -1,11 +1,11 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load osmia %}
 {% block title %}Harnesses · Osmia{% endblock %}
 {% block content_class %}wide{% endblock %}
 {% block content %}
 <div class="page-head"><h1>Harnesses</h1><span class="spacer"></span>
   <a class="btn primary" href="{% url 'harnesses:new' %}{% if project %}?project={{ project.pk }}{% endif %}">＋ New harness</a></div>
 
-<div class="parts-browser harness-browser">
+<div data-param="harness" class="parts-browser harness-browser">
   <nav class="card parts-tree" aria-label="Wire diagrams">
     <a href="?{% if q %}q={{ q|urlencode }}{% endif %}"{% if not project and not work %} class="on"{% endif %}><span>All harnesses</span><span class="muted small">{{ every }}</span></a>
     {% for kind, thing, depth, n in tree %}{% if kind == 'work' %}
@@ -43,30 +43,4 @@
   </aside>
 </div>
 {% endblock %}
-{% block scripts %}<script>
-  /* A row picked (clicked, or the arrow keys): its details on the right, kept in the address as ?harness=. */
-  (function () {
-    var detail = document.querySelector('[data-detail]'), rows = Array.prototype.slice.call(document.querySelectorAll('tr[data-part]'));
-    var asked = 0;
-    function pick(row) {
-      rows.forEach(function (r) { r.classList.toggle('on', r === row); });
-      var url = new URL(location.href);
-      url.searchParams.set('harness', row.dataset.part);
-      history.replaceState(null, '', url);
-      var mine = ++asked;
-      fetch(row.dataset.briefUrl, { headers: { 'X-Requested-With': 'fetch' } }).then(function (r) { return r.text(); }).then(function (html) {
-        if (mine === asked) detail.innerHTML = html;
-      });
-    }
-    rows.forEach(function (row, i) {
-      row.addEventListener('click', function (e) { if (!e.target.closest('a, input, button')) pick(row); });
-      row.addEventListener('keydown', function (e) {
-        var to = e.key === 'ArrowDown' ? rows[i + 1] : e.key === 'ArrowUp' ? rows[i - 1] : e.key === 'Enter' ? row : null;
-        if (!to) return;
-        e.preventDefault();
-        to.focus();
-        pick(to);
-      });
-    });
-  })();
-</script>{% endblock %}
+{% block scripts %}<script src="{% fresh 'web/browser.js' %}"></script>{% endblock %}

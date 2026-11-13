@@ -1,36 +1,46 @@
-{% extends "base.html" %}
-{% block title %}Families · Osmia{% endblock %}
-{% block content_class %}narrow{% endblock %}
+{% extends "base.html" %}{% load osmia %}
+{% block title %}Connector families · Osmia{% endblock %}
+{% block content_class %}wide{% endblock %}
 {% block content %}
-<p class="small"><a href="{% url 'inventory:parts' %}">← Parts</a></p>
-<div class="page-head"><h1>Families</h1><span class="spacer"></span>
-  <form method="post" action="{% url 'inventory:families_standard' %}">{% csrf_token %}<button class="btn">＋ Standard connectors</button></form></div>
-<div class="card flush">
-  <table class="list family-tree">
-    <tr><th>Family</th><th class="num">Parts</th><th></th></tr>
-    {% for b, depth, here in tree %}
-      <tr class="branch-row"><td style="--depth: {{ depth }}"><b>{{ b.name }}</b></td><td></td>
-        <td class="small"><a href="?branch={{ b.pk }}">Change</a></td></tr>
-      {% for f in here %}<tr><td style="--depth: {{ depth|add:1 }}"><a href="{{ f.get_absolute_url }}">{{ f.name }}</a></td><td class="num">{{ f.n }}</td>
-        <td class="small"><a href="?edit={{ f.pk }}">Change</a></td></tr>{% endfor %}
-    {% endfor %}
-    {% for f in loose %}<tr><td><a href="{{ f.get_absolute_url }}">{{ f.name }}</a></td><td class="num">{{ f.n }}</td>
-      <td class="small"><a href="?edit={{ f.pk }}">Change</a></td></tr>{% endfor %}
-    {% if not tree and not loose %}<tr><td colspan="3" class="empty small">No families yet.</td></tr>{% endif %}
-  </table>
-</div>
-<div class="columns">
-  <form method="post" class="form card" action="{% url 'inventory:families' %}{% if item %}?edit={{ item.pk }}{% endif %}">{% csrf_token %}
-    <input type="hidden" name="form" value="family">
-    <h3>{% if item %}Change {{ item.name }}{% else %}New family{% endif %}</h3>
-    <div class="fields">{% include "web/_form_fields.html" with form=form %}</div>
-    <div class="actions"><button class="btn primary">Save</button>{% if item %} <a href="{% url 'inventory:families' %}">Cancel</a>{% endif %}</div>
-  </form>
-  <form method="post" class="form card" action="{% url 'inventory:families' %}{% if branch %}?branch={{ branch.pk }}{% endif %}">{% csrf_token %}
-    <input type="hidden" name="form" value="branch">
-    <h3>{% if branch %}Change {{ branch.name }}{% else %}New branch{% endif %}</h3>
-    <div class="fields">{% include "web/_form_fields.html" with form=branch_form %}</div>
-    <div class="actions"><button class="btn primary">Save</button>{% if branch %} <a href="{% url 'inventory:families' %}">Cancel</a>{% endif %}</div>
-  </form>
+<div class="page-head"><h1>Connector families</h1><span class="spacer"></span>
+  <form method="post" action="{% url 'inventory:families_standard' %}">{% csrf_token %}<button class="btn">＋ Standard connectors</button></form>
+  {% if group %}<a class="btn" href="?branch={{ group.pk }}">Change {{ group.name }}</a>{% endif %}
+  <a class="btn" href="?new=branch{% if group %}&amp;group={{ group.pk }}{% endif %}">＋ Branch</a>
+  <a class="btn primary" href="?new=family{% if group %}&amp;group={{ group.pk }}{% endif %}">＋ New family</a></div>
+
+<div class="parts-browser family-browser" data-param="family">
+  {% include "web/_tree_nav.html" with label="Branches" %}
+
+  <div class="parts-middle">
+    <form method="get" class="filters">
+      {% if group %}<input type="hidden" name="group" value="{{ group.pk }}">{% endif %}
+      <input type="search" name="q" value="{{ q }}" placeholder="Name…" aria-label="Search connector families">
+      <button class="btn">Find</button>
+    </form>
+    <div class="card flush">
+      <table class="list parts-list">
+        <tr><th>Family</th>{% if not group %}<th>Branch</th>{% endif %}<th class="num">Contacts</th><th>Genders</th><th class="num">Parts</th></tr>
+        {% for f in families %}<tr data-part="{{ f.pk }}" data-brief-url="{% url 'inventory:family_brief' f.pk %}" class="{% if picked.pk == f.pk %}on{% endif %}" tabindex="0">
+          <td><a href="{{ f.get_absolute_url }}">{{ f.name }}</a></td>
+          {% if not group %}<td class="small">{{ f.group.name|default:"" }}</td>{% endif %}
+          <td class="num">{{ f.face.contacts|length|default:"" }}</td>
+          <td class="small">{% for b in f.branches.all %}{{ b.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+          <td class="num">{{ f.n }}</td>
+        </tr>{% empty %}<tr><td colspan="5" class="empty small">{% if q or group %}No families match.{% else %}No families yet.{% endif %}</td></tr>{% endfor %}
+      </table>
+    </div>
+  </div>
+
+  <aside class="card parts-detail" data-detail>
+    {% if brief %}{% include "inventory/_family_brief.html" with family=brief.family face=brief.face branches=brief.branches parts=brief.parts %}
+    {% else %}<p class="muted small pad">Pick a family to see it here.</p>{% endif %}
+  </aside>
 </div>
 {% endblock %}
+{% block scripts %}<script src="{% fresh 'harnesses/pinout.js' %}"></script><script>
+  /* The connector of the family picked, drawn in its details. */
+  document.addEventListener('brief', function (e) {
+    var data = e.detail.querySelector('script[data-face]'), svg = e.detail.querySelector('svg[data-face]');
+    if (data && svg) Pinout.face(svg, JSON.parse(data.textContent));
+  });
+</script><script src="{% fresh 'web/browser.js' %}"></script>{% endblock %}

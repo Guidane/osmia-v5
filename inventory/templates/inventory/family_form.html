@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · Osmia{% endblock %}
+{% block content_class %}narrow{% endblock %}
+{% block leave_to %}{{ back }}{% endblock %}
+{% block content %}
+<form method="post" class="form card" action="?{{ request.GET.urlencode }}">{% csrf_token %}
+  <input type="hidden" name="form" value="{{ kind }}">
+  <h1>{{ title }}</h1>
+  <div class="fields">{% include "web/_form_fields.html" %}</div>
+  <div class="actions"><button class="btn primary">Save</button> <a href="{{ back }}">Cancel</a></div>
+</form>
+{% endblock %}

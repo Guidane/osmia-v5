@@ -39,6 +39,8 @@ def _rows(totals):
 
 @login_required
 def budget_list(request):
+    """The budgets, as a tree on the left; in the middle those in the one picked (the top ones when none is), each
+    with what is spent and left; on the right the details of the budget picked (else of the one picked in the tree)."""
     totals = money.totals()
     rows = _rows(totals)
     if not request.GET.get('all'):
@@ -48,7 +50,21 @@ def budget_list(request):
                                                        'Still to come', 'Other costs', 'Spent', 'Left', 'Used %', 'In drafts'],
                                            [(b.number, b.name, str(b.parent or ''), str(b.project or ''), str(b.owner or ''), b.amount,
                                              t.received, t.coming, t.costs, t.spent, t.remaining, t.used, t.planned) for b, _, t in rows])])
-    return render(request, 'budgets/list.html', {'rows': rows})
+    from web import briefs, browse
+    inside = Budget.objects.filter(pk=request.GET.get('in') or 0).first()
+    shown = {b.pk for b, _, _ in rows}
+    own = {}
+    for b, _, _ in rows:
+        own[b.parent_id] = own.get(b.parent_id, 0) + 1
+    kept = browse.keep(request, 'all')
+    tree = browse.nodes([(b, d) for b, d in Budget.ordered() if b.pk in shown], own, inside, lambda b: f'?in={b.pk}{kept}')
+    for n in tree:
+        n['count'] = n['count'] or None
+    nodes = [browse.node('All budgets', f'?{kept[1:]}', len(rows), inside is None)] + tree
+    listed = [(b, 0, t) for b, _, t in rows if b.parent_id == (inside.pk if inside else None)]
+    picked = Budget.objects.filter(pk=request.GET.get('budget') or 0).first() or inside
+    return render(request, 'budgets/list.html', {'rows': rows, 'listed': listed, 'nodes': nodes, 'inside': inside, 'picked': picked,
+                                                 'brief': briefs.of('budget', picked) if picked else None})
 
 
 @login_required

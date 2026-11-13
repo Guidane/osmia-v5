@@ -144,3 +144,42 @@ class DocumentAndLabelTests(Base):
         page = self.client.get(reverse('web:labels', args=['asset']), {'ids': asset.pk, 'size': '64x38', 'show_number': '1', 'show_serial': '1'})
         self.assertContains(page, 'T-010')
         self.assertContains(page, 'S/N SN-55')
+
+
+class AssetFieldTests(Base):
+    """Asset fields: what every asset fills in, whatever its category (a company's own: an inventory ID, a cost centre)."""
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.tool = Asset.objects.create(number='T-001', name='D-sub crimp tool', kind='tool')
+
+    def test_asset_fields_every_asset_fills_in(self):
+        url = reverse('assets:fields')
+        self.client.post(url, {'name': 'Inventory ID', 'kind': 'auto', 'prefix': 'INV-', 'digits': '4'})
+        ident = Attribute.objects.get(name='Inventory ID')
+        self.assertIsNone(ident.category)                                                   # no category: every asset
+        self.assertEqual(AssetValueOf(self.tool, ident), 'INV-0001')                        # the ones there already: numbered
+        self.client.post(url, {'name': 'Cost centre', 'kind': 'choice', 'choices': 'Lab\nProduction'})
+        self.client.post(url, {'name': 'Bought for', 'kind': 'decimal', 'unit': '€'})
+        self.assertContains(self.client.post(url, {'name': 'cost centre', 'kind': 'text'}), 'There is already an asset field')
+        response = self.client.post(reverse('assets:new'), {'number': 'PSU-02', 'name': 'Bench supply', 'kind': 'lab', 'status': 'available',
+                                                            f'attr_{Attribute.objects.get(name="Cost centre").pk}': 'Lab',
+                                                            f'attr_{Attribute.objects.get(name="Bought for").pk}': '129,50',
+                                                            'attributes_of': ''})
+        psu = Asset.objects.get(number='PSU-02')
+        self.assertRedirects(response, psu.get_absolute_url())
+        self.assertEqual((AssetValueOf(psu, ident), AssetValueOf(psu, Attribute.objects.get(name='Cost centre'))), ('INV-0002', 'Lab'))
+        page = self.client.get(psu.get_absolute_url())
+        self.assertContains(page, '129.5')
+        listed = self.client.get(reverse('assets:list'), {f'a{Attribute.objects.get(name="Cost centre").pk}': 'Lab'})
+        self.assertEqual([a.number for a, _ in listed.context['rows']], ['PSU-02'])        # filtered by it, any category
+        self.client.post(reverse('assets:field_move', args=[Attribute.objects.get(name='Bought for').pk]), {'to': 'up'})
+        self.assertEqual([a.name for a in Attribute.asset_fields()], ['Inventory ID', 'Bought for', 'Cost centre'])
+        self.client.post(reverse('assets:field_delete', args=[ident.pk]))
+        self.assertFalse(Attribute.objects.filter(name='Inventory ID').exists())
+
+
+def AssetValueOf(asset, attribute):
+    from assets.models import AssetValue
+    found = AssetValue.objects.filter(asset=asset, attribute=attribute).first()
+    return found.value if found else None

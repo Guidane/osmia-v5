@@ -69,7 +69,9 @@ class Category(Tree):
 
 
 class Attribute(models.Model):
-    """Something the parts and assets of a category, and those of every category under it, fill in, e.g. Resistance in Ω."""
+    """Something the parts and assets of a category, and those of every category under it, fill in, e.g. Resistance in Ω.
+    One of no category is an asset field: every asset fills it in (what a company keeps of its assets: a cost centre,
+    an inventory number, a purchase date)."""
     class Kind(models.TextChoices):
         TEXT = 'text', 'Text'
         INTEGER = 'integer', 'Whole number'
@@ -87,7 +89,7 @@ class Attribute(models.Model):
     NUMERIC = (Kind.INTEGER, Kind.DECIMAL)
     LINKS = (Kind.INTERACTS, Kind.LINK)   # what parts fill in are other parts (or assets), not a value
 
-    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='attributes')
+    category = models.ForeignKey(Category, null=True, blank=True, on_delete=models.CASCADE, related_name='attributes')
     name = models.CharField(max_length=100)
     kind = models.CharField('type', max_length=10, choices=Kind, default=Kind.TEXT)
     unit = models.CharField(max_length=20, blank=True)
@@ -118,7 +120,12 @@ class Attribute(models.Model):
 
     def other_side(self):
         """What the parts or assets linked to call this attribute."""
-        return self.reverse_name or f'{self.name} (of {self.category.name})'
+        return self.reverse_name or f'{self.name} (of {self.category.name if self.category else "assets"})'
+
+    @classmethod
+    def asset_fields(cls):
+        """The asset fields: what every asset fills in, whatever its category."""
+        return list(cls.objects.filter(category=None))
 
     def candidates(self):
         """What may be linked to with this attribute: the target category's parts (and below), every part, or assets."""

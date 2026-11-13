@@ -1,0 +1,11 @@
+{% load osmia %}<section class="card flush" id="to-order">
+  <div class="card-head"><h3>Below their minimum</h3>{% include "web/home/_x.html" %}</div>
+  <table class="list">
+    <tr><th>Part</th><th class="num">Have</th><th class="num">Coming</th><th class="num">Minimum</th><th></th></tr>
+    {% for part, have, coming in to_order %}<tr>
+      <td><a href="{{ part.get_absolute_url }}">{{ part.number }}</a> <span class="muted small">{{ part.description }}</span></td>
+      <td class="num">{{ have|qty }}</td><td class="num">{{ coming|qty }}</td><td class="num">{{ part.minimum|qty }}</td>
+      <td>{% if part.vendor %}<form method="post" action="{% url 'inventory:part_reorder' part.pk %}">{% csrf_token %}<button class="btn small">Reorder</button></form>{% endif %}</td>
+    </tr>{% empty %}<tr><td colspan="5" class="empty small">Every part is above its minimum.</td></tr>{% endfor %}
+  </table>
+</section>

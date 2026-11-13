@@ -1,12 +1,13 @@
 {% extends "base.html" %}{% load osmia %}
 {% block title %}{{ location.name }} · Osmia{% endblock %}
 {% block content %}
-<p class="small"><a href="{% url 'inventory:locations' %}">← Locations</a></p>
+<p class="small"><a href="{% url 'inventory:locations' %}?location={{ location.pk }}">← Locations</a></p>
 <div class="page-head"><h1>{{ location.path }}</h1><span class="muted">{{ location.description }}</span><span class="spacer"></span>
   <a class="btn" href="?export=1">⬇ Excel</a>
   <a class="btn" href="{% url 'inventory:location_new' %}?parent={{ location.pk }}">＋ Inside it</a>
   <a class="btn" href="{% url 'inventory:location_edit' location.pk %}">Change</a></div>
-{% if children %}<p class="small">Inside: {% for c in children %}<a href="{{ c.get_absolute_url }}">{{ c.name }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+{% preview location %}
+{% if children %}<p class="small inside-row">Inside: {% for c in children %}<a class="with-thumb" href="{{ c.get_absolute_url }}">{% thumb c %}{{ c.name }}</a>{% endfor %}</p>{% endif %}
 <div class="card flush">
   <table class="list">
     <tr><th>Part</th><th>Description</th>{% if children %}<th>Where</th>{% endif %}<th class="num">Quantity</th></tr>

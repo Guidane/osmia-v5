@@ -115,3 +115,23 @@ class PageTests(MediaBase):
         self.client.post(reverse('web:page_delete', args=[top.pk]))
         self.assertFalse(Page.objects.exists())
         self.assertFalse(Attachment.objects.exists())
+
+
+class LocationPictureTests(MediaBase):
+    """A location has pictures, files and documentation of its own: on its page, and beside the list of locations."""
+    def test_a_location_s_picture_files_and_pages(self):
+        from web.models import Attachment
+        self.client.post(reverse('web:files', args=['location', self.shelf.pk]), {'file': SimpleUploadedFile('shelf.png', PNG, 'image/png')})
+        picture = Attachment.objects.get()
+        self.assertTrue(picture.preview)                                                   # its first picture: its preview
+        listed = self.client.get(reverse('inventory:locations'), {'location': self.shelf.pk})
+        shown = reverse('web:file', args=[picture.pk])
+        self.assertContains(listed, f'<img class="thumb-sm" src="{shown}"')                # its thumbnail, in the tree
+        self.assertEqual(listed.context['brief']['obj'], self.shelf)                       # the location's own details
+        self.assertContains(listed, f'<a class="main-image" href="{shown}"')               # its picture
+        self.assertContains(listed, reverse('web:files', args=['location', self.shelf.pk]))   # its Files card, to add more
+        self.assertContains(listed, f'kind=location&amp;pk={self.shelf.pk}')               # and a page of documentation
+        page = self.client.get(self.shelf.get_absolute_url())
+        self.assertContains(page, f'<a class="main-image" href="{shown}"')
+        inside = self.client.get(self.store.get_absolute_url())
+        self.assertContains(inside, f'<img class="thumb-sm" src="{shown}"')                # among what is inside the store

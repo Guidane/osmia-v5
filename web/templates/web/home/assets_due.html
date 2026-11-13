@@ -1,0 +1,6 @@
+{% if assets_due or editing %}<section class="card flush">
+  <div class="card-head"><h3>Due for calibration <span class="muted small">within two weeks</span></h3>{% include "web/home/_x.html" %}</div>
+  <table class="list">{% for t in assets_due %}<tr><td><a href="{{ t.get_absolute_url }}">{{ t.number }}</a> <span class="muted small">{{ t.name }}</span></td>
+    <td class="small{% if t.calibration_overdue %} error{% endif %}">{{ t.calibration_due }}</td><td class="small">{{ t.keeper|default:"" }}</td></tr>
+    {% empty %}<tr><td class="empty small">None.</td></tr>{% endfor %}</table>
+</section>{% endif %}

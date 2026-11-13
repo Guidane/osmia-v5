@@ -19,6 +19,8 @@ from .models import SET_TYPES, Connector, Device, DeviceVersion, Pin, pin_order
 
 @login_required
 def device_list(request):
+    """The devices, like the parts: where they are from on the left (made in-house, bought), the devices in the middle,
+    the details of the one picked on the right."""
     q = request.GET.get('q', '').strip()
     found = Device.objects.annotate(n_connectors=Count('connectors', distinct=True), n_units=Count('assets', distinct=True))
     if q:
@@ -31,7 +33,14 @@ def device_list(request):
                                            [(d.number, d.name, d.get_origin_display(), d.manufacturer, d.model, d.version, d.n_connectors,
                                              d.n_units) for d in found]),
                                           ('Pins', PIN_HEAD, _pin_rows(found))])
-    return render(request, 'devices/list.html', {'devices': found, 'q': q, 'origin': origin, 'origins': Device.Origin.choices})
+    from web import briefs, browse
+    counts = dict(Device.objects.values('origin').annotate(n=Count('pk')).values_list('origin', 'n'))
+    kept = browse.keep(request, 'q')
+    nodes = [browse.node('All devices', f'?{kept[1:]}', sum(counts.values()), not origin)] + [
+        browse.node(label, f'?origin={value}{kept}', counts.get(value, 0), origin == value) for value, label in Device.Origin.choices]
+    picked = Device.objects.filter(pk=request.GET.get('device') or 0).first()
+    return render(request, 'devices/list.html', {'devices': found, 'q': q, 'origin': origin, 'nodes': nodes, 'picked': picked,
+                                                 'brief': briefs.of('device', picked) if picked else None})
 
 
 PIN_HEAD = ['Device', 'Connector', 'Connector name', 'Connector part', 'Pin', 'Signal', 'Set', 'Set type', 'Description']

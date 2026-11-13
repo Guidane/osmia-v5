@@ -79,7 +79,14 @@ class ProjectTests(Base):
         self.assertContains(page, 'BR-LB-B')
         for tab in ('subs', 'diagrams', 'harnesses', 'orders', 'devices', 'assets', 'tools', 'notes'):   # the page in tabs
             self.assertContains(page, f'data-panel="{tab}"')
-        # the list: a tree; a sub-project found stands under the project it is part of
-        listed = self.client.get(reverse('work:list'), {'q': 'rev B'})
-        self.assertEqual([(p.name, p.depth, p.matched) for p in listed.context['projects']],
-                         [('Burn-in rack', 0, False), ('Load boards', 1, False), ('Board rev B', 2, True)])
+        # the list: a tree on the left, the projects of the one picked, its details
+        listed = self.client.get(reverse('work:list'), {'q': 'rev B'})                    # found, wherever it is
+        self.assertEqual([p.name for p in listed.context['projects']], ['Board rev B'])
+        listed = self.client.get(reverse('work:list'))
+        self.assertEqual([p.name for p in listed.context['projects']], ['Burn-in rack'])    # the top ones
+        self.assertEqual([(n['label'], n['depth'], n['count']) for n in listed.context['nodes']],
+                         [('All projects', 0, 3), ('BR Burn-in rack', 0, 2), ('BR-LB Load boards', 1, 1), ('BR-LB-B Board rev B', 2, None)])
+        listed = self.client.get(reverse('work:list'), {'in': rack.pk})                    # picked in the tree: what is in it
+        self.assertEqual([p.name for p in listed.context['projects']], ['Load boards'])
+        self.assertEqual(listed.context['brief']['obj'], rack)                               # and its details
+        self.assertContains(self.client.get(reverse('web:brief', args=['project', boards.pk])), 'Board rev B')

@@ -5,7 +5,7 @@
 <div class="page-head"><h1>Parts</h1><span class="spacer"></span>
   <a class="btn" href="?{{ request.GET.urlencode }}{% if request.GET %}&amp;{% endif %}export=1">⬇ Excel</a>
   <button type="button" class="btn" data-labels="{% url 'web:labels' 'part' %}" title="Labels of the ticked parts (none ticked: of all listed)">🏷 Labels</button>
-  <a class="btn" href="{% url 'inventory:categories' %}">Categories</a><a class="btn" href="{% url 'inventory:families' %}">Families</a><a class="btn" href="{% url 'inventory:vendors' %}">Vendors</a>
+  <a class="btn" href="{% url 'inventory:categories' %}">Categories</a><a class="btn" href="{% url 'inventory:families' %}">Connector families</a><a class="btn" href="{% url 'inventory:vendors' %}">Vendors</a>
   <a class="btn primary" href="{% url 'inventory:part_new' %}{% if category %}?category={{ category.pk }}{% endif %}">＋ New part</a></div>
 
 <div class="parts-browser">
@@ -44,44 +44,4 @@
   </aside>
 </div>
 {% endblock %}
-{% block scripts %}<script>
-  /* Labels of the ticked ones (none ticked: of all those listed). */
-  document.querySelectorAll('[data-labels]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var boxes = document.querySelectorAll('input[name=pick]'), ticked = Array.prototype.filter.call(boxes, function (x) { return x.checked; });
-      var ids = (ticked.length ? ticked : Array.prototype.slice.call(boxes)).map(function (x) { return x.value; });
-      if (ids.length) location.href = b.dataset.labels + '?ids=' + ids.join(',');
-    });
-  });
-  var all = document.querySelector('input[data-pick-all]');
-  if (all) all.addEventListener('change', function () { document.querySelectorAll('input[name=pick]').forEach(function (x) { x.checked = all.checked; }); });
-
-  /* A row picked (clicked, or Enter, or the arrow keys): its details on the right, kept in the address as ?part=. */
-  (function () {
-    var detail = document.querySelector('[data-detail]'), rows = Array.prototype.slice.call(document.querySelectorAll('tr[data-part]'));
-    var asked = 0;
-    function pick(row) {
-      rows.forEach(function (r) { r.classList.toggle('on', r === row); });
-      var url = new URL(location.href);
-      url.searchParams.set('part', row.dataset.part);
-      history.replaceState(null, '', url);
-      var mine = ++asked;
-      fetch(row.dataset.briefUrl, { headers: { 'X-Requested-With': 'fetch' } }).then(function (r) { return r.text(); }).then(function (html) {
-        if (mine === asked) detail.innerHTML = html;
-      });
-    }
-    rows.forEach(function (row, i) {
-      row.addEventListener('click', function (e) {
-        if (e.target.closest('a, input, button')) return;   // the part number still opens its page; ticking stays ticking
-        pick(row);
-      });
-      row.addEventListener('keydown', function (e) {
-        var to = e.key === 'ArrowDown' ? rows[i + 1] : e.key === 'ArrowUp' ? rows[i - 1] : e.key === 'Enter' ? row : null;
-        if (!to) return;
-        e.preventDefault();
-        to.focus();
-        pick(to);
-      });
-    });
-  })();
-</script>{% endblock %}
+{% block scripts %}<script src="{% fresh 'web/browser.js' %}"></script>{% endblock %}

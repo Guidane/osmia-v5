@@ -11,6 +11,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from inventory import attributes as kept
@@ -37,6 +38,9 @@ class AssetForm(AttributesForm):
                    'notes': forms.Textarea(attrs={'rows': 3})}
 
     on_order = forms.BooleanField(required=False, label='Still to be bought')
+
+    def common(self):
+        return Attribute.asset_fields()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -67,19 +71,20 @@ def asset_list(request):
         found = found.filter(status=status)
     elif not request.GET.get('all'):
         found = found.exclude(status=Asset.Status.RETIRED)
-    attributes = category.all_attributes() if category else []
-    if category is not None:
-        found = kept.filtered(found, attributes, request.GET, AssetStore())
+    attributes = Attribute.asset_fields() + (category.all_attributes() if category else [])   # its fields, its category's
+    found = kept.filtered(found, attributes, request.GET, AssetStore())
     assets = list(found)
     if request.GET.get('due'):
         due = {a.pk for a in service.due()}
         assets = [a for a in assets if a.pk in due]
     if request.GET.get('export'):
+        fields = Attribute.asset_fields()
+        values = dict(kept.columns(assets, fields, AssetStore()))
         return excel.download('assets', [('Assets', ['Asset tag', 'Asset number', 'Name', 'Kind', 'Category', 'Manufacturer', 'Model', 'Serial number',
-                                                     'Kept at', 'Keeper', 'Status', 'Out with', 'Calibrated', 'Due'],
+                                                     'Kept at', 'Keeper', 'Status', 'Out with', 'Calibrated', 'Due'] + [f.name for f in fields],
                                           [(a.number, a.asset_number, a.name, a.get_kind_display(), a.category.path if a.category else '', a.manufacturer, a.model,
                                             a.serial, a.location.path if a.location else '', str(a.keeper or ''), a.get_status_display(),
-                                            str(a.holder or ''), a.calibrated_on, a.calibration_due) for a in assets])])
+                                            str(a.holder or ''), a.calibrated_on, a.calibration_due, *values[a]) for a in assets])])
     tree = Category.of(Category.Kind.ASSETS)
     own = dict(Asset.objects.exclude(status=Asset.Status.RETIRED).values('category').annotate(n=Count('pk')).values_list('category', 'n'))
     children = {}
@@ -187,3 +192,43 @@ def checklist(request, pk):
     except ValidationError as exc:
         errors(request, exc)
     return redirect(item)
+
+
+# -- the asset fields: what every asset fills in, whatever its category ------------------------------------------
+
+@login_required
+def fields(request, pk=None):
+    """The asset fields (a list, each changed, moved or taken away) and a new one added."""
+    from inventory.forms import AttributeForm
+    current = get_object_or_404(Attribute, pk=pk, category=None) if pk else None
+    form = AttributeForm(request.POST or None, instance=current, category=None)
+    if request.method == 'POST' and form.is_valid():
+        saved = form.save()
+        messages.success(request, f'{saved.name} is saved.')
+        return redirect('assets:fields')
+    if current is not None:
+        return render(request, 'web/form.html', {'form': form, 'title': f'Asset field {current.name}', 'back': reverse('assets:fields')})
+    return render(request, 'assets/fields.html', {'fields': Attribute.asset_fields(), 'form': form})
+
+
+@login_required
+@require_POST
+def field_delete(request, pk):
+    found = get_object_or_404(Attribute, pk=pk, category=None)
+    found.delete()
+    messages.success(request, f'{found.name} is taken away, with what was filled in for it.')
+    return redirect('assets:fields')
+
+
+@login_required
+@require_POST
+def field_move(request, pk):
+    order = Attribute.asset_fields()
+    found = get_object_or_404(Attribute, pk=pk, category=None)
+    i = order.index(found)
+    j = i - 1 if request.POST.get('to') == 'up' else i + 1
+    if 0 <= j < len(order):
+        order[i], order[j] = order[j], order[i]
+        for position, a in enumerate(order):
+            Attribute.objects.filter(pk=a.pk).update(position=position)
+    return redirect('assets:fields')

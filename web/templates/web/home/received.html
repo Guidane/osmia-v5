@@ -1,0 +1,5 @@
+{% if received or editing %}<section class="card flush">
+  <div class="card-head"><h3>Arrived lately</h3>{% include "web/home/_x.html" %}</div>
+  <table class="list">{% for o in received %}<tr><td><a href="{{ o.get_absolute_url }}">{{ o.number }}</a></td><td>{{ o.vendor|default:"—" }}</td><td class="nowrap">{{ o.received_on }}</td></tr>
+    {% empty %}<tr><td class="empty small">None.</td></tr>{% endfor %}</table>
+</section>{% endif %}

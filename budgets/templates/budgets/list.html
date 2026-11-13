@@ -1,21 +1,35 @@
 {% extends "base.html" %}{% load osmia %}
 {% block title %}Budgets · Osmia{% endblock %}
+{% block content_class %}wide{% endblock %}
 {% block content %}
 <p class="small"><a href="{% url 'orders:list' %}">← Orders</a></p>
 <div class="page-head"><h1>Budgets</h1><span class="spacer"></span>
   <a class="btn" href="?export=1{% if request.GET.all %}&amp;all=1{% endif %}">⬇ Excel</a>
-  <a class="btn primary" href="{% url 'budgets:new' %}">＋ New budget</a></div>
-<div class="filters"><a class="small" href="?{% if not request.GET.all %}all=1{% endif %}">{% if request.GET.all %}Only the open ones{% else %}Also closed ones{% endif %}</a></div>
-<div class="card flush">
-  <table class="list">
-    <tr><th>Budget</th><th>Owner</th><th class="num">Amount</th><th class="num">Spent</th><th class="num">Left</th><th>Used</th></tr>
-    {% for b, depth, t in rows %}<tr>
-      <td style="padding-left:{{ depth|add:1 }}em"><a href="{{ b.get_absolute_url }}">{{ b }}</a>{% if b.project %} <span class="muted small">{{ b.project }}</span>{% endif %}{% if not b.active %} <span class="badge">Closed</span>{% endif %}</td>
-      <td class="small">{{ b.owner|default:"" }}</td>
-      <td class="num">{{ b.amount|money }}</td><td class="num">{{ t.spent|money }}</td>
-      <td class="num{% if t.over %} low{% endif %}">{{ t.remaining|money }}</td>
-      <td><span class="meter{% if t.over %} over{% elif t.used >= 90 %} near{% endif %}"><span style="width:{% if t.used > 100 %}100{% else %}{{ t.used }}{% endif %}%"></span></span> <span class="small">{{ t.used }}%</span></td>
-    </tr>{% empty %}<tr><td colspan="6" class="empty small">No budgets yet.</td></tr>{% endfor %}
-  </table>
+  <a class="btn primary" href="{% url 'budgets:new' %}{% if inside %}?parent={{ inside.pk }}{% endif %}">＋ New budget{% if inside %} in it{% endif %}</a></div>
+
+<div class="parts-browser" data-param="budget">
+  {% include "web/_tree_nav.html" with label="Budgets" %}
+
+  <div class="parts-middle">
+    <form method="get" class="filters">{% if inside %}<input type="hidden" name="in" value="{{ inside.pk }}">{% endif %}
+      <label class="small"><input type="checkbox" name="all" value="1"{% if request.GET.all %} checked{% endif %} onchange="this.form.submit()"> also closed ones</label></form>
+    <div class="card flush">
+      <table class="list parts-list">
+        <tr><th>Budget</th><th>Owner</th><th class="num">Amount</th><th class="num">Spent</th><th class="num">Left</th><th>Used</th></tr>
+        {% for b, depth, t in listed %}<tr data-part="{{ b.pk }}" data-brief-url="{% url 'web:brief' 'budget' b.pk %}" class="{% if picked.pk == b.pk %}on{% endif %}" tabindex="0">
+          <td><a href="{{ b.get_absolute_url }}">{{ b }}</a>{% if b.project %} <span class="muted small">{{ b.project }}</span>{% endif %}{% if not b.active %} <span class="badge">Closed</span>{% endif %}</td>
+          <td class="small">{{ b.owner|default:"" }}</td>
+          <td class="num">{{ b.amount|money }}</td><td class="num">{{ t.spent|money }}</td>
+          <td class="num{% if t.over %} low{% endif %}">{{ t.remaining|money }}</td>
+          <td><span class="meter{% if t.over %} over{% elif t.used >= 90 %} near{% endif %}"><span style="width:{% if t.used > 100 %}100{% else %}{{ t.used }}{% endif %}%"></span></span> <span class="small">{{ t.used }}%</span></td>
+        </tr>{% empty %}<tr><td colspan="6" class="empty small">{% if inside %}No budgets in it.{% else %}No budgets yet.{% endif %}</td></tr>{% endfor %}
+      </table>
+    </div>
+  </div>
+
+  <aside class="card parts-detail" data-detail>
+    {% if brief %}{% include "web/_brief.html" %}{% else %}<p class="muted small pad">Pick a budget to see it here.</p>{% endif %}
+  </aside>
 </div>
 {% endblock %}
+{% block scripts %}<script src="{% fresh 'web/browser.js' %}"></script>{% endblock %}

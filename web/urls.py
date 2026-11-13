@@ -6,9 +6,11 @@ app_name = 'web'
 
 urlpatterns = [
     path('', views.home, name='home'),
+    path('home/reports/', views.home_reports, name='home_reports'),
     path('files/<slug:kind>/<int:pk>/', files.upload, name='files'),
     path('files/<int:pk>/', files.file, name='file'),
     path('notes/<slug:kind>/<int:pk>/', views.notes, name='notes'),
+    path('brief/<slug:kind>/<int:pk>/', views.brief, name='brief'),
     path('files/<int:pk>/remove/', files.remove, name='file_remove'),
     path('files/<int:pk>/preview/', files.make_preview, name='file_preview'),
     path('docs/', pages.docs, name='docs'),

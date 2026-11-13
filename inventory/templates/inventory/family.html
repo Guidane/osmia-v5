@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% load osmia %}
 {% block title %}{{ family.name }} · Osmia{% endblock %}
 {% block content %}
-<p class="small"><a href="{% url 'inventory:families' %}">← Families</a></p>
+<p class="small"><a href="{% url 'inventory:families' %}">← Connector families</a></p>
 <div class="page-head"><h1>{{ family.name }}</h1><span class="spacer"></span><a class="btn" href="{% url 'inventory:families' %}?edit={{ family.pk }}">Change</a></div>
 <div class="tiles">
   <div class="tile"><b>{{ family.on_hand|qty }}</b> {{ family.unit }} on hand, together</div>

@@ -22,6 +22,7 @@ class User(AbstractUser):
     job_title = models.CharField(max_length=100, blank=True)
     phone = models.CharField(max_length=30, blank=True)
     department = models.ForeignKey(Department, null=True, blank=True, on_delete=models.SET_NULL, related_name='members')
+    home_reports = models.JSONField(null=True, blank=True, editable=False)   # the reports on their Home, in order (None: as it comes)
 
     class Meta:
         ordering = ['first_name', 'last_name', 'username']

@@ -56,7 +56,17 @@ def users(request):
                                                    'Can log in', 'Last logged in'],
                                          [(u.username, u.get_full_name(), u.email, u.job_title, u.phone, u.department.path if u.department else '',
                                            'yes' if u.is_superuser else '', 'yes' if u.is_active else 'no', u.last_login) for u in found])])
-    return render(request, 'accounts/users.html', {'users': found, 'q': q, 'department': department, 'departments': Department.ordered()})
+    from web import briefs, browse
+    everyone = User.objects.all() if request.GET.get('all') else User.objects.filter(is_active=True)
+    own = dict(everyone.exclude(department=None).values('department').annotate(n=Count('pk')).values_list('department', 'n'))
+    kept = browse.keep(request, 'q', 'all')
+    loose = bool(request.GET.get('none'))
+    nodes = [browse.node('Everyone', f'?{kept[1:]}', everyone.count(), department is None and not loose)] + browse.nodes(
+        Department.ordered(), own, department, lambda d: f'?department={d.pk}{kept}', label=lambda d: d.name) + [
+        browse.node('In no department', f'?none=1{kept}', everyone.filter(department=None).count(), loose)]
+    picked = User.objects.filter(pk=request.GET.get('user') or 0).first()
+    return render(request, 'accounts/users.html', {'users': found, 'q': q, 'department': department, 'nodes': nodes, 'loose': loose,
+                                                   'picked': picked, 'brief': briefs.of('user', picked) if picked else None})
 
 
 @administrators

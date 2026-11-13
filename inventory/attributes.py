@@ -172,8 +172,13 @@ def filters(attributes, query):
 
 
 
+def of(obj, node):
+    """The attributes ``obj`` (a part or an asset) fills in: an asset's fields first, then its category's (``node``)."""
+    return ([] if isinstance(obj, Part) else Attribute.asset_fields()) + (node.all_attributes() if node else [])
+
+
 def shown(obj, node):
     """[(attribute, value)] of a part or asset for its page: a link attribute's value is what it links to."""
     store = store_for(obj)
     values = store.values(obj)
-    return [(a, store.linked(a, obj) if a.is_link else a.show(values.get(a.pk, ''))) for a in (node.all_attributes() if node else [])]
+    return [(a, store.linked(a, obj) if a.is_link else a.show(values.get(a.pk, ''))) for a in of(obj, node)]

@@ -85,7 +85,12 @@ def order_list(request):
     found = list(found[:300])
     if shown == 'open':   # late ones first, then by when they are expected
         found.sort(key=lambda o: (not o.overdue, o.expected_on or date.max, o.pk))
-    return render(request, 'orders/list.html', {'orders': found, 'shown': shown, 'tabs': [(k, v[0]) for k, v in SHOWN.items()], 'q': q,
+    from web import briefs, browse
+    kept = browse.keep(request, 'q')
+    nodes = [browse.node(label, f'?show={key}{kept}', Order.objects.filter(which).count(), key == shown) for key, (label, which) in SHOWN.items()]
+    picked = Order.objects.filter(pk=request.GET.get('order') or 0).first()
+    return render(request, 'orders/list.html', {'orders': found, 'shown': shown, 'nodes': nodes, 'q': q, 'picked': picked,
+                                                'brief': briefs.of('order', picked) if picked else None,
                                                 'requests': Order.objects.filter(REQUESTS).count()})
 
 

@@ -1,16 +1,32 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load osmia %}
 {% block title %}Vendors · Osmia{% endblock %}
+{% block content_class %}wide{% endblock %}
 {% block content %}
 <p class="small"><a href="{% url 'inventory:parts' %}">← Parts</a> · <a href="{% url 'orders:list' %}">← Orders</a></p>
 <div class="page-head"><h1>Vendors</h1><span class="spacer"></span><a class="btn primary" href="{% url 'inventory:vendor_new' %}">＋ New vendor</a></div>
-<div class="card flush">
-  <table class="list">
-    <tr><th>Vendor</th><th>Code</th><th>Email</th><th>Phone</th><th></th></tr>
-    {% for v in vendors %}<tr>
-      <td><a href="{{ v.get_absolute_url }}">{{ v.name }}</a></td><td class="small">{{ v.code }}</td>
-      <td class="small">{% if v.email %}<a href="mailto:{{ v.email }}">{{ v.email }}</a>{% endif %}</td><td class="small">{{ v.phone }}</td>
-      <td>{% if not v.active %}<span class="badge">Inactive</span>{% endif %}</td>
-    </tr>{% empty %}<tr><td colspan="5" class="empty small">No vendors yet.</td></tr>{% endfor %}
-  </table>
+
+<div class="parts-browser" data-param="vendor">
+  {% include "web/_tree_nav.html" with label="Vendors" %}
+
+  <div class="parts-middle">
+    <form method="get" class="filters">{% if shown %}<input type="hidden" name="show" value="{{ shown }}">{% endif %}
+      <input type="search" name="q" value="{{ q }}" placeholder="Name, code, email…" aria-label="Search vendors">
+      <button class="btn">Find</button></form>
+    <div class="card flush">
+      <table class="list parts-list">
+        <tr><th>Vendor</th><th>Code</th><th>Email</th><th>Phone</th><th></th></tr>
+        {% for v in vendors %}<tr data-part="{{ v.pk }}" data-brief-url="{% url 'web:brief' 'vendor' v.pk %}" class="{% if picked.pk == v.pk %}on{% endif %}" tabindex="0">
+          <td><a href="{{ v.get_absolute_url }}">{{ v.name }}</a></td><td class="small">{{ v.code }}</td>
+          <td class="small">{% if v.email %}<a href="mailto:{{ v.email }}">{{ v.email }}</a>{% endif %}</td><td class="small">{{ v.phone }}</td>
+          <td>{% if not v.active %}<span class="badge">Inactive</span>{% endif %}</td>
+        </tr>{% empty %}<tr><td colspan="5" class="empty small">{% if q or shown %}No vendors match.{% else %}No vendors yet.{% endif %}</td></tr>{% endfor %}
+      </table>
+    </div>
+  </div>
+
+  <aside class="card parts-detail" data-detail>
+    {% if brief %}{% include "web/_brief.html" %}{% else %}<p class="muted small pad">Pick a vendor to see it here.</p>{% endif %}
+  </aside>
 </div>
 {% endblock %}
+{% block scripts %}<script src="{% fresh 'web/browser.js' %}"></script>{% endblock %}

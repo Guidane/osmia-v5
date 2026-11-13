@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Asset fields · Osmia{% endblock %}
+{% block content %}
+<p class="small"><a href="{% url 'assets:list' %}">← Assets</a></p>
+<div class="page-head"><h1>Asset fields</h1></div>
+
+<section class="card flush" id="fields">
+  <div class="card-head"><h3>Fields <span class="muted small">{{ fields|length }}</span></h3></div>
+  <table class="list">
+    <tr><th>Field</th><th>Type</th><th>Unit, choices, what it links to</th><th>Required</th><th></th></tr>
+    {% for a in fields %}<tr>
+      <td><b>{{ a.name }}</b>{% if a.help %} <span class="muted small">{{ a.help }}</span>{% endif %}</td><td class="small">{{ a.get_kind_display }}</td>
+      <td class="small">{% include "inventory/_attribute_detail.html" %}</td>
+      <td>{% if a.required %}✓{% endif %}</td>
+      <td class="nowrap">
+        <form method="post" action="{% url 'assets:field_move' a.pk %}" class="inline">{% csrf_token %}
+          <button class="btn small ghost" name="to" value="up" title="Up"{% if forloop.first %} disabled{% endif %}>↑</button><button class="btn small ghost" name="to" value="down" title="Down"{% if forloop.last %} disabled{% endif %}>↓</button></form>
+        <a class="btn small ghost" href="{% url 'assets:field_edit' a.pk %}">Change</a>
+        <form method="post" action="{% url 'assets:field_delete' a.pk %}" class="inline" data-confirm="Take {{ a.name }} away? What was filled in for it goes too.">{% csrf_token %}<button class="btn small ghost" title="Take it away">✕</button></form></td></tr>
+    {% empty %}<tr><td colspan="5" class="empty small">No asset fields yet.</td></tr>{% endfor %}
+  </table>
+</section>
+
+<form method="post" action="{% url 'assets:fields' %}" class="form card">{% csrf_token %}
+  <h3>New field</h3>
+  <div class="fields">{% include "web/_form_fields.html" %}</div>
+  <div class="actions"><button class="btn primary">＋ Add it</button></div>
+</form>
+{% endblock %}

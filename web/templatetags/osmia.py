@@ -121,3 +121,12 @@ def kind(obj):
     """What ``obj`` is called in addresses (``web.things``): part, asset, harness, …"""
     from web.things import kind_of
     return kind_of(obj)
+
+
+@register.filter
+def json_text(value):
+    """``value`` as JSON for inside a <script type="application/json"> (where a details pane fetched later keeps its data)."""
+    import json
+
+    from django.utils.safestring import mark_safe
+    return mark_safe(json.dumps(value).replace('<', '\\u003C').replace('>', '\\u003E').replace('&', '\\u0026'))

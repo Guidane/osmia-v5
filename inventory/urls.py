@@ -25,6 +25,7 @@ urlpatterns = [
     path('locations/<int:pk>/edit/', views.location_form, name='location_edit'),
     path('families/', views.families, name='families'),
     path('families/standard/', views.standard_families, name='families_standard'),
+    path('families/<int:pk>/brief/', views.family_brief, name='family_brief'),
     path('families/<int:pk>/', views.family, name='family'),
     path('families/<int:pk>/connector/', views.connector, name='connector'),
     path('vendors/', views.vendors, name='vendors'),

@@ -1,23 +1,38 @@
 {% extends "base.html" %}{% load osmia %}
 {% block title %}Projects · Osmia{% endblock %}
+{% block content_class %}wide{% endblock %}
 {% block content %}
 <div class="page-head"><h1>Projects</h1><span class="spacer"></span>
-  <form method="get" class="inline-form">
-    <input type="search" name="q" value="{{ q }}" placeholder="Find…" aria-label="Find a project">
-    <select name="status" aria-label="Status" onchange="this.form.submit()"><option value="all"{% if shown == 'all' %} selected{% endif %}>All</option>
-      {% for value, label in statuses %}<option value="{{ value }}"{% if shown == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
-  </form>
-  <a class="btn primary" href="{% url 'work:new' %}">＋ New project</a></div>
-<div class="card flush">
-  <table class="list">
-    <tr><th></th><th>Project</th><th>Status</th><th>Owner</th><th class="num">Wire diagrams</th><th class="num">Orders</th><th class="num">Devices</th><th class="num">Assets and tools</th></tr>
-    {% for p in projects %}<tr class="{% if not p.matched %}muted{% endif %}">
-      <td class="thumb-cell">{% thumb p %}</td>
-      <td class="tree-cell" style="--depth: {{ p.depth }}">{% if p.depth %}<span class="tree-elbow">└</span>{% endif %}<a href="{{ p.get_absolute_url }}">{{ p }}</a> <span class="muted small">{{ p.description|truncatechars:80 }}</span></td>
-      <td><span class="badge{% if p.status == 'active' %} ok{% endif %}">{{ p.get_status_display }}</span></td>
-      <td class="small">{{ p.owner|default:"" }}</td>
-      <td class="num">{{ p.n_diagrams }}</td><td class="num">{{ p.n_orders }}</td><td class="num">{{ p.n_devices }}</td><td class="num">{{ p.n_assets }}</td>
-    </tr>{% empty %}<tr><td colspan="8" class="empty small">No projects{% if shown != 'all' %} here{% endif %}.</td></tr>{% endfor %}
-  </table>
+  <a class="btn primary" href="{% url 'work:new' %}{% if inside %}?parent={{ inside.pk }}{% endif %}">＋ New {% if inside %}sub-project{% else %}project{% endif %}</a></div>
+
+<div class="parts-browser" data-param="project">
+  {% include "web/_tree_nav.html" with label="Projects" %}
+
+  <div class="parts-middle">
+    <form method="get" class="filters">
+      {% if inside %}<input type="hidden" name="in" value="{{ inside.pk }}">{% endif %}
+      <input type="search" name="q" value="{{ q }}" placeholder="Find…" aria-label="Find a project">
+      <select name="status" aria-label="Status" onchange="this.form.submit()"><option value="all"{% if shown == 'all' %} selected{% endif %}>All</option>
+        {% for value, label in statuses %}<option value="{{ value }}"{% if shown == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+      <button class="btn">Find</button>
+    </form>
+    <div class="card flush">
+      <table class="list parts-list">
+        <tr><th></th><th>{% if inside and not q %}Sub-project{% else %}Project{% endif %}</th><th>Status</th><th>Owner</th><th class="num">Wire diagrams</th><th class="num">Orders</th><th class="num">Devices</th><th class="num">Assets and tools</th></tr>
+        {% for p in projects %}<tr data-part="{{ p.pk }}" data-brief-url="{% url 'web:brief' 'project' p.pk %}" class="{% if picked.pk == p.pk %}on{% endif %}" tabindex="0">
+          <td class="thumb-cell">{% thumb p %}</td>
+          <td><a href="{{ p.get_absolute_url }}">{{ p }}</a> <span class="muted small">{{ p.description|truncatechars:80 }}</span></td>
+          <td><span class="badge{% if p.status == 'active' %} ok{% endif %}">{{ p.get_status_display }}</span></td>
+          <td class="small">{{ p.owner|default:"" }}</td>
+          <td class="num">{{ p.n_diagrams }}</td><td class="num">{{ p.n_orders }}</td><td class="num">{{ p.n_devices }}</td><td class="num">{{ p.n_assets }}</td>
+        </tr>{% empty %}<tr><td colspan="8" class="empty small">{% if inside and not q %}No sub-projects.{% else %}No projects{% if shown != 'all' or q %} here{% endif %}.{% endif %}</td></tr>{% endfor %}
+      </table>
+    </div>
+  </div>
+
+  <aside class="card parts-detail" data-detail>
+    {% if brief %}{% include "web/_brief.html" %}{% else %}<p class="muted small pad">Pick a project to see it here.</p>{% endif %}
+  </aside>
 </div>
 {% endblock %}
+{% block scripts %}<script src="{% fresh 'web/browser.js' %}"></script>{% endblock %}

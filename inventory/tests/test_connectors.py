@@ -122,3 +122,21 @@ class ConnectorTests(Base):
         self.assertEqual(extra['contacts'][-1][0], 'S')
         self.assertEqual(extra['below'], family.face['h'])
         self.assertEqual([c[0] for c in drawn(None, ['1', '4'])['contacts']], ['1', '2', '3', '4'])
+
+    def test_connector_families_as_a_tree_a_list_and_details(self):
+        from inventory.models import FamilyBranch
+        circular = FamilyBranch.objects.create(name='Circular')
+        m12 = FamilyBranch.objects.create(name='M12', parent=circular)
+        five = Family.objects.create(name='M12 5-pin', group=m12, face=start('circle', 5))
+        Family.objects.create(name='Header 3', face=start('row', 3))
+        url = reverse('inventory:families')
+        page = self.client.get(url, {'group': circular.pk, 'family': five.pk})
+        self.assertContains(page, 'Connector families')
+        self.assertEqual([f.name for f in page.context['families']], ['M12 5-pin'])         # of the branch and those under it
+        self.assertEqual([(n['label'], n['count']) for n in page.context['nodes']], [('All families', 2), ('Circular', 1), ('M12', 1)])
+        self.assertEqual(page.context['brief']['family'], five)                              # its details, already open
+        brief = self.client.get(reverse('inventory:family_brief', args=[five.pk]))
+        self.assertContains(brief, 'Edit connector')
+        self.assertContains(brief, 'data-face')
+        self.assertContains(self.client.get(url, {'new': 'family', 'group': m12.pk}), 'New connector family')   # a form of its own
+        self.assertEqual([f.name for f in self.client.get(url, {'q': 'header'}).context['families']], ['Header 3'])

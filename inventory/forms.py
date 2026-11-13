@@ -80,7 +80,7 @@ class AttributesForm(TreeForm):
         # The attributes shown were those of ``attributes_of``: a category picked since has its own still to fill in.
         self.shown_category = node.pk if node else ''
         moved = self.is_bound and str(self.data.get('attributes_of', '')) != str(self.shown_category)
-        self.attributes = node.all_attributes() if node else []
+        self.attributes = self.common() + (node.all_attributes() if node else [])
         self.store = store_for(self.instance)
         have = self.store.values(self.instance) if self.instance.pk else {}
         for a in self.attributes:
@@ -88,6 +88,10 @@ class AttributesForm(TreeForm):
                 linked = self.store.linked(a, self.instance)
                 have[a.pk] = [x.pk for x in linked] if a.kind == Attribute.Kind.INTERACTS or a.to_assets else ', '.join(x.number for x in linked)
             self.fields[f'attr_{a.pk}'] = attribute_field(a, a.required and not moved, have.get(a.pk))
+
+    def common(self):
+        """What it fills in whatever its category (an asset: the asset fields)."""
+        return []
 
     def attribute_fields(self):
         return [self[f'attr_{a.pk}'] for a in self.attributes]
@@ -165,11 +169,15 @@ class AttributeForm(forms.ModelForm):
         fields = ['name', 'kind', 'unit', 'choices', 'prefix', 'digits', 'target', 'links_to', 'reverse_name', 'required', 'help']
         widgets = {'choices': forms.Textarea(attrs={'rows': 4})}
 
-    def __init__(self, *args, category, **kwargs):
+    def __init__(self, *args, category, **kwargs):   # (category None: an asset field)
         super().__init__(*args, **kwargs)
         self.category = category
         self.fields['target'].choices = tree_choices(Category, kind=Category.Kind.PARTS)
         self.fields['digits'].required = False
+        if category is None:   # what interacts with parts of a category is a part's
+            self.fields['kind'].choices = [c for c in self.fields['kind'].choices if c[0] != Attribute.Kind.INTERACTS]
+            for name in ('target', 'reverse_name'):
+                del self.fields[name]
 
     def _values(self):
         """What parts and assets filled in for it."""
@@ -180,6 +188,10 @@ class AttributeForm(forms.ModelForm):
 
     def clean_name(self):
         name = self.cleaned_data['name'].strip()
+        if self.category is None:
+            if Attribute.objects.filter(category=None, name__iexact=name).exclude(pk=self.instance.pk).exists():
+                raise forms.ValidationError(f'There is already an asset field "{name}".')
+            return name
         related = [c.pk for c in self.category.chain()] + list(self.category.below())
         clash = Attribute.objects.filter(category__in=related, name__iexact=name).exclude(pk=self.instance.pk).select_related('category').first()
         if clash:
@@ -220,7 +232,7 @@ class AttributeForm(forms.ModelForm):
         attribute = super().save(commit=False)
         attribute.category = self.category
         if not attribute.pk:
-            attribute.position = self.category.attributes.count()
+            attribute.position = Attribute.objects.filter(category=self.category).count()
         if not attribute.is_link:
             attribute.target, attribute.links_to, attribute.reverse_name = None, '', ''
         elif attribute.kind == Attribute.Kind.LINK:
@@ -230,10 +242,13 @@ class AttributeForm(forms.ModelForm):
             from assets.models import Asset
 
             from .attributes import number_up
-            below = self.category.below()
             for v in self._values():
                 v.value = attribute.auto_value(int(v.number))
                 v.save(update_fields=['value'])
+            if self.category is None:   # an asset field: every asset
+                number_up(attribute, list(Asset.objects.order_by('pk')))
+                return attribute
+            below = self.category.below()
             number_up(attribute, list(Part.objects.filter(category_id__in=below).order_by('pk'))
                       + list(Asset.objects.filter(category_id__in=below).order_by('pk')))
             return attribute

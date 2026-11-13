@@ -1,58 +1,18 @@
 {% extends "base.html" %}{% load osmia %}
 {% block title %}Home · Osmia{% endblock %}
 {% block content %}
-<div class="tiles">
-  <a class="tile{% if to_order %} warn{% endif %}" href="#to-order"><b>{{ to_order|length }}</b> part{{ to_order|length|pluralize }} to order</a>
-  <a class="tile" href="{% url 'orders:list' %}"><b>{{ waiting|length }}</b> order{{ waiting|length|pluralize }} still to come</a>
-  <a class="tile{% if late %} bad{% endif %}" href="{% url 'orders:list' %}"><b>{{ late }}</b> late</a>
-  <a class="tile{% if requests %} warn{% endif %}" href="{% url 'orders:list' %}?show=requests"><b>{{ requests }}</b> request{{ requests|pluralize }} to order</a>
-  {% if harness_requests %}<a class="tile warn" href="#harness-requests"><b>{{ harness_requests|length }}</b> harness{{ harness_requests|length|pluralize:"es" }} asked for</a>{% endif %}
-  <a class="tile" href="{% url 'orders:list' %}?show=draft"><b>{{ drafts }}</b> draft{{ drafts|pluralize }} to place</a>
-  <a class="tile{% if over_budget %} bad{% endif %}" href="{% url 'budgets:list' %}"><b>{{ over_budget|length }}</b> budget{{ over_budget|length|pluralize }} overspent</a>
-  <a class="tile{% if assets_due %} warn{% endif %}" href="{% url 'assets:list' %}?due=1"><b>{{ assets_due|length }}</b> asset{{ assets_due|length|pluralize }} due for calibration</a>
-</div>
+<div class="page-head"><h1>Home</h1><span class="spacer"></span>
+  {% if editing %}
+    {% if addable %}<form method="post" action="{% url 'web:home_reports' %}" class="inline-form">{% csrf_token %}
+      <select name="key" aria-label="Report" required><option value="">Report…</option>{% for key, title in addable %}<option value="{{ key }}">{{ title }}</option>{% endfor %}</select>
+      <button class="btn" name="action" value="add">＋ Add report</button></form>{% endif %}
+    <form method="post" action="{% url 'web:home_reports' %}" class="inline">{% csrf_token %}<button class="btn ghost" name="action" value="reset">Reset</button></form>
+    <a class="btn primary" href="{% url 'web:home' %}">Done</a>
+  {% else %}<a class="btn" href="?edit=1">Edit</a>{% endif %}</div>
 {% if over_budget %}<div class="flash error">Overspent: {% for b in over_budget %}<a href="{{ b.get_absolute_url }}">{{ b }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}
 
-{% if harness_requests %}<section class="card flush" id="harness-requests">
-  <div class="card-head"><h3>Harnesses asked for</h3></div>
-  <table class="list">{% for r in harness_requests %}<tr><td><a href="{{ r.get_absolute_url }}">{{ r.configuration.project }} · {{ r.configuration }}</a>
-    <span class="small">{{ r.request|truncatechars:120 }}</span></td><td class="small nowrap">{{ r.created_by|default:"" }} → {{ r.ask|default:"the administrators" }}</td></tr>{% endfor %}</table>
-</section>{% endif %}
-
-<div class="columns">
-  <section class="card flush">
-    <div class="card-head"><h3>Still to come</h3><a class="btn small" href="{% url 'orders:new' %}">＋ New order</a></div>
-    <table class="list">
-      <tr><th>Order</th><th>Vendor</th><th>Expected</th><th></th></tr>
-      {% for o in waiting %}<tr>
-        <td><a href="{{ o.get_absolute_url }}">{{ o.number }}</a></td><td>{{ o.vendor|default:"—" }}</td>
-        <td class="nowrap">{{ o.expected_on|default:"—" }}</td>
-        <td>{% if o.overdue %}<span class="badge failed">Late</span>{% elif o.status == 'partly' %}<span class="badge">Partly received</span>{% endif %}</td>
-      </tr>{% empty %}<tr><td colspan="4" class="empty small">Nothing on its way.</td></tr>{% endfor %}
-    </table>
-  </section>
-
-  <section class="card flush" id="to-order">
-    <div class="card-head"><h3>Below their minimum</h3></div>
-    <table class="list">
-      <tr><th>Part</th><th class="num">Have</th><th class="num">Coming</th><th class="num">Minimum</th><th></th></tr>
-      {% for part, have, coming in to_order %}<tr>
-        <td><a href="{{ part.get_absolute_url }}">{{ part.number }}</a> <span class="muted small">{{ part.description }}</span></td>
-        <td class="num">{{ have|qty }}</td><td class="num">{{ coming|qty }}</td><td class="num">{{ part.minimum|qty }}</td>
-        <td>{% if part.vendor %}<form method="post" action="{% url 'inventory:part_reorder' part.pk %}">{% csrf_token %}<button class="btn small">Reorder</button></form>{% endif %}</td>
-      </tr>{% empty %}<tr><td colspan="5" class="empty small">Every part is above its minimum.</td></tr>{% endfor %}
-    </table>
-  </section>
+<div class="home-grid{% if editing %} editing{% endif %}">
+  {% for key, title, template in reports %}{% include template %}{% endfor %}
 </div>
-
-{% if assets_due %}<section class="card flush">
-  <div class="card-head"><h3>Due for calibration</h3><span class="muted small">within two weeks</span></div>
-  <table class="list">{% for t in assets_due %}<tr><td><a href="{{ t.get_absolute_url }}">{{ t.number }}</a> <span class="muted small">{{ t.name }}</span></td>
-    <td class="small{% if t.calibration_overdue %} error{% endif %}">{{ t.calibration_due }}</td><td class="small">{{ t.keeper|default:"" }}</td></tr>{% endfor %}</table>
-</section>{% endif %}
-
-{% if received %}<section class="card flush">
-  <div class="card-head"><h3>Arrived lately</h3></div>
-  <table class="list">{% for o in received %}<tr><td><a href="{{ o.get_absolute_url }}">{{ o.number }}</a></td><td>{{ o.vendor|default:"—" }}</td><td class="nowrap">{{ o.received_on }}</td></tr>{% endfor %}</table>
-</section>{% endif %}
+{% if not reports %}<p class="muted small">No reports on Home.</p>{% endif %}
 {% endblock %}

@@ -1,0 +1,6 @@
+<section class="card flush">
+  <div class="card-head"><h3>Being built</h3>{% include "web/home/_x.html" %}</div>
+  <table class="list">{% for a in building %}<tr><td><a href="{{ a.get_absolute_url }}">{{ a.number }}</a> <span class="muted small">{{ a.name }}</span></td>
+    <td class="small">{{ a.built_by|default:"" }}</td></tr>
+    {% empty %}<tr><td class="empty small">None.</td></tr>{% endfor %}</table>
+</section>

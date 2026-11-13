@@ -39,28 +39,43 @@ class ProjectForm(TreeForm):
 
 @login_required
 def project_list(request):
+    """The projects, as a tree on the left (sub-projects under the project they are part of); in the middle those of
+    the one picked (the top ones when none is; those found, wherever they are, when searching); on the right the
+    details of the project picked (else of the one picked in the tree)."""
+    from web import briefs, browse
     shown = request.GET.get('status', 'active')
-    found = Project.objects.select_related('owner').annotate(
-        n_diagrams=Count('wire_diagrams', distinct=True), n_orders=Count('orders', distinct=True),
-        n_devices=Count('devices', distinct=True), n_assets=Count('assets', distinct=True))
-    if shown in Project.Status.values:
-        found = found.filter(status=shown)
-    q = request.GET.get('q', '').strip()
-    if q:
-        found = found.filter(Q(name__icontains=q) | Q(code__icontains=q) | Q(description__icontains=q))
     every = {p.pk: p for p in Project.objects.select_related('owner').annotate(
         n_diagrams=Count('wire_diagrams', distinct=True), n_orders=Count('orders', distinct=True),
         n_devices=Count('devices', distinct=True), n_assets=Count('assets', distinct=True))}
-    matched = set(found.values_list('pk', flat=True))
-    shown_pks = set(matched)   # those found, and the projects they are part of (to stand under)
-    for pk in matched:
-        shown_pks.update(every[pk].chain_pks())
-    rows = []
-    for p, depth in Project.ordered(every.values()):
-        if p.pk in shown_pks:
-            p.depth, p.matched = depth, p.pk in matched
-            rows.append(p)
-    return render(request, 'work/list.html', {'projects': rows, 'shown': shown, 'statuses': Project.Status.choices, 'q': q})
+    fits = {pk for pk, p in every.items() if shown not in Project.Status.values or p.status == shown}
+    q = request.GET.get('q', '').strip()
+    inside = every.get(int(request.GET['in'])) if request.GET.get('in', '').isdigit() else None
+    if q:
+        words = q.lower()
+        rows = [p for pk, p in every.items() if pk in fits and words in f'{p.code} {p.name} {p.description}'.lower()]
+    elif inside is not None:
+        rows = [p for p in every.values() if p.parent_id == inside.pk]
+    else:
+        rows = [p for pk, p in every.items() if pk in fits and p.parent_id is None]
+    rows.sort(key=lambda p: (p.code.lower(), p.name.lower()))
+    seen = set(fits)   # in the tree: those of that status, and the projects they are part of (to stand under)
+    for pk in fits:
+        node = every[pk]
+        while node.parent_id and node.parent_id not in seen:
+            seen.add(node.parent_id)
+            node = every[node.parent_id]
+    own = {}
+    for pk in seen:
+        own[every[pk].parent_id] = own.get(every[pk].parent_id, 0) + 1
+    kept = browse.keep(request, 'status')
+    tree = browse.nodes([(p, d) for p, d in Project.ordered(every.values()) if p.pk in seen], own, inside,
+                        lambda p: f'?in={p.pk}{kept}')
+    for n in tree:
+        n['count'] = n['count'] or None
+    nodes = [browse.node('All projects', f'?{kept[1:]}', len(fits), inside is None)] + tree
+    picked = every.get(int(request.GET['project'])) if request.GET.get('project', '').isdigit() else inside
+    return render(request, 'work/list.html', {'projects': rows, 'shown': shown, 'statuses': Project.Status.choices, 'q': q, 'nodes': nodes,
+                                              'inside': inside, 'picked': picked, 'brief': briefs.of('project', picked) if picked else None})
 
 
 @login_required

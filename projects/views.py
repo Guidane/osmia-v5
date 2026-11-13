@@ -54,7 +54,30 @@ def _tree(project):
 
 @login_required
 def project_list(request):
-    return render(request, 'projects/list.html', {'projects': Project.objects.prefetch_related('configurations', 'harnesses')})
+    """The wire diagrams, like the parts: the projects (and their sub-projects) as a tree on the left, the wire diagrams
+    of the one picked in the middle, the details of the wire diagram picked on the right."""
+    from django.db.models import Count, Q
+
+    from web import briefs, browse
+    from work.models import Project as Work
+    found = Project.objects.select_related('owner', 'in_project').prefetch_related('configurations', 'harnesses')
+    q = request.GET.get('q', '').strip()
+    if q:
+        found = found.filter(Q(name__icontains=q) | Q(code__icontains=q) | Q(description__icontains=q))
+    work = Work.objects.filter(pk=request.GET.get('work') or 0).first()
+    loose = bool(request.GET.get('none')) and work is None
+    if work:
+        found = found.filter(in_project_id__in=work.below())
+    elif loose:
+        found = found.filter(in_project=None)
+    own = dict(Project.objects.exclude(in_project=None).values('in_project').annotate(n=Count('pk')).values_list('in_project', 'n'))
+    kept = browse.keep(request, 'q')
+    tree = [n for n in browse.nodes(Work.ordered(), own, work, lambda w: f'?work={w.pk}{kept}') if n['count']]   # projects with some
+    nodes = [browse.node('All wire diagrams', f'?{kept[1:]}', Project.objects.count(), not work and not loose)] + tree + [
+        browse.node('In no project', f'?none=1{kept}', Project.objects.filter(in_project=None).count(), loose)]
+    picked = Project.objects.filter(pk=request.GET.get('diagram') or 0).first()
+    return render(request, 'projects/list.html', {'projects': found, 'nodes': nodes, 'q': q, 'work': work, 'loose': loose, 'picked': picked,
+                                                  'brief': briefs.of('diagram', picked) if picked else None})
 
 
 @login_required

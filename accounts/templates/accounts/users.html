@@ -1,27 +1,39 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load osmia %}
 {% block title %}Users · Osmia{% endblock %}
+{% block content_class %}wide{% endblock %}
 {% block content %}
 <div class="page-head"><h1>Users</h1><span class="spacer"></span>
   <a class="btn" href="{% url 'accounts:departments' %}">Departments</a>
   <a class="btn" href="?{{ request.GET.urlencode }}{% if request.GET %}&amp;{% endif %}export=1">⬇ Excel</a>
-  <a class="btn primary" href="{% url 'accounts:user_new' %}">＋ New user</a></div>
-<form method="get" class="filters">
-  <input type="search" name="q" value="{{ q }}" placeholder="Name, user name, email, job…" aria-label="Search users">
-  <select name="department" aria-label="Department" onchange="this.form.submit()"><option value="">Every department</option>
-    {% for d, depth in departments %}<option value="{{ d.pk }}"{% if department.pk == d.pk %} selected{% endif %}>{% for _ in ""|ljust:depth %}&nbsp;&nbsp;&nbsp;{% endfor %}{{ d.name }}</option>{% endfor %}</select>
-  <label class="small"><input type="checkbox" name="none" value="1"{% if request.GET.none %} checked{% endif %} onchange="this.form.submit()"> in no department</label>
-  <label class="small"><input type="checkbox" name="all" value="1"{% if request.GET.all %} checked{% endif %} onchange="this.form.submit()"> also those who can't log in</label>
-</form>
-<div class="card flush">
-  <table class="list">
-    <tr><th>Name</th><th>User name</th><th>Job title</th><th>Department</th><th>Email</th><th>Last logged in</th><th></th></tr>
-    {% for u in users %}<tr>
-      <td><a href="{% url 'accounts:user_edit' u.pk %}">{{ u }}</a></td><td class="small">{{ u.username }}</td><td class="small">{{ u.job_title }}</td>
-      <td class="small">{% if u.department %}<a href="{{ u.department.get_absolute_url }}">{{ u.department.name }}</a>{% else %}<span class="muted">—</span>{% endif %}</td>
-      <td class="small">{% if u.email %}<a href="mailto:{{ u.email }}">{{ u.email }}</a>{% endif %}</td>
-      <td class="small">{{ u.last_login|date:"j M Y"|default:"never" }}</td>
-      <td>{% if u.is_superuser %}<span class="badge ok">Administrator</span>{% endif %}{% if not u.is_active %}<span class="badge failed">Can't log in</span>{% endif %}</td>
-    </tr>{% empty %}<tr><td colspan="7" class="empty small">Nobody here.</td></tr>{% endfor %}
-  </table>
+  <a class="btn primary" href="{% url 'accounts:user_new' %}{% if department %}?department={{ department.pk }}{% endif %}">＋ New user</a></div>
+
+<div class="parts-browser" data-param="user">
+  {% include "web/_tree_nav.html" with label="Departments" %}
+
+  <div class="parts-middle">
+    <form method="get" class="filters">
+      {% if department %}<input type="hidden" name="department" value="{{ department.pk }}">{% elif loose %}<input type="hidden" name="none" value="1">{% endif %}
+      <input type="search" name="q" value="{{ q }}" placeholder="Name, user name, email, job…" aria-label="Search users">
+      <label class="small"><input type="checkbox" name="all" value="1"{% if request.GET.all %} checked{% endif %} onchange="this.form.submit()"> also those who can't log in</label>
+      <button class="btn">Find</button>
+    </form>
+    <div class="card flush">
+      <table class="list parts-list">
+        <tr><th>Name</th><th>User name</th><th>Job title</th>{% if not department %}<th>Department</th>{% endif %}<th>Email</th><th>Last logged in</th><th></th></tr>
+        {% for u in users %}<tr data-part="{{ u.pk }}" data-brief-url="{% url 'web:brief' 'user' u.pk %}" class="{% if picked.pk == u.pk %}on{% endif %}" tabindex="0">
+          <td><a href="{% url 'accounts:user_edit' u.pk %}">{{ u }}</a></td><td class="small">{{ u.username }}</td><td class="small">{{ u.job_title }}</td>
+          {% if not department %}<td class="small">{% if u.department %}<a href="{{ u.department.get_absolute_url }}">{{ u.department.name }}</a>{% else %}<span class="muted">—</span>{% endif %}</td>{% endif %}
+          <td class="small">{% if u.email %}<a href="mailto:{{ u.email }}">{{ u.email }}</a>{% endif %}</td>
+          <td class="small">{{ u.last_login|date:"j M Y"|default:"never" }}</td>
+          <td>{% if u.is_superuser %}<span class="badge ok">Administrator</span>{% endif %}{% if not u.is_active %}<span class="badge failed">Can't log in</span>{% endif %}</td>
+        </tr>{% empty %}<tr><td colspan="7" class="empty small">Nobody here.</td></tr>{% endfor %}
+      </table>
+    </div>
+  </div>
+
+  <aside class="card parts-detail" data-detail>
+    {% if brief %}{% include "web/_brief.html" %}{% else %}<p class="muted small pad">Pick someone to see it here.</p>{% endif %}
+  </aside>
 </div>
 {% endblock %}
+{% block scripts %}<script src="{% fresh 'web/browser.js' %}"></script>{% endblock %}

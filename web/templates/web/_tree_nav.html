@@ -1,0 +1,4 @@
+{% load osmia %}{# The tree on the left of a list (.parts-browser): ``nodes`` [{label, url, depth, count, on, open, muted, thumb: a thing whose small picture goes before it}], the first usually "All …". #}
+<nav class="card parts-tree" aria-label="{{ label|default:'Tree' }}">
+  {% for n in nodes %}<a href="{{ n.url }}" style="--depth: {{ n.depth|default:0 }}" class="{% if n.on %}on{% elif n.open %}open{% endif %}{% if n.muted %} muted{% endif %}"><span>{% if n.thumb %}{% thumb n.thumb %}{% endif %}{{ n.label }}</span><span class="muted small">{{ n.count|default_if_none:"" }}</span></a>{% endfor %}
+</nav>

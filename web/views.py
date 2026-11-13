@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from .models import Notification
@@ -43,28 +44,69 @@ def setup(request):
     return render(request, 'web/setup.html', {'errors': errors, 'values': values})
 
 
+REPORTS = [   # what Home can show: (key, title, on Home as it comes)
+    ('glance', 'At a glance', True), ('harness_requests', 'Harnesses asked for', True), ('waiting', 'Still to come', True),
+    ('to_order', 'Below their minimum', True), ('assets_due', 'Due for calibration', True), ('received', 'Arrived lately', True),
+    ('my_assets', 'What I have out', False), ('projects', 'Active projects', False), ('drafts', 'Drafts and requests', False),
+    ('building', 'Being built', False), ('budgets', 'Budgets overspent', False),
+]
+
+
+def home_reports_of(user):
+    """The reports on ``user``'s Home, in their order: their own pick, else those it comes with."""
+    known = {key for key, _, _ in REPORTS}
+    if user.home_reports is None:
+        return [key for key, _, shown in REPORTS if shown]
+    return [key for key in user.home_reports if key in known]
+
+
 @login_required
 def home(request):
-    """What needs attention: parts to order, orders still to come (late ones first), budgets overspent, what arrived
-    lately."""
+    """What needs attention, in reports each person picks for themselves (Edit: a ✕ on each, ＋ Add report): parts to
+    order, orders still to come (late ones first), budgets overspent, what arrived lately, …"""
     from projects.models import HarnessRequest
     from datetime import date
 
+    from assets.models import Asset
     from orders.models import Order
     from orders.service import needs_ordering
+    from work.models import Project
     waiting = sorted(Order.objects.filter(status__in=Order.OPEN).select_related('vendor'),
                      key=lambda o: (not o.overdue, o.expected_on or date.max))
     from budgets.money import totals
     from assets.service import due
     over = [t.budget for t in totals().values() if t.over and t.budget.active]
+    mine = home_reports_of(request.user)
+    titles = {key: title for key, title, _ in REPORTS}
     return render(request, 'web/home.html', {
+        'reports': [(key, titles[key], f'web/home/{key}.html') for key in mine],
+        'addable': [(key, title) for key, title, _ in REPORTS if key not in mine],
+        'editing': bool(request.GET.get('edit')),
         'assets_due': due(),
         'over_budget': over,
         'to_order': needs_ordering(), 'waiting': waiting, 'late': sum(1 for o in waiting if o.overdue),
         'drafts': Order.objects.filter(status=Order.Status.DRAFT, kind=Order.Kind.ORDER).count(),
         'requests': Order.objects.filter(status=Order.Status.DRAFT, kind=Order.Kind.REQUEST).count(),
         'harness_requests': HarnessRequest.objects.filter(status='open').select_related('configuration__project', 'created_by', 'ask'),
-        'received': Order.objects.filter(status=Order.Status.RECEIVED).select_related('vendor').order_by('-received_on', '-pk')[:8]})
+        'received': Order.objects.filter(status=Order.Status.RECEIVED).select_related('vendor').order_by('-received_on', '-pk')[:8],
+        'my_assets': Asset.objects.filter(holder=request.user).select_related('location') if 'my_assets' in mine else [],
+        'active_projects': Project.objects.filter(status=Project.Status.ACTIVE, parent=None).select_related('owner') if 'projects' in mine else [],
+        'draft_orders': Order.objects.filter(status=Order.Status.DRAFT).select_related('vendor', 'created_by')[:20] if 'drafts' in mine else [],
+        'building': Asset.objects.filter(status=Asset.Status.BUILDING).select_related('built_by') if 'building' in mine else []})
+
+
+@login_required
+@require_POST
+def home_reports(request):
+    """A report put on one's Home (at the end), taken off it, or Home put back as it comes."""
+    user, action, key = request.user, request.POST.get('action'), request.POST.get('key', '')
+    mine = home_reports_of(user)
+    if action == 'reset':
+        user.home_reports = None
+    elif key in {k for k, _, _ in REPORTS}:
+        user.home_reports = [k for k in mine if k != key] + ([key] if action == 'add' else [])
+    user.save(update_fields=['home_reports'])
+    return redirect(reverse('web:home') + '?edit=1')
 
 
 @login_required
@@ -183,3 +225,10 @@ def notes(request, kind, pk):
     obj.save(update_fields=['notes'])
     back = request.POST.get('next', '')
     return redirect(back if back.startswith('/') and not back.startswith('//') else obj.get_absolute_url())
+
+
+@login_required
+def brief(request, kind, pk):
+    """The details of a thing beside its list (fetched when a row is picked): see ``web.briefs``."""
+    from . import briefs
+    return render(request, 'web/_brief.html', {'brief': briefs.of(kind, briefs.find(kind, pk))})

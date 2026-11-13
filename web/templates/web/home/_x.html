@@ -1,0 +1,1 @@
+{% if editing %}<form method="post" action="{% url 'web:home_reports' %}" class="inline">{% csrf_token %}<input type="hidden" name="key" value="{{ key }}"><button class="btn small ghost" name="action" value="remove" title="Take it off Home" aria-label="Take {{ title }} off Home">✕</button></form>{% endif %}

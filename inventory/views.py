@@ -178,10 +178,37 @@ def part_reorder(request, pk):
 
 @login_required
 def locations(request):
-    totals = dict(Stock.objects.filter(quantity__gt=0).values('location').annotate(n=Sum('quantity')).values_list('location', 'n'))
-    kinds = dict(Stock.objects.filter(quantity__gt=0).values('location').annotate(n=Count('pk')).values_list('location', 'n'))
+    """The locations, like the parts: their tree on the left, what is kept at the one picked (and in those inside it:
+    parts in stock, assets) in the middle; on the right the details of the part or asset picked, else the location's own:
+    its picture, its files and its documentation."""
+    from assets.models import Asset
+    from assets.views import _brief as asset_brief
+    from web import briefs, browse
+    place = Location.objects.filter(pk=request.GET.get('location') or 0).first()
+    q = request.GET.get('q', '').strip()
+    stock = Stock.objects.filter(quantity__gt=0).select_related('part', 'location')
+    kept_here = Asset.objects.exclude(location=None).exclude(status=Asset.Status.RETIRED).select_related('location')
+    if place is not None:
+        stock, kept_here = stock.filter(location_id__in=place.below()), kept_here.filter(location_id__in=place.below())
+    if q:
+        stock = stock.filter(Q(part__number__icontains=q) | Q(part__description__icontains=q))
+        kept_here = kept_here.filter(Q(number__icontains=q) | Q(name__icontains=q))
+    own = dict(Stock.objects.filter(quantity__gt=0).values('location').annotate(n=Count('pk')).values_list('location', 'n'))
+    for pk, n in Asset.objects.exclude(location=None).exclude(status=Asset.Status.RETIRED).values('location').annotate(n=Count('pk')).values_list('location', 'n'):
+        own[pk] = own.get(pk, 0) + n
+    keep = browse.keep(request, 'q')
+    tree = Location.ordered()
+    nodes = [browse.node('All locations', f'?{keep[1:]}', sum(own.values()), place is None)] + browse.nodes(
+        tree, own, place, lambda l: f'?location={l.pk}{keep}', label=lambda l: l.name, thumbs=True)
+    wanted = request.GET.get('part', '')   # the row picked: a part, or (a<id>) an asset
+    part = Part.objects.filter(pk=wanted).first() if wanted.isdigit() else None
+    asset = Asset.objects.filter(pk=wanted[1:]).first() if wanted[:1] == 'a' and wanted[1:].isdigit() else None
     return render(request, 'inventory/locations.html', {
-        'locations': [(node, depth, kinds.get(node.pk, 0)) for node, depth in Location.ordered()], 'totals': totals})
+        'nodes': nodes, 'place': place, 'q': q, 'stock': stock[:500], 'assets': kept_here[:200], 'wanted': wanted,
+        'locations': [(node, depth, own.get(node.pk, 0)) for node, depth in tree],
+        'part_brief': _brief(part) if part else None, 'asset_brief': asset_brief(asset) if asset else None,
+        # the location itself: its picture, files and pages
+        'brief': briefs.of('location', place) if place and not part and not asset else None})
 
 
 @login_required
@@ -203,7 +230,23 @@ def location_form(request, pk=None):
 
 @login_required
 def vendors(request):
-    return render(request, 'inventory/vendors.html', {'vendors': Vendor.objects.all()})
+    """The vendors: those dealt with and those no longer on the left, the vendors in the middle, the details of the
+    one picked on the right."""
+    from web import briefs, browse
+    shown = request.GET.get('show', '')
+    q = request.GET.get('q', '').strip()
+    found = Vendor.objects.all()
+    if shown in ('active', 'inactive'):
+        found = found.filter(active=shown == 'active')
+    if q:
+        found = found.filter(Q(name__icontains=q) | Q(code__icontains=q) | Q(email__icontains=q))
+    kept = browse.keep(request, 'q')
+    nodes = [browse.node('All vendors', f'?{kept[1:]}', Vendor.objects.count(), not shown),
+             browse.node('Active', f'?show=active{kept}', Vendor.objects.filter(active=True).count(), shown == 'active'),
+             browse.node('Inactive', f'?show=inactive{kept}', Vendor.objects.filter(active=False).count(), shown == 'inactive')]
+    picked = Vendor.objects.filter(pk=request.GET.get('vendor') or 0).first()
+    return render(request, 'inventory/vendors.html', {'vendors': found, 'nodes': nodes, 'q': q, 'shown': shown, 'picked': picked,
+                                                      'brief': briefs.of('vendor', picked) if picked else None})
 
 
 @login_required
@@ -221,26 +264,66 @@ def vendor_form(request, pk=None):
 
 @login_required
 def families(request):
-    """The families of parts that can take each other's place, in their branches (a tree: D-sub, Circular / M12, …),
-    with forms to make a family and a branch (or change one: ?edit=<pk>, ?branch=<pk>)."""
+    """The connector families, like the parts: their branches as a tree on the left (D-sub, Circular / M12, …), the
+    families of the one picked in the middle, the details of the family picked on the right. A family or a branch is
+    made or changed on a form of its own (?new=family, ?new=branch, ?edit=<family>, ?branch=<branch>)."""
+    from .faces import natural
     item = Family.objects.filter(pk=request.GET.get('edit') or 0).first()
     branch = FamilyBranch.objects.filter(pk=request.GET.get('branch') or 0).first()
-    making = request.POST.get('form')
-    form = FamilyForm(request.POST if making == 'family' else None, instance=item, prefix='family')
-    branch_form = FamilyBranchForm(request.POST if making == 'branch' else None, instance=branch, prefix='branch')
-    for sent in (form, branch_form):
+    making = request.POST.get('form') or ('family' if item or request.GET.get('new') == 'family' else
+                                          'branch' if branch or request.GET.get('new') == 'branch' else '')
+    group = FamilyBranch.objects.filter(pk=request.GET.get('group') or 0).first()
+    if making:
+        start = {'group': group.pk} if group and not item else {}
+        under = {'parent': group.pk} if group and not branch else {}
+        form = FamilyForm(request.POST if making == 'family' and request.method == 'POST' else None, instance=item, prefix='family', initial=start)
+        branch_form = FamilyBranchForm(request.POST if making == 'branch' and request.method == 'POST' else None, instance=branch,
+                                       prefix='branch', initial=under)
+        sent = branch_form if making == 'branch' else form
         if sent.is_bound and sent.is_valid():
             saved = sent.save()
             messages.success(request, f'{saved} is saved.')
-            return redirect('inventory:families')
-    from .faces import natural
-    found = sorted(Family.objects.annotate(n=Count('parts')).select_related('group'), key=lambda f: natural(f.name))
-    by_branch = {}
-    for f in found:
-        by_branch.setdefault(f.group_id, []).append(f)
-    tree = [(b, depth, by_branch.get(b.pk, [])) for b, depth in FamilyBranch.ordered()]
-    return render(request, 'inventory/families.html', {'tree': tree, 'loose': by_branch.get(None, []), 'form': form,
-                                                       'item': item, 'branch_form': branch_form, 'branch': branch})
+            where = saved.group_id if making == 'family' else saved.pk
+            return redirect(reverse('inventory:families') + (f'?group={where}' if where else '')
+                            + (f'{"&" if where else "?"}family={saved.pk}' if making == 'family' else ''))
+        title = (f'Change {item.name}' if item else 'New connector family') if making == 'family' else \
+                (f'Change {branch.name}' if branch else 'New branch')
+        return render(request, 'inventory/family_form.html', {'form': sent, 'kind': making, 'title': title,
+                                                              'back': reverse('inventory:families') + (f'?group={group.pk}' if group else '')})
+    q = request.GET.get('q', '').strip()
+    every = sorted(Family.objects.annotate(n=Count('parts')).select_related('group').prefetch_related('branches'), key=lambda f: natural(f.name))
+    found = [f for f in every if (not q or q.lower() in f.name.lower()) and (group is None or f.group_id in group.below())]
+    tree = FamilyBranch.ordered()
+    own, children = {}, {}
+    for f in every:
+        own[f.group_id] = own.get(f.group_id, 0) + 1
+    for b, _ in tree:
+        children.setdefault(b.parent_id, []).append(b.pk)
+
+    def counted(pk):   # its families and those of the branches under it
+        return own.get(pk, 0) + sum(counted(child) for child in children.get(pk, []))
+    keep = f'&q={q}' if q else ''
+    open_ = set(group.chain_pks()) if group else set()
+    nodes = [{'label': 'All families', 'url': f'?{keep[1:]}', 'count': len(every), 'on': group is None}] + [
+        {'label': b.name, 'url': f'?group={b.pk}{keep}', 'depth': depth, 'count': counted(b.pk), 'on': group == b, 'open': b.pk in open_}
+        for b, depth in tree]
+    picked = Family.objects.filter(pk=request.GET.get('family') or 0).first()
+    return render(request, 'inventory/families.html', {'families': found, 'nodes': nodes, 'group': group, 'q': q, 'picked': picked,
+                                                       'brief': _family_brief(picked) if picked else None})
+
+
+def _family_brief(family):
+    """What the details beside the list of connector families show of ``family``."""
+    face = family.face if (family.face or {}).get('contacts') else None
+    return {'family': family, 'face': {'face': face, 'pins': [[c[0], ''] for c in face['contacts']]} if face else None,
+            'branches': family.branches.annotate(n=Count('parts')),
+            'parts': family.parts.select_related('branch').annotate(have=Sum('stock__quantity'))[:30]}
+
+
+@login_required
+def family_brief(request, pk):
+    """The details of a connector family beside their list (fetched when one is picked)."""
+    return render(request, 'inventory/_family_brief.html', _family_brief(get_object_or_404(Family.objects.select_related('group'), pk=pk)))
 
 
 @login_required
